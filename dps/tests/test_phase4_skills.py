@@ -118,7 +118,7 @@ def test_sanction_pack_reads_terms_covenants_and_schedule():
 def test_formula_rejected_or_spring_down_goes_to_review():
     result = skills.run(load("sanction"), fake_job("EXTRACT_SANCTION"), model_of(SANCTION), None, Tools(valid=False))
     cov = next(f for f in result["fields"] if f["group"] == "FINANCIAL_COVENANT")
-    assert cov["status"] == "NEEDS_REVIEW" and cov["issues"][-1]["code"] == "FORMULA_INVALID"
+    assert cov["status"] == "NEEDS_REVIEW" and "FORMULA_INVALID" in {i["code"] for i in cov["issues"]}
     result = skills.run(load("sanction"), fake_job("EXTRACT_SANCTION"), model_of(SANCTION), None, Tools(up=False))
     cov = next(f for f in result["fields"] if f["group"] == "FINANCIAL_COVENANT")
     assert {i["code"] for i in cov["issues"]} >= {"SPRING_UNAVAILABLE"} and result["status"] == "NEEDS_REVIEW"

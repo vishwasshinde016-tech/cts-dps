@@ -30,7 +30,8 @@ from dps.skills.covenants import names
     ("RESTRICTION_ON_TRANSFER_OF_CONTROL", None, "CHANGE_OF_CONTROL"),
     ("RESTRICTION_ON_OBSTRUCTION_OF_INSPECTION", None, "BOOKS_AND_RECORDS"),
     ("LIEN_RESTRICTION", None, "NEGATIVE_PLEDGE"),
-    ("RESTRICTION_ON_CHANGE_OF_BUSINESS", None, "OTHER"),
+    ("RESTRICTION_ON_CHANGE_OF_BUSINESS", None, "NEG_CHANGE_OF_BUSINESS"),  # the taxonomy knows it
+    ("HOTEL_STAR_CLASSIFICATION", None, "OTHER"),
     (None, "Fixed Asset Coverage", "OTHER"),
 ])
 def test_agent_names_map_to_library_keys(metric, name, key):
@@ -55,11 +56,11 @@ def test_one_item_per_non_financial_key_and_other_keeps_the_written_name():
     out = names.clean([
         {"name": "Annual financial statements", "value": {"metric": "ANNUAL_FINANCIAL_STATEMENTS"}},
         {"name": "Management accounts", "value": {"metric": "MANAGEMENT_ACCOUNTS"}},
-        {"name": "No change of business", "value": {"metric": "RESTRICTION_ON_CHANGE_OF_BUSINESS"}},
+        {"name": "Hotel star classification", "value": {"metric": "HOTEL_STAR_CLASSIFICATION"}},
         {"name": "DSCR", "value": {"metric": "DSCR", "threshold": 1.2}},
         {"name": "DSCR step-down", "value": {"metric": "DSCR", "threshold": 1.1}}])
     assert [p["value"]["metric"] for p in out] == ["REPORTING_COVENANT", "OTHER", "DSCR", "DSCR"]
-    assert out[1]["value"]["nameAsWritten"] == "No change of business" and out[0]["_written"] == \
+    assert out[1]["value"]["nameAsWritten"] == "Hotel star classification" and out[0]["_written"] == \
         "Annual financial statements"
 
 
@@ -71,17 +72,25 @@ def test_amendments_keep_every_item_and_their_mechanics():
     assert names.clean(None) is None
 
 
-def test_the_prompt_lists_exactly_the_library_keys():
-    prompt = (Path(names.__file__).parent / "prompt.md").read_text(encoding="utf-8")
-    listed = set(re.findall(r"\b[A-Z][A-Z_]{2,}\b", prompt.split("library keys:")[1].split("Use OTHER")[0]))
-    assert listed == set(names.KNOWN)
+def test_each_part_prompt_lists_exactly_its_taxonomy_codes():
+    from dps.skills.covenants import parts
+    from dps.skills.covenants.taxonomy import get as taxonomy
+
+    pack = load("covenants")
+    assert "{types}" in (Path(names.__file__).parent / "prompt.md").read_text(encoding="utf-8")
+    for part in [*parts.parts_of(pack), parts.ALL]:
+        prompt = parts.part_pack(pack, part).prompt
+        assert "{types}" not in prompt and "{scope}" not in prompt and "{exclusions}" not in prompt
+        listed = set(re.findall(r"^- ([A-Z][A-Z0-9_]+):", prompt, re.M))
+        assert listed == {t.code for t in taxonomy().of_categories(part.categories)}, part.name
 
 
 def test_agreement_job_reviewers_see_covenants_only_with_library_names():
     page = ("FINANCIAL COVENANTS\nThe Borrower shall maintain a Debt Service Coverage Ratio of not less than 1.20 "
             "times, tested annually.\nThe Borrower may prepay the facility after giving not less than 30 days notice.\n"
             "The Borrower shall not create any lien over its assets without prior written consent of the Lender.\n"
-            "The Borrower shall not change the general nature of its business.")
+            "The Borrower shall not change the general nature of its business.\n"
+            "The Borrower shall maintain its hotel star classification.")
     items = {"items": [
         {"name": "Debt Service Coverage Ratio", "page": 1, "quote": "Debt Service Coverage Ratio of not less than 1.20",
          "value": {"metric": "DSCR", "operator": ">=", "threshold": 1.2, "unit": "TIMES"}},
@@ -90,16 +99,19 @@ def test_agreement_job_reviewers_see_covenants_only_with_library_names():
         {"name": "Restriction on liens", "page": 1, "quote": "shall not create any lien over its assets",
          "value": {"metric": "RESTRICTION_ON_LIENS_AND_ENCUMBRANCES"}},
         {"name": "No change of business", "page": 1, "quote": "shall not change the general nature of its business",
-         "value": {"metric": "RESTRICTION_ON_CHANGE_OF_BUSINESS"}}]}
+         "value": {"metric": "RESTRICTION_ON_CHANGE_OF_BUSINESS"}},
+        {"name": "Hotel star classification", "page": 1, "quote": "shall maintain its hotel star classification",
+         "value": {"metric": "HOTEL_STAR_CLASSIFICATION"}}]}
     script = Script({("strong", "covenants"): items,
                      ("strong", "schedule_terms"): {"items": []}})
     result = skills.run(load("covenants"), fake_job("ONBOARD"), model_of(page), gateway(script), Tools())
-    covenants = [f for f in result["fields"] if f["group"] != "SCHEDULE_TERM"]
+    covenants = [f for f in result["fields"] if f["group"] not in ("SCHEDULE_TERM", "EVENT_OF_DEFAULT")]
     metrics = sorted(str(f["value"].get("metric")).upper() for f in covenants)
     assert "PREPAYMENT_NOTICE" not in metrics and not any("RESTRICTION_ON" in m for m in metrics)
-    assert "DSCR" in metrics and "NEGATIVE_PLEDGE" in metrics and "OTHER" in metrics
+    assert {"DSCR", "NEGATIVE_PLEDGE", "NEG_CHANGE_OF_BUSINESS", "OTHER"} <= set(metrics)
     other = next(f for f in covenants if f["value"].get("metric") == "OTHER")
-    assert other["status"] == "NEEDS_REVIEW" and other["value"]["nameAsWritten"] == "No change of business"
+    assert other["status"] == "NEEDS_REVIEW" and other["value"]["nameAsWritten"] == "Hotel star classification"
+    assert next(f for f in covenants if f["value"].get("metric") == "DSCR")["value"]["code"] == "FIN_DSCR"
 
 
 @pytest.mark.parametrize("metric, key", [("SECURITY_COVER", "SECURITY_COVER"), ("Asset Cover", "SECURITY_COVER"),

@@ -107,7 +107,8 @@
             "SCHEDULE_TERM",
             "STATEMENT_LINE",
             "CERTIFIED_FIGURE",
-            "IDENTIFIER"
+            "IDENTIFIER",
+            "EVENT_OF_DEFAULT"
           ]
         },
         "name": {
@@ -316,8 +317,64 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "group": {
+                "const": "EVENT_OF_DEFAULT"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/eventOfDefaultValue"
+              }
+            }
+          }
         }
       ]
+    },
+    "eventOfDefaultValue": {
+      "type": "object",
+      "required": [
+        "code",
+        "category"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Event-of-default taxonomy code (EOD_NON_PAYMENT, EOD_COVENANT_BREACH ...; EOD_OTHER)"
+        },
+        "category": {
+          "const": "event_of_default"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "threshold": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cureDays": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
     },
     "covenantValue": {
       "type": "object",
@@ -332,6 +389,38 @@
         "metric": {
           "type": "string",
           "description": "Metric key as read (DSCR, ICR, DEBT_TO_EBITDA ...)"
+        },
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Covenant taxonomy code (FIN_DSCR, NEG_LIENS ...); null when the taxonomy has none"
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "financial",
+            "affirmative",
+            "negative",
+            "reporting",
+            "event_of_default",
+            null
+          ]
+        },
+        "defaults": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "operator",
+              "unit",
+              "frequency"
+            ]
+          },
+          "description": "Values not stated in the document, filled from the taxonomy (TAXONOMY_DEFAULT; sent for review)"
         },
         "operator": {
           "type": [
@@ -805,6 +894,13 @@
             "string",
             "null"
           ]
+        },
+        "taxonomyVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Covenant taxonomy version the codes come from (2026.11.0+dps.1)"
         },
         "models": {
           "type": [

@@ -1,0 +1,446 @@
+# Default covenant taxonomy.
+#
+# Extend it WITHOUT code changes:
+#   * drop an overlay YAML in COVX_TAXONOMY_PATH (a directory is merged file by file), or
+#   * call the REST API: POST /v1/taxonomy/types  (one type) or PUT /v1/taxonomy (whole document).
+# Overlay rules: a type with an existing `code` replaces/patches it, `enabled: false` disables it,
+# new codes are added. Every change bumps `version`, which is stamped on every extraction result.
+#
+# Fields of a type:
+#   code         stable id used by the core banking system (UPPER_SNAKE)
+#   category     one of the categories below (or a new one you add)
+#   name         display name
+#   description  what it means; shown to the LLM, keep it short
+#   aliases      names used in agreements (US / LMA / Indian wording); used for matching + pre-filter
+#   keywords     extra pre-filter terms
+#   quantitative true -> extractor fills `financial` (metric, operator, threshold, schedule)
+#   default_operator  used when wording is ambiguous
+#   unit         ratio | multiple | percent | amount | days | count
+#   frequency    typical test/reporting frequency
+#   attributes   custom fields to extract into covenant.attributes: {name, type, description, required}
+#
+# Sources used to compile the financial metrics list (Nov 2026 research):
+#   CFI "Debt Covenants"; ACT Treasurers wiki "Financial covenant"; McDonald Hopkins "Understanding financial
+#   covenants in loan documents"; Prudential Private Capital "Senior Debt Covenants"; Martin LLP "Financial
+#   covenants in cash flow loan agreements"; SEC EDGAR credit agreements (e.g. Holly Corp 2010 amendment,
+#   Southcross Energy 2018 amendment, Core Laboratories 2022 credit agreement); LMA facility agreements filed
+#   publicly (Workspace Group 2022, AMEC 2014); Indian bank forms (IDFC FIRST BBG term loan, AU SFB, SBM, DCB).
+
+version: "2026.11.0"
+
+categories:
+  - code: financial
+    name: Financial covenants
+    description: Quantitative maintenance or incurrence tests on financial ratios or amounts.
+  - code: affirmative
+    name: Affirmative / positive covenants
+    description: Things the obligor must do (maintain existence, insurance, pay taxes, comply with law).
+  - code: negative
+    name: Negative / restrictive covenants
+    description: Things the obligor must not do without lender consent (liens, debt, disposals, dividends).
+  - code: reporting
+    name: Reporting / information covenants
+    description: Delivery of financial statements, certificates, stock statements and notices with deadlines.
+  - code: event_of_default
+    name: Events of default
+    description: Events that allow lenders to accelerate or enforce.
+
+types:
+  # ======================================================================================
+  # FINANCIAL - leverage
+  # ======================================================================================
+  - code: FIN_TOTAL_LEVERAGE
+    category: financial
+    name: Total Leverage Ratio (Total Debt / EBITDA)
+    description: Maximum ratio of total (funded) debt to EBITDA.
+    aliases: [Total Leverage Ratio, Consolidated Leverage Ratio, Consolidated Total Leverage Ratio, Leverage Ratio, Total Debt to EBITDA, Funded Debt to EBITDA, Debt/EBITDA, Leverage]
+    keywords: [leverage, funded debt, EBITDA]
+    quantitative: true
+    default_operator: "<="
+    unit: ratio
+    frequency: quarterly
+  - code: FIN_NET_LEVERAGE
+    category: financial
+    name: Net Leverage Ratio (Net Debt / EBITDA)
+    description: Maximum ratio of debt net of (unrestricted) cash to EBITDA.
+    aliases: [Net Leverage Ratio, Consolidated Net Leverage Ratio, Total Net Leverage Ratio, Net Debt to EBITDA, Net Debt/EBITDA, Net Leverage]
+    keywords: [net debt, net leverage]
+    quantitative: true
+    default_operator: "<="
+    unit: ratio
+    frequency: quarterly
+  - code: FIN_SENIOR_LEVERAGE
+    category: financial
+    name: Senior / First Lien / Secured Leverage Ratio
+    description: Maximum ratio of senior, first-lien or secured debt to EBITDA.
+    aliases: [Senior Leverage Ratio, First Lien Leverage Ratio, Secured Leverage Ratio, Senior Secured Leverage Ratio, Consolidated Senior Secured Leverage Ratio, Senior Debt to EBITDA]
+    keywords: [first lien, senior secured, secured debt]
+    quantitative: true
+    default_operator: "<="
+    unit: ratio
+    frequency: quarterly
+  - code: FIN_DEBT_TO_EQUITY
+    category: financial
+    name: Debt to Equity / Gearing
+    description: Maximum ratio of debt to equity or net worth (gearing).
+    aliases: [Debt to Equity Ratio, Debt Equity Ratio, Debt-Equity Ratio, DER, Gearing, Gearing Ratio, Net Gearing, Debt to Net Worth, Total Debt to Tangible Net Worth, TD/TNW]
+    keywords: [gearing, debt equity, debt-equity]
+    quantitative: true
+    default_operator: "<="
+    unit: ratio
+    frequency: annual
+  - code: FIN_TOL_TNW
+    category: financial
+    name: Total Outside Liabilities / Tangible Net Worth
+    description: Indian banking ratio of all outside liabilities to tangible net worth.
+    aliases: [TOL/TNW, TOL to TNW, Total Outside Liabilities to Tangible Net Worth, Total Liabilities to Tangible Net Worth, TOL/ATNW, Total Outside Liabilities / Adjusted Tangible Net Worth]
+    keywords: [outside liabilities, TOL, TNW]
+    quantitative: true
+    default_operator: "<="
+    unit: ratio
+    frequency: annual
+  - code: FIN_DEBT_TO_CAPITALIZATION
+    category: financial
+    name: Debt to Capitalization
+    description: Maximum ratio of debt to total capitalization (debt + equity).
+    aliases: [Debt to Capitalization Ratio, Debt to Total Capitalization, Total Debt to Total Capitalization, Capitalization Ratio, Debt to Capital]
+    keywords: [capitalization]
+    quantitative: true
+    default_operator: "<="
+    unit: percent
+    frequency: quarterly
+  - code: FIN_DEBT_TO_ASSETS
+    category: financial
+    name: Debt to Total Assets / Total Liabilities to Total Assets
+    description: Maximum ratio of debt or liabilities to total assets (incl. Total Debt / Total Asset Value in REIT deals).
+    aliases: [Debt to Assets, Total Liabilities to Total Assets, Total Debt to Total Asset Value, Maximum Leverage Ratio, Indebtedness to Total Asset Value]
+    keywords: [total asset value, total assets]
+    quantitative: true
+    default_operator: "<="
+    unit: percent
+    frequency: quarterly
+  - code: FIN_RECURRING_REVENUE_LEVERAGE
+    category: financial
+    name: Recurring Revenue Leverage
+    description: Maximum debt to annualised recurring revenue (software / ARR loans).
+    aliases: [Recurring Revenue Leverage Ratio, Debt to Recurring Revenue, ARR Leverage, Total Debt to Recurring Revenue]
+    keywords: [recurring revenue, ARR]
+    quantitative: true
+    default_operator: "<="
+    unit: ratio
+    frequency: quarterly
+  # ======================================================================================
+  # FINANCIAL - coverage
+  # ======================================================================================
+  - code: FIN_INTEREST_COVERAGE
+    category: financial
+    name: Interest Coverage Ratio (EBITDA or EBIT / Interest)
+    description: Minimum ratio of EBITDA (or EBIT) to interest expense.
+    aliases: [Interest Coverage Ratio, Consolidated Interest Coverage Ratio, Interest Cover, Interest Cover Ratio, ICR, EBITDA to Interest Expense, Times Interest Earned, Interest Service Coverage Ratio, ISCR, Net Interest Cover]
+    keywords: [interest cover, interest coverage, times interest earned]
+    quantitative: true
+    default_operator: ">="
+    unit: ratio
+    frequency: quarterly
+  - code: FIN_DSCR
+    category: financial
+    name: Debt Service Coverage Ratio
+    description: Minimum ratio of cash flow available for debt service to scheduled principal plus interest. Includes average / minimum DSCR (Indian project loans).
+    aliases: [Debt Service Coverage Ratio, DSCR, Debt Service Cover Ratio, Debt Service Cover, DSC Ratio, Average DSCR, Minimum DSCR, Historic DSCR, Projected DSCR]
+    keywords: [debt service]
+    quantitative: true
+    default_operator: ">="
+    unit: ratio
+    frequency: annual
+  - code: FIN_FCCR
+    category: financial
+    name: Fixed Charge Coverage Ratio
+    description: Minimum ratio of EBITDA less capex/taxes/distributions to fixed charges (interest, scheduled principal, rent).
+    aliases: [Fixed Charge Coverage Ratio, Consolidated Fixed Charge Coverage Ratio, FCCR, Fixed Charge Cover, Fixed Charges Coverage]
+    keywords: [fixed charge]
+    quantitative: true
+    default_operator: ">="
+    unit: ratio
+    frequency: quarterly
+  - code: FIN_CASHFLOW_COVER
+    category: financial
+    name: Cashflow Cover
+    description: LMA-style minimum ratio of Cashflow to Debt Service.
+    aliases: [Cashflow Cover, Cash Flow Cover, Cashflow Cover Ratio, Cash Flow Coverage Ratio]
+    keywords: [cashflow cover, cash flow cover]
+    quantitative: true
+    default_operator: ">="
+    unit: ratio
+    frequency: quarterly
+  - code: FIN_ASSET_COVERAGE
+    category: financial
+    name: Asset / Security Coverage Ratio (FACR)
+    description: Minimum value of (fixed) assets or security relative to outstanding debt. Includes Indian FACR and security cover.
+    aliases: [Fixed Asset Coverage Ratio, FACR, Asset Coverage Ratio, Security Cover, Security Coverage Ratio, Asset Cover, Collateral Coverage Ratio, Minimum Security Cover]
+    keywords: [asset coverage, security cover, collateral coverage]
+    quantitative: true
+    default_operator: ">="
+    unit: ratio
+    frequency: annual
+  - code: FIN_LTV
+    category: financial
+    name: Loan to Value
+    description: Maximum ratio of loan amount to market value of the property / collateral.
+    aliases: [Loan to Value, Loan-to-Value, LTV, LTV Ratio, Loan to Value Ratio, Maximum LTV]
+    keywords: [loan to value, market value]
+    quantitative: true
+    default_operator: "<="
+    unit: percent
+    frequency: annual
+  - code: FIN_LTC
+    category: financial
+    name: Loan to Cost
+    description: Maximum loan as a percentage of project / development cost.
+    aliases: [Loan to Cost, Loan-to-Cost, LTC, Loan to Cost Ratio]
+    keywords: [loan to cost, project cost]
+    quantitative: true
+    default_operator: "<="
+    unit: percent
+    frequency: quarterly
+  - code: FIN_DEBT_YIELD
+    category: financial
+    name: Debt Yield
+    description: Minimum net operating income as a percentage of loan amount (real estate).
+    aliases: [Debt Yield, Debt Yield Ratio, Minimum Debt Yield]
+    keywords: [debt yield, net operating income]
+    quantitative: true
+    default_operator: ">="
+    unit: percent
+    frequency: quarterly
+  - code: FIN_UNENCUMBERED_ASSETS
+    category: financial
+    name: Unencumbered Asset Ratio
+    description: Minimum value of unencumbered assets relative to unsecured debt.
+    aliases: [Unencumbered Assets, Unencumbered Asset Ratio, Unencumbered Asset Value to Unsecured Debt, Unencumbered Leverage Ratio]
+    keywords: [unencumbered]
+    quantitative: true
+    default_operator: ">="
+    unit: ratio
+    frequency: quarterly
+  # ======================================================================================
+  # FINANCIAL - liquidity & balance sheet
+  # ======================================================================================
+  - code: FIN_CURRENT_RATIO
+    category: financial
+    name: Current Ratio
+    description: Minimum ratio of current assets to current liabilities.
+    aliases: [Current Ratio, Working Capital Ratio, Consolidated Current Ratio, CR]
+    keywords: [current assets, current liabilities]
+    quantitative: true
+    default_operator: ">="
+    unit: ratio
+    frequency: quarterly
+  - code: FIN_QUICK_RATIO
+    category: financial
+    name: Quick Ratio / Acid Test
+    description: Minimum ratio of quick assets (cash, receivables) to current liabilities.
+    aliases: [Quick Ratio, Acid Test Ratio, Acid-Test Ratio, Liquid Ratio]
+    keywords: [quick assets]
+    quantitative: true
+    default_operator: ">="
+    unit: ratio
+    frequency: quarterly
+  - code: FIN_MIN_LIQUIDITY
+    category: financial
+    name: Minimum Liquidity / Cash
+    description: Minimum unrestricted cash, cash equivalents and/or undrawn commitments.
+    aliases: [Minimum Liquidity, Liquidity, Minimum Cash, Minimum Cash Balance, Unrestricted Cash, Minimum Availability, Excess Availability]
+    keywords: [liquidity, unrestricted cash, availability]
+    quantitative: true
+    default_operator: ">="
+    unit: amount
+    frequency: monthly
+  - code: FIN_MIN_NET_WORTH
+    category: financial
+    name: Minimum (Tangible) Net Worth
+    description: Minimum net worth, tangible net worth or shareholders' equity.
+    aliases: [Tangible Net Worth, Minimum Tangible Net Worth, Consolidated Tangible Net Worth, Net Worth, Minimum Net Worth, Consolidated Net Worth, Adjusted Tangible Net Worth, TNW, Shareholders Equity, Minimum Shareholders' Equity, Net Assets]
+    keywords: [net worth, tangible net worth, net assets]
+    quantitative: true
+    default_operator: ">="
+    unit: amount
+    frequency: quarterly
+  - code: FIN_MIN_WORKING_CAPITAL
+    category: financial
+    name: Minimum Working Capital / Net Working Capital
+    description: Minimum net working capital amount (or margin on current assets in Indian working capital lines).
+    aliases: [Minimum Working Capital, Net Working Capital, NWC, Working Capital]
+    keywords: [working capital]
+    quantitative: true
+    default_operator: ">="
+    unit: amount
+    frequency: quarterly
+  - code: FIN_BORROWING_BASE
+    category: financial
+    name: Borrowing Base / Drawing Power
+    description: Outstanding credit limited to a percentage of eligible receivables/inventory (US borrowing base, Indian drawing power with stock margin).
+    aliases: [Borrowing Base, Drawing Power, DP, Advance Rate, Margin on Stock, Margin on Book Debts, Eligible Receivables, Eligible Inventory]
+    keywords: [borrowing base, drawing power, margin on stock, book debts]
+    quantitative: true
+    default_operator: "<="
+    unit: percent
+    frequency: monthly
+  # ======================================================================================
+  # FINANCIAL - performance, spending, other
+  # ======================================================================================
+  - code: FIN_MIN_EBITDA
+    category: financial
+    name: Minimum EBITDA
+    description: Minimum (consolidated) EBITDA for a test period.
+    aliases: [Minimum EBITDA, Minimum Consolidated EBITDA, Minimum Adjusted EBITDA]
+    keywords: [minimum EBITDA]
+    quantitative: true
+    default_operator: ">="
+    unit: amount
+    frequency: quarterly
+  - code: FIN_MIN_REVENUE
+    category: financial
+    name: Minimum Revenue / Turnover / Recurring Revenue
+    description: Minimum revenue, turnover, sales or recurring revenue.
+    aliases: [Minimum Revenue, Minimum Turnover, Minimum Recurring Revenue, Minimum Net Sales, Minimum Sales]
+    keywords: [turnover, revenue]
+    quantitative: true
+    default_operator: ">="
+    unit: amount
+    frequency: quarterly
+  - code: FIN_MAX_CAPEX
+    category: financial
+    name: Maximum Capital Expenditure
+    description: Cap on capital expenditures per fiscal year (often with carry-forward).
+    aliases: [Capital Expenditures, Maximum Capital Expenditures, Capex, Capex Limit, Limitation on Capital Expenditures]
+    keywords: [capital expenditure, capex]
+    quantitative: true
+    default_operator: "<="
+    unit: amount
+    frequency: annual
+  - code: FIN_DIVIDEND_PAYOUT
+    category: financial
+    name: Dividend / Distribution Payout Limit
+    description: Quantitative limit on dividends or distributions (e.g. % of net income) or a ratio condition for paying them.
+    aliases: [Dividend Payout Ratio, Maximum Distributions, Payout Ratio, Distribution Lock-up, Dividend Cover]
+    keywords: [payout, distributions]
+    quantitative: true
+    default_operator: "<="
+    unit: percent
+    frequency: annual
+  - code: FIN_PROMOTER_HOLDING
+    category: financial
+    name: Minimum Promoter / Sponsor Shareholding
+    description: Promoters or sponsors must hold at least a stated percentage of shares (common in Indian facilities).
+    aliases: [Promoter Shareholding, Promoter Holding, Minimum Promoter Contribution, Sponsor Ownership, Minimum Shareholding]
+    keywords: [promoter, shareholding]
+    quantitative: true
+    default_operator: ">="
+    unit: percent
+    frequency: quarterly
+  - code: FIN_OCCUPANCY
+    category: financial
+    name: Minimum Occupancy / WALT
+    description: Real-estate operating tests such as minimum occupancy or weighted average lease term.
+    aliases: [Minimum Occupancy, Occupancy Rate, Weighted Average Lease Term, WALT, WAULT]
+    keywords: [occupancy, lease term]
+    quantitative: true
+    default_operator: ">="
+    unit: percent
+    frequency: quarterly
+  - code: FIN_HEDGING
+    category: financial
+    name: Minimum Hedging Ratio
+    description: Minimum percentage of floating-rate debt or exposure that must be hedged.
+    aliases: [Hedging Ratio, Interest Rate Hedging, Hedged Percentage, Minimum Hedging]
+    keywords: [hedging, hedged]
+    quantitative: true
+    default_operator: ">="
+    unit: percent
+    frequency: quarterly
+  - code: FIN_OTHER
+    category: financial
+    name: Other financial covenant
+    description: Any other quantitative ratio or amount test not listed above.
+    aliases: []
+    keywords: [ratio, not less than, not more than, not exceed, shall not permit]
+    quantitative: true
+    unit: ratio
+    frequency: quarterly
+
+  # ======================================================================================
+  # AFFIRMATIVE
+  # ======================================================================================
+  - {code: AFF_EXISTENCE, category: affirmative, name: Maintenance of existence, description: Preserve legal existence and good standing., aliases: [Preservation of Existence, Maintenance of Existence, Corporate Existence, Status], keywords: [existence]}
+  - {code: AFF_COMPLIANCE_LAWS, category: affirmative, name: Compliance with laws, description: Comply with applicable laws and regulations., aliases: [Compliance with Laws, Compliance with Law, Compliance with Laws and Material Contractual Obligations], keywords: [comply with all, applicable law]}
+  - {code: AFF_SANCTIONS_ABC, category: affirmative, name: Sanctions / anti-corruption / AML, description: Comply with sanctions, anti-bribery, anti-money-laundering and KYC rules., aliases: [Sanctions, Anti-Corruption Laws, Anti-Money Laundering, OFAC, Know Your Customer, KYC], keywords: [sanctions, corruption, money laundering, OFAC, FCPA]}
+  - {code: AFF_INSURANCE, category: affirmative, name: Maintenance of insurance, description: Maintain insurance with reputable insurers; bank as loss payee., aliases: [Insurance, Maintenance of Insurance, Insurances], keywords: [insurance, insurers, loss payee]}
+  - {code: AFF_TAXES, category: affirmative, name: Payment of taxes and obligations, description: Pay taxes and material obligations when due., aliases: [Payment of Taxes, Taxation, Payment of Obligations, Taxes], keywords: [taxes, tax returns]}
+  - {code: AFF_BOOKS_RECORDS, category: affirmative, name: Books and records, description: Keep proper books of record and account., aliases: [Books and Records, Accounting Records, Maintenance of Books], keywords: [books of record, books and records]}
+  - {code: AFF_INSPECTION, category: affirmative, name: Inspection rights / stock audit, description: Allow lender inspection, audit, stock audits or site visits., aliases: [Inspection Rights, Access, Inspection, Stock Audit, Site Visits, Visitation], keywords: [inspect, inspection, stock audit, visit]}
+  - {code: AFF_MAINTAIN_PROPERTY, category: affirmative, name: Maintenance of properties, description: Keep assets and properties in good working order., aliases: [Maintenance of Properties, Maintenance of Assets, Properties], keywords: [good working order, repair]}
+  - {code: AFF_USE_OF_PROCEEDS, category: affirmative, name: Use of proceeds / end use, description: Use loan only for the stated purpose; end-use certificate., aliases: [Use of Proceeds, Purpose, End Use, End-Use Certificate, Application of Loan], keywords: [use of proceeds, purpose, end use]}
+  - {code: AFF_SECURITY_PERFECTION, category: affirmative, name: Security perfection / further assurance, description: Create, perfect and maintain security; further assurance; additional guarantors., aliases: [Further Assurances, Additional Guarantors, Collateral, Security, Creation of Security, Perfection of Security, Additional Subsidiaries], keywords: [further assurance, perfect, security interest, additional guarantor]}
+  - {code: AFF_PARI_PASSU, category: affirmative, name: Pari passu ranking, description: Obligations rank at least pari passu with other unsecured unsubordinated debt., aliases: [Pari Passu Ranking, Ranking], keywords: [pari passu]}
+  - {code: AFF_CREDIT_RATING, category: affirmative, name: Maintain credit rating, description: Obtain and maintain an external credit rating (often a minimum grade)., aliases: [Credit Rating, Rating, External Rating, Maintenance of Ratings], keywords: [credit rating, rating agency]}
+  - {code: AFF_ENVIRONMENTAL, category: affirmative, name: Environmental / ESG compliance, description: Comply with environmental and social laws and ESG undertakings., aliases: [Environmental Compliance, Environmental Matters, ESG, Sustainability, Environmental Laws], keywords: [environmental, ESG, sustainability]}
+  - {code: AFF_HEDGING_OBLIGATION, category: affirmative, name: Enter into hedging, description: Obligation to enter into and maintain hedging arrangements., aliases: [Hedging, Hedging Arrangements, Interest Rate Protection], keywords: [hedging arrangements, swap]}
+  - {code: AFF_ACCOUNTS, category: affirmative, name: Maintain accounts with lender / cash management, description: Route sales proceeds through lender accounts, maintain DSRA / escrow / TRA., aliases: [Cash Management, Accounts, Debt Service Reserve Account, DSRA, Escrow Account, Trust and Retention Account, TRA], keywords: [DSRA, escrow, retention account, cash management]}
+  - {code: AFF_OTHER, category: affirmative, name: Other affirmative covenant, description: Any other positive obligation., aliases: [], keywords: [shall maintain, shall ensure, shall procure, will maintain]}
+
+  # ======================================================================================
+  # NEGATIVE
+  # ======================================================================================
+  - {code: NEG_LIENS, category: negative, name: Negative pledge / limitation on liens, description: No liens or security over assets beyond permitted liens., aliases: [Liens, Negative Pledge, Limitation on Liens, Encumbrances, Security Interests], keywords: [lien, negative pledge, encumbrance, charge]}
+  - {code: NEG_INDEBTEDNESS, category: negative, name: Limitation on indebtedness, description: No additional financial indebtedness beyond permitted baskets., aliases: [Indebtedness, Limitation on Indebtedness, Financial Indebtedness, Borrowings, Additional Borrowings], keywords: [indebtedness, borrowing]}
+  - {code: NEG_GUARANTEES, category: negative, name: Limitation on guarantees, description: No guarantees of third-party obligations beyond permitted., aliases: [Guarantees, Guarantee Obligations, Contingent Obligations], keywords: [guarantee, contingent obligation]}
+  - {code: NEG_FUNDAMENTAL_CHANGES, category: negative, name: Mergers / fundamental changes, description: No merger, consolidation, amalgamation, demerger, liquidation or restructuring., aliases: [Fundamental Changes, Merger, Mergers, Consolidations, Amalgamation, Corporate Restructuring, Reorganisation], keywords: [merge with, merger, consolidate with, amalgamat, demerger, liquidate, dissolve, corporate reconstruction]}
+  - {code: NEG_DISPOSALS, category: negative, name: Asset dispositions, description: No sale, lease or transfer of assets beyond permitted dispositions., aliases: [Dispositions, Disposals, Asset Sales, Sale of Assets, Disposition of Assets], keywords: [dispose, disposal, sell, transfer]}
+  - {code: NEG_RESTRICTED_PAYMENTS, category: negative, name: Restricted payments / dividends, description: Limits on dividends, distributions, share buybacks and junior payments., aliases: [Restricted Payments, Dividends, Distributions, Dividends and Share Redemption], keywords: [dividend, distribution, restricted payment, buy back, redeem]}
+  - {code: NEG_INVESTMENTS, category: negative, name: Investments / loans / acquisitions, description: Limits on investments, loans, advances and acquisitions., aliases: [Investments, Loans and Advances, Acquisitions, Loans or Credit, Joint Ventures], keywords: [investment, acquisition, joint venture, loans or advances]}
+  - {code: NEG_AFFILIATE_TXN, category: negative, name: Transactions with affiliates, description: Affiliate transactions only on arm's-length terms., aliases: [Transactions with Affiliates, Affiliate Transactions, Arm's Length Terms, Related Party Transactions], keywords: [affiliate, arm's length, related party]}
+  - {code: NEG_CHANGE_OF_BUSINESS, category: negative, name: Change of business, description: No substantial change in the general nature of the business., aliases: [Change of Business, Change in Nature of Business, Lines of Business, Business Activities, Diversification], keywords: [nature of business, line of business, diversification]}
+  - {code: NEG_CHANGE_OF_CONTROL, category: negative, name: Change of control / management / ownership, description: No change of control, ownership, promoters or key management without consent., aliases: [Change of Control, Change in Ownership, Change in Management, Change in Shareholding, Change in Promoters], keywords: [change of control, change in management, shareholding pattern]}
+  - {code: NEG_CONSTITUTIONAL_DOCS, category: negative, name: Amendment of constitutional / material documents, description: No amendment of charter documents or material contracts., aliases: [Amendments to Organizational Documents, Constitutional Documents, Memorandum and Articles, Amendment of Material Documents], keywords: [constitutional documents, organizational documents, articles of association, charter]}
+  - {code: NEG_SALE_LEASEBACK, category: negative, name: Sale and leaseback, description: No sale-and-leaseback transactions., aliases: [Sale and Leaseback, Sale-Leaseback Transactions], keywords: [leaseback]}
+  - {code: NEG_PREPAY_OTHER_DEBT, category: negative, name: Prepayment of other debt / subordinated debt, description: No prepayment or amendment of subordinated or other debt; no repayment of promoter loans., aliases: [Prepayments of Indebtedness, Payments of Subordinated Debt, Unsecured Loans from Promoters], keywords: [prepay, subordinated, promoter loans]}
+  - {code: NEG_ACCOUNTING_CHANGES, category: negative, name: Change of fiscal year / accounting policies, description: No change of fiscal year end, accounting policies or auditors., aliases: [Fiscal Year, Change in Fiscal Year, Accounting Changes, Change of Auditors], keywords: [fiscal year, accounting policies, auditors]}
+  - {code: NEG_BURDENSOME_AGREEMENTS, category: negative, name: Burdensome agreements / restrictive agreements, description: No agreements restricting the ability to grant liens or pay dividends., aliases: [Burdensome Agreements, Restrictive Agreements, Negative Pledge Clauses], keywords: [burdensome, restrictive agreement]}
+  - {code: NEG_SWAP_SPECULATION, category: negative, name: Speculative derivatives, description: No speculative swap / derivative transactions., aliases: [Swap Contracts, Hedging Agreements, Derivative Transactions], keywords: [speculative, derivative]}
+  - {code: NEG_OTHER, category: negative, name: Other negative covenant, description: Any other restriction., aliases: [], keywords: [shall not, will not, without the prior written consent]}
+
+  # ======================================================================================
+  # REPORTING / INFORMATION
+  # ======================================================================================
+  - {code: REP_ANNUAL_FS, category: reporting, name: Annual audited financial statements, description: Deliver audited annual accounts within N days after fiscal year end., aliases: [Annual Financial Statements, Audited Financial Statements, Annual Accounts, Audited Annual Accounts, Year-End Financials], keywords: [audited, annual, fiscal year], frequency: annual}
+  - {code: REP_INTERIM_FS, category: reporting, name: Quarterly / half-yearly financial statements, description: Deliver unaudited quarterly or semi-annual statements within N days., aliases: [Quarterly Financial Statements, Interim Financial Statements, Half-Yearly Accounts, Semi-Annual Financial Statements, Unaudited Results], keywords: [quarterly, half-yearly, semi-annual, interim, fiscal quarters, half of each, unaudited], frequency: quarterly}
+  - {code: REP_MONTHLY_MIS, category: reporting, name: Monthly management accounts / MIS, description: Deliver monthly management accounts or MIS reports., aliases: [Monthly Financial Statements, Monthly Management Accounts, MIS, Monthly Reports, Management Information], keywords: [monthly, management accounts, MIS], frequency: monthly}
+  - {code: REP_COMPLIANCE_CERT, category: reporting, name: Compliance certificate, description: Deliver a compliance certificate with covenant calculations., aliases: [Compliance Certificate, Officer's Certificate, Covenant Compliance Certificate, Certificates], keywords: [compliance certificate, officer's certificate], frequency: quarterly}
+  - {code: REP_STOCK_STATEMENT, category: reporting, name: Stock and book-debt statement, description: Monthly stock / inventory and receivables statement for drawing power (Indian working capital)., aliases: [Stock Statement, Stock and Book Debts Statement, Inventory Report, Receivables Report, QIS, Quarterly Information System, FFR], keywords: [stock statement, book debts, inventory, receivables aging, QIS, FFR], frequency: monthly}
+  - {code: REP_BORROWING_BASE_CERT, category: reporting, name: Borrowing base certificate, description: Deliver borrowing base certificate., aliases: [Borrowing Base Certificate, Borrowing Base Report], keywords: [borrowing base certificate], frequency: monthly}
+  - {code: REP_BUDGET, category: reporting, name: Budget / projections / business plan, description: Deliver annual budget, projections or CMA data., aliases: [Budget, Annual Budget, Projections, Business Plan, CMA Data, Financial Projections], keywords: [budget, projections, business plan, CMA], frequency: annual}
+  - {code: REP_NOTICE_DEFAULT, category: reporting, name: Notice of default, description: Notify lender promptly of any default or event of default., aliases: [Notice of Default, Notification of Default, Notices], keywords: [notice of default, notify, promptly], frequency: on_occurrence}
+  - {code: REP_NOTICE_LITIGATION, category: reporting, name: Notice of litigation / material events, description: Notify of litigation, material adverse events, ERISA events, regulatory actions., aliases: [Litigation, Notice of Litigation, Material Adverse Effect Notice, Notices of Material Events, ERISA Events], keywords: [litigation, proceedings, material adverse], frequency: on_occurrence}
+  - {code: REP_INSURANCE_CERT, category: reporting, name: Insurance reports, description: Deliver insurance certificates or reports., aliases: [Insurance Certificate, Insurance Report], keywords: [insurance certificate], frequency: annual}
+  - {code: REP_VALUATION, category: reporting, name: Valuation report, description: Deliver property / collateral valuation reports., aliases: [Valuation, Valuation Report, Appraisal], keywords: [valuation, appraisal, valuer], frequency: annual}
+  - {code: REP_ESG, category: reporting, name: ESG / sustainability reporting, description: Deliver sustainability-linked KPI or ESG reports., aliases: [Sustainability Compliance Certificate, ESG Report, KPI Report], keywords: [sustainability, ESG, KPI], frequency: annual}
+  - {code: REP_OTHER_INFO, category: reporting, name: Other information on request, description: Other information reasonably requested by lender., aliases: [Information, Other Information, Information Undertakings, Further Information], keywords: [information, reasonably request], frequency: on_request}
+
+  # ======================================================================================
+  # EVENTS OF DEFAULT
+  # ======================================================================================
+  - {code: EOD_NON_PAYMENT, category: event_of_default, name: Non-payment, description: Failure to pay principal, interest or fees when due (with any grace period)., aliases: [Non-Payment, Non-payment, Failure to Pay, Payment Default], keywords: [fails to pay, failure to pay, non-payment]}
+  - {code: EOD_FIN_COVENANT_BREACH, category: event_of_default, name: Financial covenant breach, description: Breach of a financial covenant., aliases: [Financial Covenants, Breach of Financial Covenant], keywords: [financial covenant]}
+  - {code: EOD_COVENANT_BREACH, category: event_of_default, name: Breach of other obligations, description: Breach of other covenants with cure period., aliases: [Other Obligations, Specific Covenants, Other Defaults, Breach of Covenant], keywords: [fails to perform, breach of]}
+  - {code: EOD_MISREPRESENTATION, category: event_of_default, name: Misrepresentation, description: Representation or warranty untrue in a material respect., aliases: [Misrepresentation, Representations and Warranties, Incorrect Representation], keywords: [misrepresentation, incorrect or misleading, untrue]}
+  - {code: EOD_CROSS_DEFAULT, category: event_of_default, name: Cross default / cross acceleration, description: Default on other indebtedness above a threshold., aliases: [Cross Default, Cross-Default, Cross Acceleration, Cross-Acceleration], keywords: [cross default, cross-default, other indebtedness]}
+  - {code: EOD_INSOLVENCY, category: event_of_default, name: Insolvency / bankruptcy, description: Insolvency, inability to pay debts, insolvency proceedings, IBC/NCLT admission., aliases: [Insolvency, Insolvency Proceedings, Bankruptcy, Inability to Pay Debts, Winding Up, IBC], keywords: [insolvency, bankruptcy, winding up, receiver, liquidator, NCLT]}
+  - {code: EOD_CREDITORS_PROCESS, category: event_of_default, name: Creditors' process / judgments, description: Attachment, distress, execution or unpaid judgments above threshold., aliases: [Judgments, Creditors' Process, Attachment, Expropriation], keywords: [judgment, attachment, distress, execution]}
+  - {code: EOD_UNLAWFULNESS, category: event_of_default, name: Unlawfulness / invalidity / repudiation, description: Finance documents invalid, unlawful or repudiated; security impaired., aliases: [Unlawfulness, Invalidity, Repudiation, Invalidity of Loan Documents, Security Impaired], keywords: [unlawful, invalid, repudiat, enforceable]}
+  - {code: EOD_CHANGE_OF_CONTROL, category: event_of_default, name: Change of control, description: Change of control as event of default or mandatory prepayment trigger., aliases: [Change of Control], keywords: [change of control]}
+  - {code: EOD_CESSATION, category: event_of_default, name: Cessation of business, description: Obligor ceases or threatens to cease business., aliases: [Cessation of Business], keywords: [cease, cessation]}
+  - {code: EOD_MAC, category: event_of_default, name: Material adverse change, description: Material adverse change in financial condition., aliases: [Material Adverse Change, MAC, Material Adverse Effect], keywords: [material adverse]}
+  - {code: EOD_AUDIT_QUALIFICATION, category: event_of_default, name: Audit qualification, description: Auditors qualify the audited financial statements., aliases: [Audit Qualification, Qualified Audit Opinion, Going Concern], keywords: [qualif, going concern]}
+  - {code: EOD_ERISA, category: event_of_default, name: ERISA / pension events, description: Pension plan events above threshold (US)., aliases: [ERISA, ERISA Events, Pension], keywords: [ERISA, pension]}
+  - {code: EOD_WILFUL_DEFAULTER, category: event_of_default, name: Wilful defaulter / fraud / NPA classification, description: Obligor or promoters named wilful defaulter, fraud, or account classified NPA by another lender (India)., aliases: [Wilful Defaulter, Fraud, Non-Performing Asset, NPA, CIBIL defaulter list], keywords: [wilful defaulter, NPA, non-performing, fraud]}
+  - {code: EOD_OTHER, category: event_of_default, name: Other event of default, description: Any other event of default., aliases: [], keywords: [event of default]}

@@ -14,6 +14,8 @@ from __future__ import annotations
 import re
 
 from dps.extraction.agreement import FINANCIAL_ALIASES, NON_FINANCIAL_RULES
+from dps.skills.covenants.taxonomy import COVENANT_CATEGORIES
+from dps.skills.covenants.taxonomy import get as taxonomy
 
 OTHER = "OTHER"
 # Security covenants the rules also read (extraction/agreement.py _SECURITY_RULES): a threshold, so voted like the
@@ -25,7 +27,7 @@ SECURITY: dict[str, list[str]] = {
                              "VALUE OF THE SECURITY"],
     "ASSET_DISPOSAL_CAP": ["ASSET DISPOSAL CAP", "DISPOSAL CAP", "ASSET DISPOSAL LIMIT", "DISPOSAL LIMIT"],
 }
-FINANCIAL = frozenset(FINANCIAL_ALIASES) | frozenset(SECURITY)
+LEGACY_FINANCIAL = frozenset(FINANCIAL_ALIASES) | frozenset(SECURITY)
 # Undertakings of Indian loan agreements the rules have no rule for (live run, 18 Nov 2026): without a key they were
 # OTHER, so Spring could not map them and the coverage check could not match them by kind.
 EXTRA_NON_FINANCIAL: dict[str, str] = {
@@ -36,8 +38,30 @@ EXTRA_NON_FINANCIAL: dict[str, str] = {
                          r"PERFECTION|PERFECT_SECURITY",
     "MATERIAL_CONTRACTS": r"MATERIAL_CONTRACTS?|PROJECT_DOCUMENTS?|MATERIAL_AGREEMENTS?",
 }
-NON_FINANCIAL = tuple(dict.fromkeys([*(rule[0] for rule in NON_FINANCIAL_RULES), *EXTRA_NON_FINANCIAL]))
-KNOWN = FINANCIAL | frozenset(NON_FINANCIAL)
+LEGACY_NON_FINANCIAL = tuple(dict.fromkeys([*(rule[0] for rule in NON_FINANCIAL_RULES), *EXTRA_NON_FINANCIAL]))
+LEGACY_KNOWN = LEGACY_FINANCIAL | frozenset(LEGACY_NON_FINANCIAL)
+
+# The covenant taxonomy (taxonomy/): the 32 covenants above keep their DPS names inside DPS (every one is a dps_key
+# of a taxonomy code, and results carry the code too); the taxonomy's other types are used by their codes.
+_TAX = taxonomy()
+_COVENANT_TYPES = [t for t in _TAX.types.values() if t.category in COVENANT_CATEGORIES and not t.is_other]
+TAXONOMY_FINANCIAL = frozenset(t.code for t in _COVENANT_TYPES if t.quantitative and not t.dps_keys)
+TAXONOMY_NON_FINANCIAL = tuple(sorted(t.code for t in _COVENANT_TYPES if not t.quantitative and not t.dps_keys))
+EVENTS_OF_DEFAULT = frozenset(t.code for t in _TAX.types.values() if t.category == "event_of_default")
+OTHER_CODES = frozenset(t.code for t in _TAX.types.values() if t.is_other)
+FINANCIAL = LEGACY_FINANCIAL | TAXONOMY_FINANCIAL
+NON_FINANCIAL = (*LEGACY_NON_FINANCIAL, *TAXONOMY_NON_FINANCIAL)
+KNOWN = FINANCIAL | frozenset(NON_FINANCIAL) | EVENTS_OF_DEFAULT | OTHER_CODES
+
+
+def is_other(key: str | None) -> bool:
+    """No library key fits: OTHER, or a category's other code (FIN_OTHER, NEG_OTHER ...)."""
+    return not key or key == OTHER or key in OTHER_CODES
+
+
+def code_of(key: str | None) -> str | None:
+    """The taxonomy code of a DPS name, a code or a name as written."""
+    return _TAX.code_for(key)
 
 # A name the agent made up, to the library key it means. Checked in this order: the first match wins, so the
 # reporting words come before "INSURANCE" ("evidence of tax payment, insurance validity" is an information duty)
@@ -76,13 +100,16 @@ def _token(text: str) -> str:
 
 
 def canonical(metric: str | None, name: str | None = None) -> str:
-    """The library key for the agent's metric (or name as written); OTHER when none fits."""
+    """The library key for the agent's metric (or name as written): a DPS name for the 32 covenants DPS already
+    named, a taxonomy code for the others; OTHER when none fits."""
     for raw in (metric, name):
         token = _token(raw)
         if not token:
             continue
-        if token in KNOWN:
+        if token in LEGACY_KNOWN:
             return token
+        if token in _TAX.types:  # the agent answers with taxonomy codes
+            return _TAX.dps_key(token) or token
         spaced = f" {token.replace('_', ' ')} "
         for alias, key in _ALIASES:  # the longest alias first: "DEBT TO NET WORTH" before "NET WORTH"
             if f" {re.sub(r'[^A-Z0-9]+', ' ', alias).strip()} " in spaced:
@@ -90,6 +117,10 @@ def canonical(metric: str | None, name: str | None = None) -> str:
         for key, pattern in _NON_FINANCIAL_RE:
             if pattern.search(token):
                 return key
+    for raw in (metric, name):  # the taxonomy's names and aliases
+        code = _TAX.code_for(raw)
+        if code:
+            return _TAX.dps_key(code) or code
     return OTHER
 
 
@@ -121,7 +152,7 @@ def clean(proposals: list[dict] | None, drop_mechanics: bool = True, collapse: b
                 continue
             pages.append(page)
         value["metric"] = key
-        if key == OTHER:
+        if is_other(key):
             value["nameAsWritten"] = str(written or "")[:120]
         out.append({**p, "value": value, "_written": written})
     return out

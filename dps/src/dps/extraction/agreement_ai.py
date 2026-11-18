@@ -227,7 +227,7 @@ def skill_terms(pages: list[Page], proposals: list[dict]) -> tuple[list[Term], i
     older reader (a % coverage is times, a ratio above MAX_RATIO is not that ratio, a certificate form is not the
     covenant). Non-financial covenants are kept: a library key the rules also hold confirms it; anything else is a
     possible covenant for a person."""
-    from dps.skills.covenants.names import FINANCIAL, OTHER, SECURITY
+    from dps.skills.covenants.names import FINANCIAL, OTHER, SECURITY, is_other
 
     texts = {p.no: p.text for p in pages}
     out: list[Term] = []
@@ -267,7 +267,7 @@ def skill_terms(pages: list[Page], proposals: list[dict]) -> tuple[list[Term], i
         if page is not None and quote_on_page(texts, page, quote) is None:
             dropped += 1
             continue
-        if metric not in FINANCIAL and metric != OTHER:  # a library non-financial covenant
+        if metric not in FINANCIAL and not is_other(metric):  # a library non-financial covenant
             out.append(Term(metric, "NON_FINANCIAL", None, None, None, None, page, quote, None, 0.6, method="AI",
                             issues=["AI_ONLY: found by the AI reader, not by the rules"], name=name or None))
             continue
@@ -299,8 +299,8 @@ def read_with_skill(pages: list[Page], terms: list[Term], gateway, spring=None, 
     tools over the whole document, grounding with salvage and library names (skills/). The rules' terms unchanged
     when the model is not available."""
     from dps.skills import load
-    from dps.skills.common import MAX_PROMPT_CHARS, batched_proposals
-    from dps.skills.covenants import names
+    from dps.skills.common import MAX_PROMPT_CHARS
+    from dps.skills.covenants import names, parts
     from dps.skills.covenants.pages import covenant_batches
 
     pack = load("covenants")
@@ -313,8 +313,8 @@ def read_with_skill(pages: list[Page], terms: list[Term], gateway, spring=None, 
                                       pack.page_selection.get("max_pages", 25), MAX_PROMPT_CHARS,
                                       pack.page_selection.get("max_batches", 1))
     try:
-        proposals = batched_proposals(pack, gateway, batches or [[]], notes=notes, spring=spring,
-                                      correlation_id=correlation_id, all_pages=page_dicts)
+        proposals, _ = parts.read(pack, gateway, batches or [[]], notes=notes, spring=spring,
+                                  correlation_id=correlation_id, all_pages=page_dicts)
     except Exception as ex:  # noqa: BLE001 - a model outage must not stop agreements from being read
         log.warning("Covenants skill unavailable: %s", type(ex).__name__)
         return terms

@@ -28,9 +28,13 @@ and a person decide. Only the pages a job needs are sent, only to the bank's own
 - **Grounding:** every agent value must quote text found on the page it names (or the page before or after, or
   across a page break); otherwise it is repaired once, and then only the grounded items are kept (`AI_UNGROUNDED`
   says how many were dropped). Values read from page images cannot be grounded, so they always go to a person.
-- **Covenant names:** every covenant the agent proposes gets a covenant-library metric key (or OTHER, with the
-  name as written kept for the reviewer); loan mechanics (drawdown, prepayment, default, cure) are left to the
-  schedule skill; one item per non-financial key and clause area (`skills/covenants/names.py`).
+- **Covenant names:** every covenant the agent proposes gets a covenant-library metric key or a code from the
+  bank's covenant taxonomy (or OTHER, with the name as written kept for the reviewer); loan mechanics (drawdown,
+  prepayment, default, cure) are left to the schedule skill; one item per key and clause area
+  (`skills/covenants/names.py`). Since 18 Nov 2026 the agent reads covenants in four focused parts, each prompt
+  listing only that part's taxonomy codes (`skills/covenants/parts.py`); events of default come back as their own
+  fields, always for a person; values the document does not state and the taxonomy fills (operator, unit, test
+  frequency) are flagged `TAXONOMY_DEFAULT` and go to a person (`skills/covenants/codes.py`).
 - **Covenant pages and coverage:** the agent reads the covenant sections, duty pages and definitions, not only the
   pages the rules used (`skills/covenants/pages.py`). Every duty sentence on those pages must be explained by an
   extracted field or is listed for the reviewer (`document.coverage`, `COVERAGE_GAP`; `skills/covenants/coverage.py`).

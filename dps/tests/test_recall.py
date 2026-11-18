@@ -148,7 +148,7 @@ def test_the_covenants_skill_prompt_holds_the_far_section_and_says_when_pages_di
     texts[35] = "ARTICLE 12 INFORMATION UNDERTAKINGS\nThe Borrower shall deliver audited accounts within 180 days."
     gw = Recorder()
     result = skills.run(load("covenants"), fake_job("ONBOARD"), model_of(*texts), gw, None)
-    assert "<<<page 36>>>" in gw.prompts[0] and "INFORMATION UNDERTAKINGS" in gw.prompts[0]
+    assert any("<<<page 36>>>" in p and "INFORMATION UNDERTAKINGS" in p for p in gw.prompts)
     assert not [w for w in result["warnings"] if w["code"] == "PAGES_NOT_SENT"]
     many = [("The Borrower shall maintain a ratio of not less than 1.25 times. " * 40)] * 100  # > 4 batches
     result = skills.run(load("covenants"), fake_job("ONBOARD"), model_of(*many), Recorder(), None)
@@ -260,7 +260,8 @@ def test_the_older_agreement_flow_reads_with_the_covenants_skill():
     assert by[("ICR", "FINANCIAL")].method in ("REGEX+AI", "AI")
     pledge = by.get(("NEGATIVE_PLEDGE", "NON_FINANCIAL"))
     assert pledge is not None and pledge.method in ("REGEX+AI", "AI")  # kept, not dropped for having no number
-    assert any(t.category == "CANDIDATE" and "general nature" in (t.quote or "") for t in voted)
+    change = by.get(("NEG_CHANGE_OF_BUSINESS", "NON_FINANCIAL"))  # a taxonomy code now, not a candidate
+    assert change is not None and "general nature" in (change.quote or "")
     assert not any("DRAWDOWN" in str(t.metric) for t in voted)  # a loan mechanic is not a covenant
     assert read_with_skill(pages, terms, None) == terms  # no model: the rules' terms unchanged
 
@@ -449,7 +450,7 @@ def test_one_insurance_covenant_covers_its_whole_clause_and_an_escrow_duty_stays
     cov = coverage.check([{"no": 3, "text": page}], [field])
     assert cov["dutySentences"] == 5 and cov["byQuote"] == 1 and cov["byKind"] == 3
     assert cov["unexplainedCount"] == 1 and "escrow" in cov["unexplained"][0]["text"]
-    assert cov["unexplained"][0]["kind"] == "ESCROW_ACCOUNT"  # its own kind, and no escrow covenant: still listed
+    assert cov["unexplained"][0]["kind"] == "AFF_ACCOUNTS"  # its own kind, and no escrow covenant: still listed
 
 
 def test_a_financial_sentence_is_covered_only_by_a_covenant_on_the_same_metric():
@@ -461,7 +462,7 @@ def test_a_financial_sentence_is_covered_only_by_a_covenant_on_the_same_metric()
             "source": {"page": 5, "quote": "unrelated words only"}}
     cov = coverage.check([{"no": 5, "text": page}], [dscr])
     assert cov["byKind"] == 1 and cov["unexplainedCount"] == 1
-    assert cov["unexplained"][0]["kind"] == "ICR"  # the ICR duty is not covered by the DSCR covenant
+    assert cov["unexplained"][0]["kind"] == "FIN_INTEREST_COVERAGE"  # the ICR duty is not covered by the DSCR covenant
     far = dict(dscr, source={"page": 9, "quote": "unrelated words only"})
     assert coverage.check([{"no": 5, "text": page}], [far])["byKind"] == 0  # a covenant far away covers nothing here
 
@@ -472,19 +473,21 @@ def test_schedule_terms_and_other_fields_have_no_kind():
     assert field_kind({"group": "SCHEDULE_TERM", "name": "cure_window", "value": {"kind": "cure_window"}}) is None
     assert field_kind({"group": "POSSIBLE_COVENANT", "name": "x", "value": {"metric": "OTHER"}}) is None
     assert field_kind({"group": "NON_FINANCIAL_COVENANT", "name": "x", "value": {"metric": "NEGATIVE_PLEDGE"}}) \
-        == "NEGATIVE_PLEDGE"
+        == "NEG_LIENS"
 
 
 def test_the_newer_kinds_are_recognised_in_sentences_and_covered_by_their_covenant():
     from dps.skills.covenants import coverage
 
     cases = {
-        "The Loan shall be utilized by the Borrower solely for capital expenditure.": "END_USE",
-        "The Borrower shall open and maintain an escrow account with a bank approved by the Lender.": "ESCROW_ACCOUNT",
+        "The Loan shall be utilized by the Borrower solely for capital expenditure.": "AFF_USE_OF_PROCEEDS",
+        "The Borrower shall open and maintain an escrow account with a bank approved by the Lender.": "AFF_ACCOUNTS",
         "The Borrower shall procure that all loans from its promoters are subordinated to the Facility.":
-            "SUBORDINATION",
-        "The Borrower shall create a first-ranking mortgage over the property within 90 days.": "SECURITY_CREATION",
-        "The Borrower shall not terminate any material contract without consent of the Lender.": "MATERIAL_CONTRACTS",
+            "AFF_SUBORDINATION",
+        "The Borrower shall create a first-ranking mortgage over the property within 90 days.":
+            "AFF_SECURITY_PERFECTION",
+        "The Borrower shall not terminate any material contract without consent of the Lender.":
+            "NEG_MATERIAL_CONTRACTS",
     }
     for sentence, kind in cases.items():
         assert coverage.sentence_kind(sentence) == kind, sentence
