@@ -100,3 +100,10 @@ def test_agreement_job_reviewers_see_covenants_only_with_library_names():
     assert "DSCR" in metrics and "NEGATIVE_PLEDGE" in metrics and "OTHER" in metrics
     other = next(f for f in covenants if f["value"].get("metric") == "OTHER")
     assert other["status"] == "NEEDS_REVIEW" and other["value"]["nameAsWritten"] == "No change of business"
+
+
+@pytest.mark.parametrize("metric, key", [("SECURITY_COVER", "SECURITY_COVER"), ("Asset Cover", "SECURITY_COVER"),
+                                         ("Value of the Collateral", "MIN_COLLATERAL_VALUE"),
+                                         ("ASSET_DISPOSAL_CAP", "ASSET_DISPOSAL_CAP")])
+def test_security_covenants_the_rules_know_are_library_keys(metric, key):
+    assert names.canonical(metric) == key and key in names.FINANCIAL

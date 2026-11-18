@@ -16,7 +16,16 @@ import re
 from dps.extraction.agreement import FINANCIAL_ALIASES, NON_FINANCIAL_RULES
 
 OTHER = "OTHER"
-FINANCIAL = frozenset(FINANCIAL_ALIASES)
+# Security covenants the rules also read (extraction/agreement.py _SECURITY_RULES): a threshold, so voted like the
+# financial ones. Live run 18 Nov 2026: without them the agent's security covenants became OTHER and stood apart
+# from the rules' identical ones.
+SECURITY: dict[str, list[str]] = {
+    "SECURITY_COVER": ["SECURITY COVER", "ASSET COVER", "COLLATERAL COVER", "SECURITY COVERAGE"],
+    "MIN_COLLATERAL_VALUE": ["MINIMUM COLLATERAL VALUE", "COLLATERAL VALUE", "VALUE OF THE COLLATERAL",
+                             "VALUE OF THE SECURITY"],
+    "ASSET_DISPOSAL_CAP": ["ASSET DISPOSAL CAP", "DISPOSAL CAP", "ASSET DISPOSAL LIMIT", "DISPOSAL LIMIT"],
+}
+FINANCIAL = frozenset(FINANCIAL_ALIASES) | frozenset(SECURITY)
 NON_FINANCIAL = tuple(dict.fromkeys(rule[0] for rule in NON_FINANCIAL_RULES))
 KNOWN = FINANCIAL | frozenset(NON_FINANCIAL)
 
@@ -44,7 +53,8 @@ _MECHANICS = re.compile(
     r"|EVENTS?_OF_DEFAULT|PAYMENT_(?:DEFAULT|OBLIGATION|GRACE)|DEFAULT_INTEREST|CURE|GRACE|FEES?|ACCELERAT"
     r"|TENOR|AVAILABILITY_PERIOD|COMMITMENT_PERIOD)", re.I)
 
-_ALIASES = sorted(((alias.upper(), key) for key, names in FINANCIAL_ALIASES.items() for alias in names),
+_ALIASES = sorted(((alias.upper(), key) for key, names in [*FINANCIAL_ALIASES.items(), *SECURITY.items()]
+                   for alias in names),
                   key=lambda a: -len(a[0]))
 
 
