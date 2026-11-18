@@ -153,3 +153,48 @@ def test_the_covenants_skill_prompt_holds_the_far_section_and_says_when_pages_di
     many = [("The Borrower shall maintain a ratio of not less than 1.25 times. " * 40)] * 40
     result = skills.run(load("covenants"), fake_job("ONBOARD"), model_of(*many), Recorder(), None)
     assert [w for w in result["warnings"] if w["code"] == "PAGES_NOT_SENT"]
+
+
+# ---------- one-to-one vote; non-financial merge per clause area ----------
+
+def rule(metric, threshold, page, basis=None, op=">="):
+    return {"name": metric, "value": {"metric": metric, "operator": op, "threshold": threshold}, "method": "REGEX",
+            "confidence": 0.8, "issues": [], "status": "NEEDS_REVIEW", "source": {"page": page, "quote": "q"},
+            "test": {"basis": basis}}
+
+
+def agent(metric, threshold, page, basis=None, op=">="):
+    return {"name": metric, "page": page, "quote": "q",
+            "value": {"metric": metric, "operator": op, "threshold": threshold, "basis": basis}}
+
+
+def test_two_covenants_on_the_same_metric_each_get_their_own_match():
+    company, group = rule("DSCR", 1.25, 3, "STANDALONE"), rule("DSCR", 1.10, 7, "CONSOLIDATED")
+    proposals = [agent("DSCR", 1.10, 7, "CONSOLIDATED"), agent("DSCR", 1.25, 3, "STANDALONE")]
+    skills._vote(load("covenants"), [company, group], proposals)
+    assert company["method"] == group["method"] == "RULES+AI_CONFIRMED"
+    assert not company["issues"] and not group["issues"]  # before: one of them was flagged MODELS_DISAGREE
+    assert all(p["_matched"] for p in proposals)
+
+
+def test_a_different_number_is_flagged_on_the_right_covenant_and_a_repeat_changes_nothing():
+    company, group = rule("DSCR", 1.25, 3, "STANDALONE"), rule("DSCR", 1.10, 7, "CONSOLIDATED")
+    proposals = [agent("DSCR", 1.25, 3, "STANDALONE"), agent("DSCR", 1.05, 7, "CONSOLIDATED"),
+                 agent("DSCR", 1.25, 3, "STANDALONE")]
+    skills._vote(load("covenants"), [company, group], proposals)
+    assert company["method"] == "RULES+AI_CONFIRMED" and not company["issues"]
+    assert [i["code"] for i in group["issues"]] == ["MODELS_DISAGREE"]
+    assert proposals[2]["_matched"]  # the repeated item is not a new agent-only covenant
+    extra = skills._agent_only(load("covenants"), [{"no": 3, "text": "q"}], [company, group], proposals)
+    assert extra == []
+
+
+def test_reporting_duties_merge_per_clause_but_far_apart_duties_stay_separate():
+    from dps.skills.covenants import names
+
+    items = [{"name": "Annual accounts", "page": 5, "value": {"metric": "ANNUAL_FINANCIAL_STATEMENTS"}},
+             {"name": "Quarterly accounts", "page": 5, "value": {"metric": "MANAGEMENT_ACCOUNTS"}},
+             {"name": "Breach notice", "page": 6, "value": {"metric": "BREACH_NOTICE"}},
+             {"name": "Lender's information request", "page": 31, "value": {"metric": "INFORMATION_REQUEST"}}]
+    out = names.clean(items)
+    assert [(p["value"]["metric"], p["page"]) for p in out] == [("REPORTING_COVENANT", 5), ("REPORTING_COVENANT", 31)]

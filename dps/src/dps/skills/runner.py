@@ -142,13 +142,45 @@ def _same_change(a: dict, b: dict | None) -> bool:
     return _same_test(a, b) and ((a.get("change") or {}).get("type") == ((b or {}).get("change") or {}).get("type"))
 
 
+def _basis(f: dict) -> str | None:
+    return ((f.get("test") or {}).get("basis") or (f.get("value") or {}).get("basis") or None)
+
+
+def _vote_covenants(fields: list[dict], proposals: list[dict], compare) -> list[dict]:
+    """Rules vs agent, one to one. Two covenants on the same metric (a DSCR for the company and one for the group, or
+    two levels) each get their own match: an unmatched rule covenant with the same test first, then the same basis
+    (STANDALONE / CONSOLIDATED), then the same page, then any unmatched one. An agent item that repeats a covenant
+    already matched with the same test is a duplicate and changes nothing."""
+    taken: set[int] = set()
+    by_key: dict[str, list[dict]] = {}
+    for f in fields:
+        by_key.setdefault(_covenant_key(f), []).append(f)
+    for p in proposals:
+        group = by_key.get(p.get("name")) or []
+        if not group:
+            continue
+        free = [f for f in group if id(f) not in taken]
+        value, page, basis = p.get("value") or {}, p.get("page"), (p.get("value") or {}).get("basis")
+        pick = (next((f for f in free if compare(f["value"], value)), None)
+                or next((f for f in free if basis and _basis(f) == basis), None)
+                or next((f for f in free if page is not None and (f.get("source") or {}).get("page") == page), None)
+                or (free[0] if free else None))
+        if pick is None:
+            if any(compare(f["value"], value) for f in group):
+                p["_matched"] = True  # the same covenant read twice by the agent
+            continue
+        taken.add(id(pick))
+        vote([pick], [{**p, "name": _covenant_key(pick)}], key=_covenant_key, compare=compare)
+        p["_matched"] = True
+    return fields
+
+
 def _vote(pack: Pack, fields: list[dict], proposals: list[dict] | None) -> list[dict]:
     if pack.name in ("covenants", "amendment_diff") and proposals:
         for p in proposals:  # covenants are matched by metric, not by the name as written
             p.setdefault("_written", p.get("name"))
             p["name"] = _covenant_key({"value": p.get("value"), "name": p.get("name")}) or p.get("name")
-        return vote(fields, proposals, key=_covenant_key,
-                    compare=_same_change if pack.name == "amendment_diff" else _same_test)
+        return _vote_covenants(fields, proposals, _same_change if pack.name == "amendment_diff" else _same_test)
     return vote(fields, proposals)
 
 
