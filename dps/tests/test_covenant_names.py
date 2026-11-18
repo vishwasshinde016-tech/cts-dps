@@ -107,3 +107,21 @@ def test_agreement_job_reviewers_see_covenants_only_with_library_names():
                                          ("ASSET_DISPOSAL_CAP", "ASSET_DISPOSAL_CAP")])
 def test_security_covenants_the_rules_know_are_library_keys(metric, key):
     assert names.canonical(metric) == key and key in names.FINANCIAL
+
+
+@pytest.mark.parametrize("metric, key", [
+    ("USE_OF_PROCEEDS", "END_USE"), ("UTILISATION_OF_PROCEEDS", "END_USE"), ("End use of funds", "END_USE"),
+    ("TRA_ACCOUNT", "ESCROW_ACCOUNT"), ("Escrow account", "ESCROW_ACCOUNT"),
+    ("SUBORDINATION_OF_PROMOTER_LOANS", "SUBORDINATION"), ("Promoter loans", "SUBORDINATION"),
+    ("CREATION_OF_MORTGAGE", "SECURITY_CREATION"), ("Perfection of security", "SECURITY_CREATION"),
+    ("MATERIAL_CONTRACTS", "MATERIAL_CONTRACTS"), ("Project documents", "MATERIAL_CONTRACTS"),
+])
+def test_indian_agreement_undertakings_have_library_keys(metric, key):
+    assert names.canonical(metric) == key and key in names.NON_FINANCIAL
+
+
+def test_end_use_is_kept_while_loan_mechanics_are_still_dropped():
+    out = names.clean([{"name": "Utilisation of proceeds", "page": 2, "value": {"metric": "UTILISATION_OF_PROCEEDS"}},
+                       {"name": "Drawdown notice", "page": 2, "value": {"metric": "DRAWDOWN_NOTICE"}},
+                       {"name": "Utilisation request", "page": 2, "value": {"metric": "UTILISATION_REQUEST"}}])
+    assert [p["value"]["metric"] for p in out] == ["END_USE"]

@@ -26,7 +26,17 @@ SECURITY: dict[str, list[str]] = {
     "ASSET_DISPOSAL_CAP": ["ASSET DISPOSAL CAP", "DISPOSAL CAP", "ASSET DISPOSAL LIMIT", "DISPOSAL LIMIT"],
 }
 FINANCIAL = frozenset(FINANCIAL_ALIASES) | frozenset(SECURITY)
-NON_FINANCIAL = tuple(dict.fromkeys(rule[0] for rule in NON_FINANCIAL_RULES))
+# Undertakings of Indian loan agreements the rules have no rule for (live run, 18 Nov 2026): without a key they were
+# OTHER, so Spring could not map them and the coverage check could not match them by kind.
+EXTRA_NON_FINANCIAL: dict[str, str] = {
+    "END_USE": r"END_USE|USE_OF_PROCEEDS|USE_OF_FUNDS|PURPOSE|PROCEEDS|UTILI[SZ]ATION_OF_(?:THE_)?FUNDS",
+    "ESCROW_ACCOUNT": r"ESCROW|TRUST_AND_RETENTION|TRA_ACCOUNT|COLLECTION_ACCOUNT|DESIGNATED_ACCOUNT",
+    "SUBORDINATION": r"SUBORDINAT|PROMOTER_LOANS?|UNSECURED_LOANS?_FROM_PROMOTERS",
+    "SECURITY_CREATION": r"SECURITY_CREATION|CREATE_SECURITY|CREATION_OF_(?:SECURITY|MORTGAGE|CHARGE)|"
+                         r"PERFECTION|PERFECT_SECURITY",
+    "MATERIAL_CONTRACTS": r"MATERIAL_CONTRACTS?|PROJECT_DOCUMENTS?|MATERIAL_AGREEMENTS?",
+}
+NON_FINANCIAL = tuple(dict.fromkeys([*(rule[0] for rule in NON_FINANCIAL_RULES), *EXTRA_NON_FINANCIAL]))
 KNOWN = FINANCIAL | frozenset(NON_FINANCIAL)
 
 # A name the agent made up, to the library key it means. Checked in this order: the first match wins, so the
@@ -36,6 +46,9 @@ _NON_FINANCIAL_WORDS: list[tuple[str, str]] = [
     ("COMPLIANCE_CERTIFICATE", r"COMPLIANCE_CERTIFICATE|OFFICER_CERTIFICATE"),
     ("REPORTING_COVENANT", r"REPORTING|FINANCIAL_STATEMENTS?|ANNUAL_ACCOUNTS|MANAGEMENT_ACCOUNTS|INFORMATION"
                            r"|TAX_FILINGS?|EVIDENCE|NOTICE|DELIVER"),
+    # the five newer kinds after reporting ("evidence of end use" is an information duty) and before the broader ones
+    # ("subordination of promoter loans" is not a borrowing restriction, "creation of mortgage" not a negative pledge)
+    *EXTRA_NON_FINANCIAL.items(),
     ("ASSET_DISPOSAL_RESTRICTION", r"DISPOS|SALE_OF_ASSETS?|TRANSFER_OF_ASSETS?|ASSET_SALE"),
     ("DEBT_INCURRANCE_RESTRICTION", r"BORROWING|INDEBTEDNESS|ADDITIONAL_DEBT|DEBT_INCUR|GUARANTEE"),
     ("NEGATIVE_PLEDGE", r"NEGATIVE_PLEDGE|LIEN|ENCUMBRANCE|SECURITY_INTEREST"),
@@ -95,8 +108,9 @@ def clean(proposals: list[dict] | None, drop_mechanics: bool = True, collapse: b
         value = dict(p.get("value") or {})
         written = p.get("_written") or p.get("name") or value.get("metric")
         key = canonical(value.get("metric"), p.get("name"))
-        # Before the name mapping decides: "PREPAYMENT_NOTICE" is a loan mechanic, not a reporting duty.
-        known_metric = _token(value.get("metric")) in KNOWN
+        # Before the name mapping decides: "PREPAYMENT_NOTICE" is a loan mechanic, not a reporting duty. A newer kind
+        # is never a mechanic ("utilisation of proceeds" is END_USE).
+        known_metric = _token(value.get("metric")) in KNOWN or key in EXTRA_NON_FINANCIAL
         if drop_mechanics and key not in FINANCIAL and not known_metric \
                 and is_mechanics(value.get("metric"), p.get("name")):
             continue

@@ -26,7 +26,10 @@ from dps.skills.covenants.pages import is_duty, sentences
 
 MECHANICS = re.compile(r"draw\s?down|utili[sz]ation|prepay|repay|instal+ment|"
                        r"interest\s+(?:shall\s+be\s+)?pa(?:id|yable)|"
-                       r"\bfees?\b|commission|tenor|availability\s+period", re.I)
+                       r"\bfees?\b|commission|tenor|availability\s+period|"
+                       # payment mechanics: tax gross-up, withholding, set-off, the loan account, re-borrowing
+                       r"payments?\b[^.;]{0,80}\bshall\s+be\s+made|withholding|\bdeduction\s+or|gross(?:ed)?[- ]up|"
+                       r"set[- ]off|counterclaim|loan\s+account|re-?borrow|continue\s+to\s+pay\b|moratorium", re.I)
 WORD = re.compile(r"[a-z0-9]+")
 DEFINES = re.compile(r"\bmeans\b|shall\s+mean|has\s+the\s+meaning", re.I)
 MAX_LISTED = 10
@@ -36,6 +39,14 @@ COVENANT_GROUPS = {"FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "POSSIBLE_COV
 # copies of the insurance policies" is about insurance), disposal before liens ("dispose of charged assets").
 SENTENCE_KINDS: list[tuple[str, re.Pattern[str]]] = [(key, re.compile(words, re.I)) for key, words in [
     ("COMPLIANCE_CERTIFICATE", r"compliance\s+certificate|certificate\s+of\s+compliance"),
+    # the five newer kinds before the broader ones (subordination is not a borrowing restriction)
+    ("END_USE", r"(?:used|utili[sz]ed|applied)\s+(?:by\s+the\s+borrower\s+)?(?:solely|exclusively|only)\s+for|"
+                r"purpose\s+of\s+the\s+(?:loan|facility)|\bend[- ]use\b|divert"),
+    ("ESCROW_ACCOUNT", r"\bescrow|trust\s+and\s+retention|\bTRA\b|collection\s+account|designated\s+account"),
+    ("SUBORDINATION", r"subordinat"),
+    ("SECURITY_CREATION", r"\b(?:create|creation\s+of|perfect)\s+(?:and\s+perfect\s+)?(?:the\s+|a\s+)?(?:first[- ]"
+                          r"ranking\s+)?(?:security|mortgage|charge|hypothecation|pledge)"),
+    ("MATERIAL_CONTRACTS", r"material\s+(?:contracts?|agreements?)|project\s+documents?"),
     ("INSURANCE_MAINTENANCE", r"\binsur|\bpremiums?\b|\bpolic(?:y|ies)\b|loss\s+payee|underwriter"),
     ("ASSET_DISPOSAL_RESTRICTION", r"\bdispos|\bsell\b|\bsale\s+of\b|transfer\s+(?:of\s+)?(?:any\s+(?:of\s+)?)?"
                                    r"(?:its\s+)?(?:assets|property|undertaking)|lease\s+out"),

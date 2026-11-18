@@ -15,7 +15,11 @@ LOAN_TO_VALUE, MIN_EBITDA;
 security: SECURITY_COVER, MIN_COLLATERAL_VALUE, ASSET_DISPOSAL_CAP;
 non-financial: COMPLIANCE_CERTIFICATE, REPORTING_COVENANT, NEGATIVE_PLEDGE, DEBT_INCURRANCE_RESTRICTION,
 ASSET_DISPOSAL_RESTRICTION, CHANGE_OF_CONTROL, INSURANCE_MAINTENANCE, BOOKS_AND_RECORDS,
-REGULATORY_AND_TAX_COMPLIANCE.
+REGULATORY_AND_TAX_COMPLIANCE, END_USE, ESCROW_ACCOUNT, SUBORDINATION, SECURITY_CREATION, MATERIAL_CONTRACTS.
+END_USE: use the loan only for its stated purpose. ESCROW_ACCOUNT: open and keep an escrow, trust and retention or
+collection account. SUBORDINATION: promoter or group loans rank after the Lender. SECURITY_CREATION: create or
+perfect the security (mortgage, charge) within a time limit. MATERIAL_CONTRACTS: keep, not end or change, material
+contracts or project documents.
 Use OTHER only when none fits; then name says the covenant as written. Never make up a key.
 
 One item per covenant. A list of reporting duties under one clause is one REPORTING_COVENANT item. A clause that

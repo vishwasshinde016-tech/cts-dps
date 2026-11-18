@@ -52,7 +52,8 @@ BORROWER_DUTY = re.compile(r"\b(?:borrower|obligor|guarantor|company|issuer|prom
 
 # Conditions precedent are one-time conditions before a drawdown, not covenants: "the Borrower shall have delivered",
 # "shall execute and deliver to the Lender", "conditions precedent".
-CONDITION_PRECEDENT = re.compile(r"\bshall\s+have\s+(?:been\s+)?\w+(?:ed|en|ne)\b|\bconditions?\s+precedent\b|"
+CONDITION_PRECEDENT = re.compile(r"\bshall\s+have\s+(?:been\s+)?(?:\w+(?:ed|en|ne)|paid|made|set)\b|"
+                                 r"\bconditions?\s+precedent\b|"
                                  r"\bexecute\s+and\s+deliver\b|"
                                  r"\bprior\s+to\s+(?:the\s+)?(?:first\s+)?(?:drawdown|disbursement)", re.I)
 
