@@ -4,7 +4,7 @@ version: 2.0.0
 # this pack adds the accounting identities and the restatement diff to its result.
 engine: legacy_flow
 job_types: [EXTRACT_STATEMENT]
-routes: {extract: strong, verify: challenger, images: vision}
+routes: {extract: strong, images: vision}
 page_selection: {max_pages: 12}
 limits: {max_model_turns: 2, token_budget: 80000}
 prompt: prompt.md

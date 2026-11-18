@@ -296,7 +296,7 @@ def test_routes_file_and_defaults(tmp_path):
     r = Routes.load(f)
     assert r.routes["small"].deployment == "s1" and r.routes["small"].retries == 1 and r.per_job_tokens == 99
     d = Routes.load(None, "azure/gpt")
-    assert set(d.routes) == {"small", "strong", "vision", "challenger"} and d.routes["vision"].deployment == "azure/gpt"
+    assert set(d.routes) == {"small", "strong", "vision"} and d.routes["vision"].deployment == "azure/gpt"
 
 
 def test_token_bucket_waits():

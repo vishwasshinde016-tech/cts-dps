@@ -55,10 +55,7 @@ def _readers(f: dict) -> dict | None:
     out = {}
     for i in f.get("issues", []):
         if i.get("code") == "MODELS_DISAGREE" and i.get("message"):
-            if i["message"].startswith("challenger"):
-                out["challenger"] = i["message"]
-            else:
-                out["ai"] = i["message"]
+            out["ai"] = i["message"]
     if out:
         out["rules"] = f["value"]
     return out or None

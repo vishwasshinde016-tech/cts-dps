@@ -14,8 +14,8 @@ skills, tools and prompt instructions" and "1 agent with multiple skills and too
   breaker, rate limits, per-job token budget, masking and call log apply to agent calls too.
 
 The agent proposes; it never decides. Its answer must match the pack's schema and every quote must be on the page it
-names (grounding), or the answer is repaired once and then dropped. Rules, voting, the challenger, Java checks and a
-person decide what is accepted.
+names (grounding), or the answer is repaired once and then dropped. Rules, voting, Java checks and a person
+decide what is accepted.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ SEARCH_HITS = 15
 
 
 class GatewayLLM(BaseLLM):
-    """A CrewAI LLM whose every call goes through ``Gateway.call`` on one route (strong, challenger, vision ...)."""
+    """A CrewAI LLM whose every call goes through ``Gateway.call`` on one route (strong, small, vision)."""
 
     llm_type: str = "dps-gateway"
     _gateway: Gateway = PrivateAttr()

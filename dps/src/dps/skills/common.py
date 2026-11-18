@@ -1,4 +1,4 @@
-"""Shared parts of every pack: fields, grounding, page selection, the agent step, voting and the challenger."""
+"""Shared parts of every pack: fields, grounding, page selection, the agent step and voting."""
 
 from __future__ import annotations
 
@@ -183,40 +183,6 @@ def vote(fields: list[dict], proposals: list[dict] | None, key=lambda f: f["name
                                                         f"(page {p.get('page')})"))
             f["status"] = "NEEDS_REVIEW"
     return fields
-
-
-def challenge(pack, gateway, pages: list[dict], fields: list[dict], compare=None, spring=None,
-              notes: list | None = None) -> None:
-    """The challenger (a second model, ideally another family) reads the same pages for the disputed, high-risk and
-    low-confidence fields, without seeing the extractor's values; a different value sends the field to review with
-    both values."""
-    if gateway is None or not pack.routes.get("verify"):
-        return
-    targets = [f for f in fields if f["status"] == "NEEDS_REVIEW" or pack.risk(f["name"]) == "HIGH"
-               or (f["confidence"] or 0) < 0.8]
-    if not targets:
-        return
-    names = sorted({f["name"] for f in targets})
-    answers = agent_proposals(pack, gateway, pages, "Read only these fields: " + ", ".join(names),
-                              route=pack.routes["verify"], spring=spring, notes=notes)
-    if answers is None:
-        for f in targets:
-            f["issues"].append(issue("AI_UNAVAILABLE", "challenger not run"))
-        return
-    compare = compare or (lambda a, b: normalise(a) == normalise(b))
-    seen = {a.get("name"): a for a in answers}
-    for f in targets:
-        a = seen.get(f["name"])
-        if a is None:
-            continue
-        if compare(f["value"], a.get("value")):
-            f.setdefault("signals", None)
-            f["signals"] = {**(f["signals"] or {}), "challenger": "AGREE"}
-        else:
-            f["signals"] = {**(f["signals"] or {}), "challenger": "DISAGREE"}
-            seen_value = json.dumps(a.get("value"), default=str)[:120]
-            f["issues"].append(issue("MODELS_DISAGREE", f"challenger read {seen_value} on page {a.get('page')}"))
-            f["status"] = "NEEDS_REVIEW"
 
 
 NUMBER = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")

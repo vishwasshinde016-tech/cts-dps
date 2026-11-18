@@ -18,8 +18,8 @@ what the rules and the agent do not agree on.
 | AI function 2: extract covenants | Rules + Document Agent (covenant skill); matched by metric; agent-only covenants → `POSSIBLE_COVENANT` for a person |
 | AI function 3: extract schedule terms | Rules + Document Agent (schedule skill) |
 | Amendment | Diff against the approved covenants; the agent explains each change with its clause |
-| Data quality, confidence | Grounding (quote must be on the page), vote, challenger on high-risk fields, Java formula check, calibrated scorer with the agent signals |
-| Model | Through the DPS model gateway: routes `small`, `strong`, `challenger`, `vision` (`deploy/config/routes.example.yaml`); retries, circuit breaker, rate limits, per-job and monthly token budgets, masking, call log without prompt text |
+| Data quality, confidence | Grounding (quote must be on the page), vote of rules and agent, Java formula check, calibrated scorer with the agent signals |
+| Model | Through the DPS model gateway: routes `small`, `strong`, `vision` (`deploy/config/routes.example.yaml`); retries, circuit breaker, rate limits, per-job and monthly token budgets, masking, call log without prompt text |
 | Safety | Only allowed hosts (`DPS_AI_ALLOWED_HOSTS`); only the selected pages; prompt-injection guard; CrewAI telemetry off |
 | Outage | Model down or budget used → rules only, `AI_UNAVAILABLE` / `AI_BUDGET_EXCEEDED`, fields to review; the job never fails because of the model |
 
@@ -279,7 +279,7 @@ Every document job runs the same ten stages (DRAFT\_COMMENTARY reads no file and
 | 5 | Classify | Rules score first (titles, parties, clause words, statement headings, sheet names); if unsure, a small model on the first pages and headings; if the page is an image, a vision model on the page image. Compare with the user's chosen type | rules, LLM, VLM | Mismatch → `TYPE_MISMATCH` review |
 | 6 | Identify | Borrower names, facility IDs, loan account numbers, dates, period end, currency, units (lakh, crore, million, thousand), consolidated vs standalone, issuer, signature present | regex + agent skill + master-data lookup through Spring | Contradiction with the screen context → `MAPPING_CONFLICT` |
 | 7 | Extract | The job type's skill: rules engine first, then the agent reads the relevant pages only and returns the schema | rules + LLM (+ VLM for image pages) | Partial → fields flagged |
-| 8 | Verify | Grounding (every value and quote found on its cited page), a second model of another family re-reads disputed or high-impact fields, cross-checks (balance sheet balances, totals add up, ratio inside a sane range, threshold direction matches wording, period matches), compare with last period | verify module, challenger model | Disagreement → field to review; a value never found on the page is dropped |
+| 8 | Verify | Grounding (every value and quote found on its cited page), cross-checks (balance sheet balances, totals add up, ratio inside a sane range, threshold direction matches wording, period matches), compare with last period | verify module | Disagreement → field to review; a value never found on the page is dropped |
 | 9 | Score and route | Multi-signal confidence per field and per document; route by thresholds set per document type and field risk | calibrated scorer | `AUTO_ACCEPTED` / `NEEDS_REVIEW` / `REJECTED` |
 | 10 | Publish | Write the result JSON and artefacts to `derived/`; write result rows; write the outbox event in the same transaction | outbox | Spring pulls or receives the event |
 
@@ -301,7 +301,7 @@ One Document Agent, built fresh for each job with only that job type's skill pac
 | --- | --- | --- | --- |
 | `classify` | ANALYZE | `page_text`, `page_image`, `headings` | small fast model; vision model if pages are images |
 | `identify` | ANALYZE, all EXTRACT | `page_text`, `search_text`, `lookup_borrower`, `lookup_facility` (read-only, through Spring, tenant-scoped) | small model |
-| `covenants` | EXTRACT\_AGREEMENT, \_SANCTION | `page_text`, `search_text`, `find_definition`, `covenant_library`, `validate_formula` | strong model; challenger model for verify |
+| `covenants` | EXTRACT\_AGREEMENT, \_SANCTION | `page_text`, `search_text`, `find_definition`, `covenant_library`, `validate_formula` | strong model |
 | `amendment_diff` | EXTRACT\_AMENDMENT | the above + `base_version_terms` | strong model |
 | `schedule_terms` | agreement, sanction, amendment | `page_text`, `search_text`, `calendar_rules` | strong model |
 | `statement_lines` | EXTRACT\_STATEMENT | `page_text`, `table`, `sheet_cells`, `label_memory`, `page_image` | strong model + vision for scanned tables |
@@ -312,8 +312,8 @@ One Document Agent, built fresh for each job with only that job type's skill pac
 
 **Multi-model, multi-modal:**
 
-- A **model gateway** (one Python client, LiteLLM-style routing) maps a route name to a deployment: `small`, `strong`, `vision`, `challenger`. Changing a model is a config change, logged and gated by the golden set.
-- The **challenger** is from a different model family than the extractor, so their errors are not correlated. It re-reads only disputed fields, high-impact fields (financial covenant thresholds) and low-confidence fields, which keeps cost near one model's.
+- A **model gateway** (one Python client, LiteLLM-style routing) maps a route name to a deployment: `small`, `strong`, `vision`. Changing a model is a config change, logged and gated by the golden set.
+- **No challenger (decision 18 Nov 2026):** there is no second-model re-read. Rules and the Document Agent vote; a disagreement, an agent-only value on a high-risk field and every agent-only covenant go to a person.
 - **Vision** is used where text is weak: scanned pages with poor OCR, tables drawn as images, stamps and signatures, charts. Its numbers go through the same grounding check against OCR text of the region.
 - **Deployment options** (bank to choose): Azure OpenAI with a private endpoint in an Indian region and no data retention, or an on-premises open-weight model served with vLLM on a GPU host. The gateway hides the difference.
 
@@ -350,7 +350,7 @@ Two schemas, both JSON Schema files versioned with semantic versions and publish
   "run_id": "run_01J...", "job_id": "job_01J...", "job_type": "EXTRACT_AGREEMENT",
   "document_version_id": "dv_01J...", "sha256": "9f2c...",
   "pipeline": {"version": "2.3.0", "skill_pack": "covenants@1.4.2",
-               "models": {"strong": "model-a@2026-09", "challenger": "model-b@2026-08"}},
+               "models": {"strong": "model-a@2026-09"}},
   "classification": {"type": "LOAN_AGREEMENT", "expected": "LOAN_AGREEMENT", "confidence": 0.97,
                      "evidence": [{"page": 1, "quote": "FACILITY AGREEMENT dated ..."}]},
   "identifiers": [{"kind": "FACILITY_ID", "value": "FAC-101", "page": 3, "quote": "...",
@@ -363,7 +363,7 @@ Two schemas, both JSON Schema files versioned with semantic versions and publish
     "test": {"frequency": "QUARTERLY", "basis": "CONSOLIDATED", "first_test_date": "2027-03-31"},
     "method": "RULES+AI_CONFIRMED",
     "confidence": 0.96,
-    "signals": {"grounded": true, "rules": true, "ai": true, "challenger": "AGREE", "parse_quality": 0.98},
+    "signals": {"grounded": true, "rules": true, "ai": true, "agree": 1.0, "parse_quality": 0.98},
     "issues": [],
     "status": "AUTO_ACCEPTED | NEEDS_REVIEW | REJECTED"
   }],
@@ -386,7 +386,7 @@ Confidence is computed by DPS from several measured signals, never taken from wh
 | --- | --- | --- |
 | Grounding | Value and quote found on the cited page or cell | Not found → field dropped |
 | Parse quality | Native text vs OCR, OCR confidence of the region | OCR 0.6 → lower score |
-| Agreement | Rules, extractor model, challenger model agree | Two agree, one differs → review |
+| Agreement | Rules and the extractor model agree | They differ → review |
 | Consistency | Accounting identities, totals, sign, ratio range, threshold direction vs wording | Balance sheet off by 2% → review |
 | History | Same borrower last period, same label learned before | 20× jump → unit check |
 | Schema | Required fields present, value types valid | Missing period → review |
@@ -540,7 +540,7 @@ All open source and self-hostable except the model itself; Azure Document Intell
 | Layout and tables | Docling (heavy pool) | Strong on complex tables, reads DOCX/XLSX too | Marker, MinerU |
 | Excel, Word, CSV | openpyxl, python-docx, csv with limits | Cell addresses and tracked changes kept | — |
 | Model gateway | LiteLLM-style client | One interface for Azure OpenAI and on-premises models | — |
-| Models | Strong + challenger from two families, small model, vision model | Uncorrelated errors, cost control | On-premises vLLM with open-weight models |
+| Models | Strong model, small model, vision model | Cost control | On-premises vLLM with open-weight models |
 | Observability | OpenTelemetry, Grafana LGTM (today) | Traces, logs, metrics in one place | Bank's platform |
 | Security | Keycloak, secret scanning, ClamAV in DMS | Already in the platform | — |
 | Quality | Own golden-set harness (today) + CI gate | Domain metrics a generic tool lacks | promptfoo for prompt tests |
@@ -570,7 +570,7 @@ Every tool and setting is in one of three states: **Final** (decided, no test ne
 | Excel, Word, CSV readers | openpyxl, xlrd, python-docx, csv | Final | — |
 | File safety (DPS second line) | pikepdf, oletools, ZIP limits | Final | Hostile-file corpus in Phase 2 proves it |
 | Virus scan | ClamAV in the DMS | Provisional | DMS team confirms vs the bank's existing scanner |
-| Models per route (small, strong, vision, challenger) | Azure deployments the bank provides | Provisional | Phase 3 bake-off: accuracy, cost and time per document on the golden set |
+| Models per route (small, strong, vision) | Azure deployments the bank provides | Provisional | Phase 3 bake-off: accuracy, cost and time per document on the golden set |
 | Classification rules and weights | Signal tables in Phase 3 | Provisional | Tuned to ≥ 98% accuracy on the golden set, checked on the held-out set |
 | Confidence thresholds | High never auto, medium ≥ 0.95, low ≥ 0.90 | Provisional | Phase 5 calibration on reviewed data |
 | Capacity (workers, quota) | Worked example in Phase 6 | Provisional | Bank's real volumes + Phase 6 load test |
@@ -581,7 +581,7 @@ Every tool and setting is in one of three states: **Final** (decided, no test ne
 
 **Decision note, Phase 3 classification (17 Nov 2026, `dps/analyze/classify.py`, golden set):** rules alone classify 41 of 44 golden PDFs; the 3 misses are scans with no text layer (they need OCR or the vision route), so every text-readable document (41 of 41) is right, with no model call. A wrongly chosen type is caught for 40 of 41 (97.6%) and no document is flagged against its own type (0% false flags). Rules thresholds kept (decide alone at score >= 0.8 with a 0.3 lead); the small-model route is used only below that, and its answer must quote the pages verbatim. Model bake-off per route waits for the bank's Azure deployments.
 
-**Decision note, Phase 4 skill packs (17 Nov 2026):** seven packs under `dps/skills/` (covenants 1.5.0, schedule_terms, amendment_diff, sanction, statement_lines 2.0.0, certificate, commentary). EXTRACT_AGREEMENT and EXTRACT_STATEMENT keep their proven flows (golden scores unchanged); their results gain schedule terms from the page model and the statement identities. EXTRACT_SANCTION, EXTRACT_CERTIFICATE, EXTRACT_AMENDMENT and DRAFT_COMMENTARY run the generic flow: rules, page selection, the agent through the gateway (grounded answers only), voting, Java formula validation and covenant-library match through the Spring tools, the pack's cross-checks, and the challenger on disputed, high-risk and low-confidence fields. Results are stored per run in `dps_run`. Per-pack golden targets need labelled sanction letters, certificates and amendments from the bank; the golden set today has agreements and statements only.
+**Decision note, Phase 4 skill packs (17 Nov 2026):** seven packs under `dps/skills/` (covenants 1.5.0, schedule_terms, amendment_diff, sanction, statement_lines 2.0.0, certificate, commentary). EXTRACT_AGREEMENT and EXTRACT_STATEMENT keep their proven flows (golden scores unchanged); their results gain schedule terms from the page model and the statement identities. EXTRACT_SANCTION, EXTRACT_CERTIFICATE, EXTRACT_AMENDMENT and DRAFT_COMMENTARY run the generic flow: rules, page selection, the agent through the gateway (grounded answers only), voting, Java formula validation and covenant-library match through the Spring tools, the pack's cross-checks, and the challenger on disputed, high-risk and low-confidence fields (the challenger was removed on 18 Nov 2026). Results are stored per run in `dps_run`. Per-pack golden targets need labelled sanction letters, certificates and amendments from the bank; the golden set today has agreements and statements only.
 
 **Decision note, Phases 5-7 (17 Nov 2026):** confidence comes from a documented rule table until a document type has 200 labelled fields, then from a logistic regression per type calibrated by isotonic regression (expected calibration error and Brier score reported); every field keeps its top three reasons. Routing: high-risk fields always reviewed in the first release, medium auto-accepted at >= 0.95, low at >= 0.90 (thresholds in each `pack.yaml`), plus a deterministic 3% QA sample. Review decisions are kept in `dps_review_decision`; every review saves a new run (old runs never change). One worker holds the scheduler lock; the audit trail is sealed daily as a hash chain (`/ops/audit-seals`). Rollout per job type is SHADOW, ASSISTED or NORMAL by configuration, recorded on every job; `/ops/go-live` measures each type against the go-live targets.
 
@@ -600,7 +600,7 @@ The Covenexa DPS already covers about half of this design and is the starting po
 | Classification | None, trusts the user's type | Classify stage with rules, small model, vision; `TYPE_MISMATCH` |
 | Document types | Loan agreement, financial statement, evidence | Sanction, amendment (as its own job, with diff), compliance certificate, security and guarantee |
 | Identifiers | Not extracted | Borrower, facility, loan account, period, currency, units, signature; master-data matching |
-| Covenants | Rules + safety net + AI second reader with grounding and voting | Schedule terms skill; challenger from another model family |
+| Covenants | Rules + safety net + AI second reader with grounding and voting | Schedule terms skill |
 | Statements | Page finder, table reader, AI check, label memory | Vision for scanned tables; accounting identity checks |
 | Confidence | Per-field confidence and issue codes | Multi-signal calibrated scorer, risk-based thresholds, review sampling |
 | Result contract | Internal tables and REST views | Versioned `dps.result` and `dps.page-model` JSON schemas |
@@ -629,7 +629,7 @@ Ten questions for the architect decide details of the build; none blocks startin
 1. **Contract and skeleton** — OpenAPI file, JSON schemas, error catalogue, event catalogue agreed with the Spring and UI teams; job API and queue upgrades (priorities, DLQ, cancel, idempotency, batches).
 2. **Ingest from DMS and page model** — fetch by version id + SHA-256, stage 2 inspection, sandboxed parsing, DOCX, page model in `derived/`.
 3. **ANALYZE** — classification (rules, small model, vision), identifiers, mismatch and mapping suggestions; wired into the DMS upload sequence.
-4. **Extraction skill packs** — agreement and sanction covenants + schedule terms, amendment diff, statements, certificates; challenger model.
+4. **Extraction skill packs** — agreement and sanction covenants + schedule terms, amendment diff, statements, certificates.
 5. **Confidence and review** — calibrated scorer, risk thresholds, review and reclassify APIs, learning from corrections, review sampling.
 6. **Production hardening** — hash-chained audit, dashboards and alerts, load test at 2× the stated peak, chaos tests (kill workers, model down, database deadlocks), security test of every endpoint, runbook.
 7. **Pilot** — shadow run on real documents, compare with manual work, then go live per document type.

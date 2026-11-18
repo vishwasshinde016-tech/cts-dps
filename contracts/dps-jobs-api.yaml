@@ -810,7 +810,7 @@ components:
               day: { type: string, format: date }
               tenantId: { type: string }
               jobType: { type: string }
-              route: { type: string, enum: [small, strong, vision, challenger] }
+              route: { type: string, enum: [small, strong, vision] }
               calls: { type: integer }
               tokensIn: { type: integer }
               tokensOut: { type: integer }

@@ -1,6 +1,6 @@
 """Model gateway (Phase 3): the one place a DPS model call goes through.
 
-A route file maps names (small, strong, vision, challenger) to deployments. Every call gets:
+A route file maps names (small, strong, vision) to deployments. Every call gets:
 - the existing guards (``ai_guard.guarded``): masking, cache, monthly budget, call log via ``usage.note``;
 - retries on timeout, 429 and 5xx with back-off 2 s, 8 s, 30 s and jitter;
 - a circuit breaker per route (5 failures in 60 s, half-open after 30 s) -> ``AiUnavailable`` (AI_UNAVAILABLE);
@@ -81,7 +81,7 @@ class Routes:
             raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
         else:
             raw = {"routes": {n: {"provider": "default", "deployment": default_model}
-                              for n in ("small", "strong", "vision", "challenger")}}
+                              for n in ("small", "strong", "vision")}}
         defaults = raw.get("defaults") or {}
         routes = {}
         for name, spec in (raw.get("routes") or {}).items():

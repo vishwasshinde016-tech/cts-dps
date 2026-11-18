@@ -1,12 +1,11 @@
 # Model routes for the Document Agent (DPS_AI_ROUTES_FILE). Copy to the config folder as routes.yaml and set the
 # bank's Azure OpenAI deployment names. "azure/<deployment>" uses AZURE_API_BASE, AZURE_API_KEY, AZURE_API_VERSION.
-# small: document type (second opinion); strong: the Document Agent's reads; challenger: re-checks high-risk fields
-# (best from another model family); vision: scanned pages read from their images.
+# small: document type (second opinion); strong: the Document Agent's reads; vision: scanned pages read from
+# their images.
 defaults: { max_tokens: 3000, timeout_s: 60, temperature: null, retries: 3 }
 routes:
   small:      { provider: azure, deployment: azure/gpt-4.1-mini, rpm: 300 }
   strong:     { provider: azure, deployment: azure/gpt-4.1, rpm: 120, timeout_s: 90 }
-  challenger: { provider: azure, deployment: azure/gpt-4o, rpm: 120 }
   vision:     { provider: azure, deployment: azure/gpt-4o, rpm: 60, timeout_s: 90 }
 budgets:
   per_job_tokens: 150000

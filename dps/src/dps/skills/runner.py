@@ -2,7 +2,7 @@
 
 1. page model (phase 2) and context; 2. ``pack.rules`` proposals; 3. page selection; 4. the document agent
 (gateway, grounded answers only); 5. voting rules vs agent per field; 6. verify: Java formula validation and covenant
-library (Spring tools), the pack's cross-checks, the challenger on disputed, high-risk and low-confidence fields;
+library (Spring tools) and the pack's cross-checks;
 7. route (phase 5 scoring replaces the simple rule here); 8. store the run and emit the event.
 """
 
@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from dps import jobs
 from dps.models import Artifact, Job
 from dps.skills import Pack, for_job_type, load
-from dps.skills.common import agent_proposals, challenge, issue, make_field, select_pages, vote
+from dps.skills.common import agent_proposals, issue, make_field, select_pages, vote
 
 log = logging.getLogger(__name__)
 SCHEMA = "dps.result/1.0"
@@ -305,7 +305,6 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
             sched_fields += _agent_only(sched, pages, sched_fields, sched_proposals)
         warnings += sched.checks(sched_fields, {**ctx, "sanctionedAmount": amount})
         fields += sched_fields
-    challenge(pack, gateway, selected, fields, spring=tools, notes=notes)
     if gateway is not None:
         if proposals is None and not notes:
             notes.append(issue("AI_UNAVAILABLE", "read by the rules only"))

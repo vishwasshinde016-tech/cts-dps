@@ -7,7 +7,6 @@ and a person decide. Only the pages a job needs are sent, only to the bank's own
 | Component | Used for | Runs where | Sends data out? | Owner |
 | --- | --- | --- | --- | --- |
 | Document Agent, route `strong` (e.g. GPT-4.1) | Reads the selected pages with the job's skill and tools; proposes values with page and quote | Bank's Azure OpenAI deployment | Selected page text, to the bank's Azure endpoint only | DPS lead |
-| Route `challenger` (e.g. GPT-4o, ideally another family) | Re-reads high-risk and disputed fields without seeing the first answer | Bank's Azure OpenAI deployment | Same pages | DPS lead |
 | Route `small` (e.g. GPT-4.1-mini) | Second opinion on the document type (rules decide first) | Bank's Azure OpenAI deployment | First two pages | DPS lead |
 | Route `vision` (e.g. GPT-4o) | Scanned pages OCR cannot read; image-only documents' type | Bank's Azure OpenAI deployment | Up to 4 page images | DPS lead |
 | RapidOCR (ONNX models, CPU) | Text from scanned pages, with a confidence per line | DPS parser container (no network) | No | DPS lead |
@@ -29,8 +28,8 @@ and a person decide. Only the pages a job needs are sent, only to the bank's own
 - **Covenant names:** every covenant the agent proposes gets a covenant-library metric key (or OTHER, with the
   name as written kept for the reviewer); loan mechanics (drawdown, prepayment, default, cure) are left to the
   schedule skill; one item per non-financial key (`skills/covenants/names.py`, `tests/test_covenant_names.py`).
-- **Vote and challenger:** rules and agent agree → higher confidence; disagree → a person sees both; agent-only
-  values on high-risk fields and every agent-only covenant → a person. The challenger re-reads high-risk fields.
+- **Vote:** rules and agent agree → higher confidence; disagree → a person sees both; agent-only
+  values on high-risk fields and every agent-only covenant → a person. There is no second-model re-read (removed 18 Nov 2026).
 - **Numbers:** the LLM never decides compliance or calculates; formulas are validated by the Spring app (Java).
 - **Prompt injection:** document text is marked as data, not instructions; suspicious text is flagged.
 - **Outage and cost:** retries, circuit breaker and rate limits per route; per-job token budget and monthly
