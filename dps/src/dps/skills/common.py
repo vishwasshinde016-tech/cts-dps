@@ -182,6 +182,33 @@ def agent_proposals(pack, gateway, pages: list[dict], extra: str = "", route: st
     return list(answer.get("items", []))
 
 
+def batched_proposals(pack, gateway, batches: list[list[dict]], notes: list | None = None, **kw) -> list[dict] | None:
+    """One agent read per batch of pages (long agreements), merged; None only when no batch gave an answer. A spent
+    token budget stops the remaining batches, and says which were not read."""
+    out: list[dict] | None = None
+    seen: set[tuple] = set()
+    for i, batch in enumerate(batches):
+        extra = (f"These are part {i + 1} of {len(batches)} of the agreement's covenant pages: list the covenants on "
+                 "these pages.") if len(batches) > 1 else ""
+        before = len(notes) if notes is not None else 0
+        got = agent_proposals(pack, gateway, batch, extra=extra, notes=notes, **kw)
+        if got is None:
+            spent = notes is not None and any(n["code"] == "AI_BUDGET_EXCEEDED" for n in notes[before:])
+            if spent and i + 1 < len(batches):
+                notes.append(issue("AI_BUDGET_EXCEEDED", f"{pack.name}: batches {i + 2} to {len(batches)} of "
+                                                         f"{len(batches)} not read by the agent"))
+                break
+            continue
+        out = out or []
+        for p in got:
+            key = (str((p.get("value") or {}).get("metric") or p.get("name") or "").lower(), p.get("page"),
+                   squash(p.get("quote"))[:120])
+            if key not in seen:
+                seen.add(key)
+                out.append(p)
+    return out
+
+
 def _failed(pack, ex, notes: list | None) -> None:
     """Why the agent gave nothing usable, for the result's warnings; the rules' answer stands."""
     from dps.agent.gateway import AiBudgetExceeded

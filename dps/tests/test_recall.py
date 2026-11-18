@@ -150,7 +150,7 @@ def test_the_covenants_skill_prompt_holds_the_far_section_and_says_when_pages_di
     result = skills.run(load("covenants"), fake_job("ONBOARD"), model_of(*texts), gw, None)
     assert "<<<page 36>>>" in gw.prompts[0] and "INFORMATION UNDERTAKINGS" in gw.prompts[0]
     assert not [w for w in result["warnings"] if w["code"] == "PAGES_NOT_SENT"]
-    many = [("The Borrower shall maintain a ratio of not less than 1.25 times. " * 40)] * 40
+    many = [("The Borrower shall maintain a ratio of not less than 1.25 times. " * 40)] * 100  # > 4 batches
     result = skills.run(load("covenants"), fake_job("ONBOARD"), model_of(*many), Recorder(), None)
     assert [w for w in result["warnings"] if w["code"] == "PAGES_NOT_SENT"]
 
@@ -368,3 +368,66 @@ def test_ocr_opens_a_pdf_once_per_document_and_closes_it(monkeypatch):
     assert len(opened) == 2 and ocr._doc_key[1] == len(second)  # a new document replaces the old one
     ocr.close()
     assert ocr._doc is None
+
+
+# ---------- long agreements: covenant pages read in batches ----------
+
+def test_long_agreements_split_into_batches_and_short_ones_do_not():
+    from dps.skills.covenants.pages import covenant_batches
+
+    duty = "The Borrower shall maintain a ratio of not less than 1.25 times. "
+    long_doc = pages_of({n: duty * 20 for n in range(10, 50)}, 60)
+    batches, note = covenant_batches(long_doc, [], max_pages=10, max_chars=200_000, max_batches=4)
+    assert [len(b) for b in batches] == [10, 10, 10, 10]
+    assert {s["batch"] for s in note["sent"]} == {1, 2, 3, 4}
+    assert all([p["no"] for p in b] == sorted(p["no"] for p in b) for b in batches)  # each batch in page order
+    sent = {p["no"] for b in batches for p in b}
+    assert len(sent) == 40 and not note["notSent"]
+    capped, note = covenant_batches(long_doc, [], max_pages=10, max_chars=200_000, max_batches=2)
+    assert len(capped) == 2 and len(note["notSent"]) == 20  # beyond the cap: listed, not silently dropped
+    short = pages_of({3: duty}, 6)
+    batches, _ = covenant_batches(short, [], max_pages=25, max_chars=60_000, max_batches=4)
+    assert len(batches) == 1 and [p["no"] for p in batches[0]] == [3]
+
+
+class Batches(Salvage):
+    """Answers each batch with the covenants on its own pages; can run out of budget after N reads."""
+
+    def __init__(self, answers: dict[int, list[dict]], budget_after: int | None = None):
+        super().__init__([])
+        self.answers, self.budget_after, self.reads = answers, budget_after, 0
+
+    def call_json(self, route, messages, schema, check):
+        from dps.agent.gateway import AiBudgetExceeded
+
+        self.reads += 1
+        if self.budget_after is not None and self.reads > self.budget_after:
+            raise AiBudgetExceeded("job budget spent")
+        content = messages[0]["content"]
+        items = [i for page, items in self.answers.items() if f"<<<page {page}>>>" in content for i in items]
+        return {"items": items}
+
+
+def test_batch_answers_are_merged_once_and_a_spent_budget_stops_the_rest():
+    from dps.skills.common import batched_proposals
+
+    doc = [{"no": n, "text": f"On page {n} the Borrower shall keep covenant {n}."} for n in range(1, 5)]
+    item = {n: [{"name": f"C{n}", "page": n, "quote": f"shall keep covenant {n}", "value": {"metric": f"C{n}"}}]
+            for n in range(1, 5)}
+    item[2].append(dict(item[1][0]))  # the same covenant read again in another batch
+    batches = [[doc[0]], [doc[1]], [doc[2]], [doc[3]]]
+    out = batched_proposals(load("sanction"), Batches(item), batches, all_pages=doc)
+    assert sorted(p["name"] for p in out) == ["C1", "C2", "C3", "C4"]  # merged, the repeat kept once
+    notes: list[dict] = []
+    gw = Batches(item, budget_after=2)
+    out = batched_proposals(load("sanction"), gw, batches, notes=notes, all_pages=doc)
+    assert sorted(p["name"] for p in out) == ["C1", "C2"] and gw.reads == 3  # stopped after the budget ran out
+    assert any("batches 4 to 4" in n["message"] for n in notes if n["code"] == "AI_BUDGET_EXCEEDED")
+    assert batched_proposals(load("sanction"), None, batches) is None  # no model at all
+
+
+def test_the_covenants_skill_reads_a_long_agreement_in_several_batches():
+    duty = "The Borrower shall maintain a ratio of not less than 1.25 times. " * 120
+    gw = Recorder()
+    skills.run(load("covenants"), fake_job("ONBOARD"), model_of(*([duty] * 40)), gw, None)
+    assert len(gw.prompts) >= 2 and "part 1 of" in gw.prompts[0]
