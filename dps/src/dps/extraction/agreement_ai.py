@@ -299,21 +299,22 @@ def read_with_skill(pages: list[Page], terms: list[Term], gateway, spring=None, 
     tools over the whole document, grounding with salvage and library names (skills/). The rules' terms unchanged
     when the model is not available."""
     from dps.skills import load
-    from dps.skills.common import MAX_PROMPT_CHARS, agent_proposals
+    from dps.skills.common import MAX_PROMPT_CHARS, batched_proposals
     from dps.skills.covenants import names
-    from dps.skills.covenants.pages import covenant_pages as skill_pages
+    from dps.skills.covenants.pages import covenant_batches
 
     pack = load("covenants")
     page_dicts = [{"no": p.no, "text": p.text or "", "quality": p.quality} for p in pages]
     if detect_language(" ".join(p.text or "" for p in pages)) != "en":
         chosen = {p.no for p in covenant_pages(pages, terms)}  # no English headings: the numeric pages
-        selected = [d for d in page_dicts if d["no"] in chosen] or page_dicts[:MAX_PAGES]
+        batches = [[d for d in page_dicts if d["no"] in chosen] or page_dicts[:MAX_PAGES]]
     else:
-        selected, _ = skill_pages(page_dicts, [{"source": {"page": t.page}} for t in terms],
-                                  pack.page_selection.get("max_pages", 25), MAX_PROMPT_CHARS)
+        batches, _ = covenant_batches(page_dicts, [{"source": {"page": t.page}} for t in terms],
+                                      pack.page_selection.get("max_pages", 25), MAX_PROMPT_CHARS,
+                                      pack.page_selection.get("max_batches", 1))
     try:
-        proposals = agent_proposals(pack, gateway, selected, spring=spring, correlation_id=correlation_id,
-                                    notes=notes, all_pages=page_dicts)
+        proposals = batched_proposals(pack, gateway, batches or [[]], notes=notes, spring=spring,
+                                      correlation_id=correlation_id, all_pages=page_dicts)
     except Exception as ex:  # noqa: BLE001 - a model outage must not stop agreements from being read
         log.warning("Covenants skill unavailable: %s", type(ex).__name__)
         return terms

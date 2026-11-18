@@ -1,13 +1,14 @@
 name: covenants
-version: 1.8.0
+version: 1.9.0
 # EXTRACT_AGREEMENT keeps the proven Agreement Intake flow (rules, safety net, AI second reader, voting); this pack's
 # rules are the same extractor, reused by the sanction and amendment packs.
 engine: legacy_flow
 job_types: [EXTRACT_AGREEMENT]
 routes: {extract: strong, images: vision}
 tools: [page_text, search_text, find_definition, covenant_library, validate_formula]
-page_selection: {max_pages: 25, rules: covenant_section}
-limits: {max_tool_calls: 8, max_model_turns: 3, max_seconds: 240, token_budget: 120000}
+# Long agreements: up to 4 reads of 25 pages each (one prompt cannot hold every covenant page).
+page_selection: {max_pages: 25, rules: covenant_section, max_batches: 4}
+limits: {max_tool_calls: 8, max_model_turns: 3, max_seconds: 240, token_budget: 250000}
 prompt: prompt.md
 schema: schema.json
 field_risk: {threshold: HIGH, operator: HIGH, frequency: MEDIUM, cure_days: MEDIUM, name: LOW, "*": HIGH}

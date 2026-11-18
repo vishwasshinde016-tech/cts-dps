@@ -82,7 +82,17 @@ def _definition_score(text: str) -> int:
 
 def covenant_pages(pages: list[dict], candidates: list[dict], max_pages: int = 25,
                    max_chars: int = 60_000) -> tuple[list[dict], dict]:
-    """The pages to send, in page order, and a note of why each was chosen and which duty pages did not fit."""
+    """The pages to send in one read, in page order, and a note of why each was chosen and which duty pages did not
+    fit."""
+    batches, note = covenant_batches(pages, candidates, max_pages, max_chars, max_batches=1)
+    return (batches[0] if batches else []), note
+
+
+def covenant_batches(pages: list[dict], candidates: list[dict], max_pages: int = 25, max_chars: int = 60_000,
+                     max_batches: int = 1) -> tuple[list[list[dict]], dict]:
+    """The pages to send as up to ``max_batches`` reads (long agreements: one prompt cannot hold every covenant page).
+    Pages are taken in priority order; each batch keeps to ``max_pages`` and the prompt budget and is in page order.
+    The note says why each page was chosen, in which batch, and which duty pages fit in no batch."""
     if not pages or max_pages <= 0:
         return [], {"sent": [], "notSent": []}
     by_no = {p["no"]: p for p in pages}
@@ -112,14 +122,22 @@ def covenant_pages(pages: list[dict], candidates: list[dict], max_pages: int = 2
         order = [(no, "FIRST_PAGES") for no in numbers[:max_pages]]
 
     budget = max(max_chars - RESERVED_CHARS, 0)
-    keep: dict[int, str] = {}
-    used = 0
+    batches: list[dict[int, str]] = [{}]
+    used = [0]
     for no, why in order:
         size = len(by_no[no].get("text") or "") + 40
-        if len(keep) >= max_pages or (keep and used + size > budget):
-            continue
-        keep[no] = why
-        used += size
-    not_sent = [no for no, why in order if no not in keep and why in ("RULES", "SECTION", "DUTY")]
-    chosen = [p for p in pages if p["no"] in keep]
-    return chosen, {"sent": [{"page": no, "why": keep[no]} for no in sorted(keep)], "notSent": sorted(not_sent)}
+        placed = False
+        for b, keep in enumerate(batches):  # the first batch it fits in
+            if len(keep) < max_pages and (not keep or used[b] + size <= budget):
+                keep[no] = why
+                used[b] += size
+                placed = True
+                break
+        if not placed and len(batches) < max(max_batches, 1):
+            batches.append({no: why})
+            used.append(size)
+    kept = {no: (why, b + 1) for b, keep in enumerate(batches) for no, why in keep.items()}
+    not_sent = [no for no, why in order if no not in kept and why in ("RULES", "SECTION", "DUTY")]
+    out = [[p for p in pages if p["no"] in keep] for keep in batches if keep]
+    return out, {"sent": [{"page": no, "why": kept[no][0], "batch": kept[no][1]} for no in sorted(kept)],
+                 "notSent": sorted(not_sent)}

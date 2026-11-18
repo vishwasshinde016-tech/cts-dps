@@ -124,7 +124,7 @@ def test_onboard_job_classifies_then_extracts(client, app, settings, tmp_path):
 
     res = client.get(f"/dps/v1/jobs/{agr}/result", headers=SERVICE).json()
     check("result", res)
-    assert res["classification"]["type"] == "LOAN_AGREEMENT" and res["pipeline"]["skillPack"] == "covenants/1.8.0"
+    assert res["classification"]["type"] == "LOAN_AGREEMENT" and res["pipeline"]["skillPack"] == "covenants/1.9.0"
     groups = {f["group"] for f in res["fields"]}
     assert "FINANCIAL_COVENANT" in groups and "SCHEDULE_TERM" in groups
     assert any(i["kind"] == "ISSUER" for i in res["identifiers"])

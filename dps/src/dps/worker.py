@@ -499,8 +499,12 @@ def build_runners(settings: Settings, database: Database, store: FileStore, core
         # tools, grounding and library names as ONBOARD), with the Java covenant tools.
         spring = SpringTools.from_settings(settings)
 
+        from dps.skills import load as load_pack
+
+        covenant_budget = load_pack("covenants").limits.get("token_budget")
+
         def ai_covenants(pages, terms):
-            gateway.begin_job(None)
+            gateway.begin_job(covenant_budget)
             try:
                 return read_with_skill(pages, terms, gateway, spring)
             finally:

@@ -20,7 +20,15 @@ from sqlalchemy.orm import Session
 from dps import jobs
 from dps.models import Artifact, Job
 from dps.skills import Pack, for_job_type, load
-from dps.skills.common import MAX_PROMPT_CHARS, agent_proposals, issue, make_field, select_pages, vote
+from dps.skills.common import (
+    MAX_PROMPT_CHARS,
+    agent_proposals,
+    batched_proposals,
+    issue,
+    make_field,
+    select_pages,
+    vote,
+)
 
 log = logging.getLogger(__name__)
 SCHEMA = "dps.result/1.0"
@@ -302,17 +310,17 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     fields = pack.rules(pages, ctx)
     page_note = None
     if pack.page_selection.get("rules") == "covenant_section":  # rules, sections, duty sentences, definitions
-        from dps.skills.covenants.pages import covenant_pages
+        from dps.skills.covenants.pages import covenant_batches
 
-        selected, page_note = covenant_pages(pages, fields, pack.page_selection.get("max_pages", 25),
-                                             MAX_PROMPT_CHARS)
+        batches, page_note = covenant_batches(pages, fields, pack.page_selection.get("max_pages", 25),
+                                              MAX_PROMPT_CHARS, pack.page_selection.get("max_batches", 1))
     else:
-        selected = select_pages(pages, fields, KEYWORDS.get(pack.name), pack.page_selection.get("max_pages", 25))
+        batches = [select_pages(pages, fields, KEYWORDS.get(pack.name), pack.page_selection.get("max_pages", 25))]
     lookup_ctx = {"cpIds": ctx.get("cpIds") or [], "obligorId": ctx.get("obligorId"),
                   "facilityIds": ctx.get("facilityIds") or []}
     notes: list[dict] = []
-    proposals = agent_proposals(pack, gateway, selected, spring=tools, correlation_id=job.correlation_id,
-                                lookup_context=lookup_ctx, notes=notes, all_pages=pages)
+    proposals = batched_proposals(pack, gateway, batches or [[]], notes=notes, spring=tools,
+                                  correlation_id=job.correlation_id, lookup_context=lookup_ctx, all_pages=pages)
     if pack.name in ("covenants", "amendment_diff"):  # library metric keys; agreements also drop loan mechanics
         from dps.skills.covenants import names
 
