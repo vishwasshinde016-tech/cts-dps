@@ -1,0 +1,1854 @@
+{
+ "HA01": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 29.7,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "DSCR",
+    "name": "Minimum DSCR",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 1.1,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 9,
+    "quote": "\u201cCash Sweep Period\u201d \u2013 means a period during the term of the Loan: (i) commencing upon the Effective Date and expiring as of the date that the Property achieves a Debt Service Coverage Ratio equal to or greater than 1.10 for three (3) consecutive calendar months"
+   },
+   {
+    "metric_raw": "MIN_TANGIBLE_NET_WORTH",
+    "name": "Minimum Tangible Net Worth",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 75000000.0,
+    "unit": "USD",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "AMOUNT_NOT_IN_INR: convert the threshold to INR crore before applying",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 72,
+    "quote": "(l) Tangible Net Worth \u2013 Guarantor. Guarantor (in the aggregate) fails to maintain at all times Tangible Net Worth of at least $75,000,000.00 (\u201cNet Worth Covenant\u201d), to be tested pursuant to the financial statements"
+   },
+   {
+    "metric_raw": "LOAN_TO_VALUE",
+    "name": "Maximum Loan to Value",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 80.0,
+    "unit": "PERCENT",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 32,
+    "quote": "Percentage\u201d) as of the Original Maturity Date does not exceed 80.00%. To the extent Mortgage Lender determines that the Loan-to-Value Percentage exceeds 80.00% as of the Original Maturity Date, Mortgage"
+   },
+   {
+    "metric_raw": "BOOKS_AND_RECORDS",
+    "name": "Books and Records",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 4,
+    "quote": "11.2 MONTHLY PROPERTY REPORTING 65 11.3 BOOKS AND RECORDS 65"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 7,
+    "quote": "ARTICLE 1. DEFINITIONS 1.1 DEFINED TERMS. The following capitalized terms generally used in this Agreement shall have the meanings"
+   },
+   {
+    "metric_raw": "REPORTING_COVENANT",
+    "name": "Financial Reporting",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 44,
+    "quote": "Property. 6.8 FINANCIAL CONDITION. All financial statements and information heretofore and hereafter delivered to Lender"
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 76,
+    "quote": "GUARANTOR MAINTAINS A CONTROLLING INTEREST IN BORROWER) AND/OR GUARANTOR. 13.2 NOTICES. All notices, demands, or other communications under this Agreement and the other Loan Documents"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:73:7ae7e8a22b",
+    "name": "Net Worth",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 73,
+    "quote": "Guarantor (in the aggregate) fails to maintain at all times Liquid Assets of at least $1,500,000.00 (\u201cLiquid Asset Covenant\u201d and collectively with the Net Worth Covenant, the \u201cGuarantor Financial Covenants\u201d), to be tested pursuant to the financial statements and other related financial documents of the Guarantor to be provided to Lender from time to time pursuant to the terms hereof; provided that if there is a failure to satisfy the Liquid Asset Covenant, such failure shall "
+   },
+   {
+    "metric_raw": "CURE_PERIOD_DAYS",
+    "name": "Cure period",
+    "category": "INFO",
+    "operator": null,
+    "threshold": 90.0,
+    "unit": "DAYS",
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [],
+    "page": 74,
+    "quote": "structured, fails to satisfy the requirements for job creation under applicable immigration laws and USCIS regulations, and such failure is not cured or remedied within ninety (90) days after such"
+   }
+  ]
+ },
+ "HA03": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 323.6,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "ICR",
+    "name": "Minimum Interest Coverage",
+    "category": "FINANCIAL",
+    "operator": "<",
+    "threshold": 2.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "OPERATOR_UNEXPECTED: usually a minimum (>=)",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 85,
+    "quote": "Ratio would be greater than the Closing Date Total Net Leverage Ratio plus 2.00 to 1.00 or (z) the Interest Coverage Ratio would be less than 2.00 to 1.00, as applicable."
+   },
+   {
+    "metric_raw": "NET_LEVERAGE_RATIO",
+    "name": "Maximum Net Leverage",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 7.75,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 183,
+    "quote": "of the second full fiscal quarter ended after the Closing Date, the Borrowers shall not permit the First Lien Net Leverage Ratio on the last day of each Test Period to be greater than 7.75 to 1.00 if the aggregate outstanding principal amount of"
+   },
+   {
+    "metric_raw": "NET_LEVERAGE_RATIO:TOTAL_NET_LEVERAGE_RATIO",
+    "name": "Total Net Leverage Ratio",
+    "category": "FINANCIAL",
+    "operator": "<",
+    "threshold": 2.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "SECOND_COVENANT_OF_FAMILY: check the formula measures this covenant",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 85,
+    "quote": "Ratio would be greater than the Closing Date Secured Net Leverage Ratio plus 2.00 to 1.00, (y) the Total Net Leverage Ratio would be greater than the Closing Date Total Net Leverage Ratio plus 2.00 to 1.00 or (z) the Interest Coverage Ratio would be less than 2.00 to 1.00, as applicable."
+   },
+   {
+    "metric_raw": "NET_LEVERAGE_RATIO:CLOSING_DATE_TOTAL_NET_LEVERAGE_RATIO",
+    "name": "Closing Date Total Net Leverage Ratio",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 4.5,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_FROM_DEFINITION: 'Closing Date Total Net Leverage Ratio' means 4.50 to 1.00",
+     "SECOND_COVENANT_OF_FAMILY: check the formula measures this covenant",
+     "THRESHOLD_NOT_IN_QUOTE",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 85,
+    "quote": "Secured Net Leverage Ratio would be greater than the Closing Date Secured Net Leverage Ratio plus 2.00 to 1.00, (y) the Total Net Leverage Ratio would be greater than the Closing Date Total Net Leverage Ratio plus 2.00 to 1.00 or (z) the Interest Coverage Ratio"
+   },
+   {
+    "metric_raw": "CHANGE_OF_CONTROL",
+    "name": "No Change of Control",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 28,
+    "quote": "\u201cDefault Right\u201d has the meaning assigned to that term in, and shall be interpreted in accordance with, 12 C.F.R. \u00a7\u00a7 252.81, 47.2 or 382.1, as applicable."
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 60,
+    "quote": "(B) the Interest Coverage Ratio for the applicable Test Period is equal to or greater than (I) 2.00 to 1.00 or (II) the Interest Coverage Ratio immediately prior to such incurrence;"
+   },
+   {
+    "metric_raw": "BOOKS_AND_RECORDS",
+    "name": "Books and Records",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 108,
+    "quote": "made under this Section 2.07 prior to the last day of the Interest Period therefor, in lieu of making any payment pursuant to this Section 2.07 in respect of any such Term SOFR Loan or Term CORRA Rate Loan, prior to the last day of the Interest Period therefor, the"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 149,
+    "quote": "contains the information required by such paragraph (b), (C) any financial statements required to be delivered pursuant to this Section 6.01 shall not be required to contain purchase accounting adjustments and (D) following the consummation of an acquisition in the"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:166:ec6b133eb5",
+    "name": "Closing Date EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 166,
+    "quote": "(ad) Investments made by a Subsidiary that is not a Loan Party with the cash or other assets received by it pursuant to a substantially concurrent Investment made in such Subsidiary that was permitted by this Section 7.02; provided that the aggregate principal amount outstanding under this clause (dd) shall not exceed the greater of (1) 25% of Closing Date EBITDA and (2) 25% of TTM Consolidated Adjusted EBITDA as of the applicable date of determination;"
+   },
+   {
+    "metric_raw": "TESTING_BASIS",
+    "name": "Testing basis",
+    "category": "INFO",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 9,
+    "quote": "Amount Reference Period, a cumulative amount equal to the sum of, without duplication: (n) the greater of (A) 100% of Closing Date EBITDA and (B) 100% of TTM Consolidated Adjusted EBITDA as of"
+   },
+   {
+    "metric_raw": "STEP_SCHEDULE",
+    "name": "Step-down schedule",
+    "category": "INFO",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 67,
+    "quote": "or substantially all of the assets of the Borrowers, Qualifying IPO or Transformative Event. For the avoidance of doubt, (A) any reduction in margin or fees pursuant to a leveraged-based or other applicable \u201cstep-down\u201d that may, from time to time, be applicable to"
+   }
+  ]
+ },
+ "HA04": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 190.5,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "ICR",
+    "name": "Minimum Interest Coverage",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 2.5,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 202,
+    "quote": "o Indebtedness that is not secured, or any Disqualified Stock or Preferred Stock, in each case, the Interest Coverage Ratio for the Test Period preceding the date on which such Indebtedness is incurred or such Disqualified Stock or Preferred Stock is issued would be no less than 2.50 to 1.00,"
+   },
+   {
+    "metric_raw": "NET_LEVERAGE_RATIO",
+    "name": "Maximum Net Leverage",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 3.5,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 202,
+    "quote": "First Lien Obligations, the First Lien Net Leverage Ratio for the Test Period preceding the date on which such Indebtedness is incurred would be no greater than 3.50 to 1.00;"
+   },
+   {
+    "metric_raw": "NET_LEVERAGE_RATIO:SECURED_NET_LEVERAGE_RATIO",
+    "name": "Secured Net Leverage Ratio",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 4.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "SECOND_COVENANT_OF_FAMILY: check the formula measures this covenant",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 202,
+    "quote": "Collateral securing the First Lien Obligations, the Secured Net Leverage Ratio for the Test Period preceding the date on which such Indebtedness is incurred would be no greater than 4.00 to 1.00;"
+   },
+   {
+    "metric_raw": "NET_LEVERAGE_RATIO:TOTAL_NET_LEVERAGE_RATIO",
+    "name": "Total Net Leverage Ratio",
+    "category": "FINANCIAL",
+    "operator": ">",
+    "threshold": 3.5,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "SECOND_COVENANT_OF_FAMILY: check the formula measures this covenant",
+     "OPERATOR_UNEXPECTED: usually a maximum (<=)",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 148,
+    "quote": "recently ended prior to the date of such required prepayment is less than or equal to 4.00 to 1.00 and greater than 3.50 to 1.00 (with the Net Proceeds"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 254,
+    "quote": "(e) Limitations upon Participant Rights. A Participant shall not be entitled to receive any greater payment under Section 3.01, 3.04 or 3.05 than the applicable Lender would have been entitled to receive with respect to the participation sold to such Participant, unless the sale"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:203:12e6c7a2fc",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 203,
+    "quote": "(3) (x) the Closing Date Subordinated Shareholder Loan and (y) the incurrence of other Indebtedness by the Borrower and any Restricted Subsidiary in existence on the Closing Date (excluding Indebtedness described in the preceding clauses (1) and (2)); provided that any such item of Indebtedness with an aggregate outstanding principal amount on the Closing Date in excess of the greater of (x) $52.5 million and (y) 5.0% of Consolidated EBITDA of the Borrower and the Restricted "
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:225:00b04d7f6c",
+    "name": "Interest Coverage Ratio",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 225,
+    "quote": "(2) the Borrower shall not permit the Interest Coverage Ratio as of the last day of each Test Period, commencing with the Test Period ending June 30, 2026, to be less than 2.50 to 1.00 (such compliance to be determined on the basis of the financial information most recently delivered to the Administrative Agent pursuant to Section 6.01(1) and Section 6.01(2) for such Test Period);"
+   }
+  ]
+ },
+ "HA07": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 14.7,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "ICR",
+    "name": "Minimum Interest Coverage",
+    "category": "FINANCIAL",
+    "operator": "<",
+    "threshold": 1.5,
+    "unit": null,
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [
+     "OPERATOR_UNEXPECTED: usually a minimum (>=)"
+    ],
+    "page": 42,
+    "quote": "(c) Consolidated Interest Coverage Ratio to be less than 1.50 to 1.00."
+   },
+   {
+    "metric_raw": "BOOKS_AND_RECORDS",
+    "name": "Books and Records",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 3,
+    "quote": "6.08 Compliance with Laws 37 6.09 Books and Records 38"
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 5,
+    "quote": "1.01 Defined Terms. As used in this Agreement, the following terms shall have the meanings set forth"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 41,
+    "quote": "6.07 Maintenance of Insurance. Maintain with financially sound and reputable insurance companies not"
+   },
+   {
+    "metric_raw": "CHANGE_OF_CONTROL",
+    "name": "No Change of Control",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 47,
+    "quote": "8.01 Events of Default. Any of the following shall constitute an Event of Default:"
+   },
+   {
+    "metric_raw": "CURE_PERIOD_DAYS",
+    "name": "Cure period",
+    "category": "INFO",
+    "operator": null,
+    "threshold": 60.0,
+    "unit": "DAYS",
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [],
+    "page": 48,
+    "quote": "to proceed promptly to cure the same and thereafter prosecute the curing of the same with due diligence but in any event within 60 days or any Event of Default occurs under any other Loan Document; or"
+   }
+  ]
+ },
+ "HA08": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 7.1,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "DEBT_TO_EBITDA",
+    "name": "Total Debt to EBITDA Ceiling",
+    "category": "FINANCIAL",
+    "operator": ">",
+    "threshold": 0.75,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "OPERATOR_UNEXPECTED: usually a maximum (<=)",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 62,
+    "quote": "Section 6.2 Financial Covenants. Permit: (a) Total Leverage Ratio to be greater than 0.75 to 1.00 as of the last day of any month."
+   },
+   {
+    "metric_raw": "MIN_TANGIBLE_NET_WORTH",
+    "name": "Minimum Tangible Net Worth",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 1000000000.0,
+    "unit": "USD",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "AMOUNT_NOT_IN_INR: convert the threshold to INR crore before applying",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 62,
+    "quote": "(a) Total Leverage Ratio to be greater than 0.75 to 1.00 as of the last day of any month. (b) Tangible Net Worth to be less than $1,000,000,000 as of the last day of any month."
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 48,
+    "quote": "Borrower fails to pay any Non-Excluded Taxes or Other Taxes that the Borrower is required to pay pursuant to this Section 2.7 (including Non-Excluded Taxes or Other Taxes imposed or asserted on or attributable to additional amounts payable"
+   },
+   {
+    "metric_raw": "CHANGE_OF_CONTROL",
+    "name": "No Change of Control",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 48,
+    "quote": "Borrower fails to pay any Non-Excluded Taxes or Other Taxes that the Borrower is required to pay pursuant to this Section 2.7 (including Non-Excluded Taxes or Other Taxes imposed or asserted on or attributable to additional amounts payable"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 48,
+    "quote": "Borrower fails to pay any Non-Excluded Taxes or Other Taxes that the Borrower is required to pay pursuant to this Section 2.7 (including Non-Excluded Taxes or Other Taxes imposed or asserted on or attributable to additional amounts payable"
+   },
+   {
+    "metric_raw": "BOOKS_AND_RECORDS",
+    "name": "Books and Records",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 48,
+    "quote": "Borrower fails to pay any Non-Excluded Taxes or Other Taxes that the Borrower is required to pay pursuant to this Section 2.7 (including Non-Excluded Taxes or Other Taxes imposed or asserted on or attributable to additional amounts payable"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:62:3383cb5ffc",
+    "name": "EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 62,
+    "quote": "(f) the Borrower to have a ratio of the Borrower\u2019s EBITDA to the Borrower\u2019s Interest Expense with respect to (i) any Indebtedness under this Agreement, (ii) any Indebtedness under the StoneX Financial Margin Facility and (iii) any other Subordinated Indebtedness, as of the last day of each of Borrower\u2019s fiscal quarters, of less than 1.15 to 1.0, calculated for the twelve month period ending as of the last date of each such fiscal quarter."
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:66:01f7f72994",
+    "name": "Possible covenant",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 66,
+    "quote": "(f) One or more judgments or decrees shall be entered against the Borrower or any Subsidiary for a liability (to the extent not paid or covered by insurance as to which the relevant insurance company has not denied coverage) of $50,000,000 or more, and all such judgments or decrees shall not have been vacated, discharged, stayed or bonded pending appeal within 30 days from the entry thereof, or any action shall be legally taken by a judgment creditor to levy upon properties o"
+   }
+  ]
+ },
+ "HA09": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 65.7,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "ICR",
+    "name": "Minimum Interest Coverage",
+    "category": "FINANCIAL",
+    "operator": "<",
+    "threshold": 2.0,
+    "unit": null,
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [
+     "OPERATOR_UNEXPECTED: usually a minimum (>=)"
+    ],
+    "page": 76,
+    "quote": "or (ii) make a purchase or redemption of any Subordinated Obligation; or (c) At all times the Consolidated Interest Coverage Ratio is less than 2:00 to 1:00, (i) make an optional or"
+   },
+   {
+    "metric_raw": "MIN_TANGIBLE_NET_WORTH",
+    "name": "Minimum Tangible Net Worth",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 2701014000.0,
+    "unit": "USD",
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [
+     "AMOUNT_NOT_IN_INR: convert the threshold to INR crore before applying"
+    ],
+    "page": 80,
+    "quote": "7.7 Consolidated Tangible Net Worth. Permit Consolidated Tangible Net Worth to be, at the end of any Fiscal Quarter, less than an amount equal to (a) $2,701,014,000, plus (b) an amount equal to 50% of positive Consolidated Net Income for each Fiscal"
+   },
+   {
+    "metric_raw": "DEBT_TO_EBITDA",
+    "name": "Total Debt to EBITDA Ceiling",
+    "category": "FINANCIAL",
+    "operator": ">",
+    "threshold": 0.6,
+    "unit": null,
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [
+     "OPERATOR_UNEXPECTED: usually a maximum (<=)"
+    ],
+    "page": 81,
+    "quote": "7.8 Consolidated Leverage Ratio. Permit the Consolidated Leverage Ratio to be, at the end of any Fiscal Quarter, greater than 0.60 to 1.00."
+   },
+   {
+    "metric_raw": "ICR:CONSOLIDATED_INTEREST_COVERAGE_RATIO_OR_MINIMUM_LIQUIDITY",
+    "name": "Consolidated Interest Coverage Ratio or Minimum Liquidity",
+    "category": "FINANCIAL",
+    "operator": "<",
+    "threshold": 1.5,
+    "unit": null,
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [
+     "SECOND_COVENANT_OF_FAMILY: check the formula measures this covenant",
+     "OPERATOR_UNEXPECTED: usually a minimum (>=)"
+    ],
+    "page": 81,
+    "quote": "aggregate; and (b) the Consolidated Interest Coverage Ratio to be, at the end of any Fiscal Quarter, less than 1.50 to 1.00."
+   },
+   {
+    "metric_raw": "MIN_TANGIBLE_NET_WORTH:MIN_TANGIBLE_NET_WORTH",
+    "name": "Min Tangible Net Worth",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 104811000.0,
+    "unit": "USD",
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [
+     "AMOUNT_NOT_IN_INR: convert the threshold to INR crore before applying",
+     "SECOND_COVENANT_OF_FAMILY: check the formula measures this covenant"
+    ],
+    "page": 82,
+    "quote": "statements not consolidated with those of Borrower under Generally Accepted Accounting Principles consistently applied to exceed an amount equal to the sum of (a) $104,811,000 plus (b) an amount equal to 20% of Consolidated Tangible Net Worth as of the last day of"
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 7,
+    "quote": "8.1 Financial and Business Information of Borrower and Its Subsidiaries 74 8.2 Compliance Certificate 76"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 10,
+    "quote": "DEFINITIONS AND ACCOUNTING TERMS 1.1 Defined Terms. As used in this Agreement, the following terms shall have the meanings set forth below:"
+   },
+   {
+    "metric_raw": "BOOKS_AND_RECORDS",
+    "name": "Books and Records",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 83,
+    "quote": "INFORMATION AND REPORTING REQUIREMENTS 8.1 Financial and Business Information of Borrower and Its Subsidiaries. As long as any Loan remains unpaid or any"
+   }
+  ]
+ },
+ "HA11": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 16.0,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "MINIMUM_LIQUIDITY",
+    "name": "Minimum Liquidity",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 500000.0,
+    "unit": "USD",
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [
+     "AMOUNT_NOT_IN_INR: convert the threshold to INR crore before applying"
+    ],
+    "page": 17,
+    "quote": "3.00 to 1.00, as tested on December 31 of each calendar year commencing on December 31, 2026; and Minimum Liquidity. Borrowers, on a combined basis, shall maintain at all times a minimum of $500,000 in unrestricted"
+   },
+   {
+    "metric_raw": "CHANGE_OF_CONTROL",
+    "name": "No Change of Control",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 17,
+    "quote": "date, to (ii) EBITDA for the period of twelve (12) consecutive calendar months ending as of the applicable testing date, at not greater than 3.00 to 1.00, as tested on December 31 of each calendar year commencing on December 31, 2026; and"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 17,
+    "quote": "date, to (ii) EBITDA for the period of twelve (12) consecutive calendar months ending as of the applicable testing date, at not greater than 3.00 to 1.00, as tested on December 31 of each calendar year commencing on December 31, 2026; and"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:17:58263713cc",
+    "name": "EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 17,
+    "quote": "Borrowers shall maintain at all times their ratio of (i) Funded Debt as of the applicable testing date, to (ii) EBITDA for the period of twelve (12) consecutive calendar months ending as of the applicable testing date, at not greater than 3.00 to 1.00, as tested on December 31 of each calendar year commencing on December 31, 2026; and Minimum Liquidity."
+   }
+  ]
+ },
+ "HA12": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 107.5,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "NET_LEVERAGE_RATIO",
+    "name": "Maximum Net Leverage",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 4.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 42,
+    "quote": "if such Indebtedness is secured by the Collateral on a junior lien basis to the Obligations, the Secured Net Leverage Ratio is equal to or less than 4.00 to 1.00, on the date of the initial incurrence of (or commitment in respect of) such Indebtedness"
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 43,
+    "quote": "simultaneous incurrence of Permitted Secured Ratio Debt and/or Incremental Facilities), the Total Net Leverage Ratio is equal to or less than 4.00 to 1.00, on the date of the initial incurrence of (or commitment in respect of) such Indebtedness or on the LCT Test Date, as applicable;"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 61,
+    "quote": "approval of the Administrative Agent and the Issuing Bank, in each case to the extent the same would be required for an assignment under Section 9.05 (which approvals shall not be unreasonably withheld, conditioned or delayed). Such notice shall set forth (i) the amount of the Incremental Term"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:59:47af92ae77",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 59,
+    "quote": "(C) the amount of any loss or pre-opening expenses attributable to a New Project, until the date that is 12 months after the date of completing the construction, acquisition, assembling or creation of such New Project, as the case may be; provided that (i) such losses or pre-opening expenses are reasonably identifiable and factually supportable, (ii) losses or preopening expenses attributable to such New Project after 12 months from the date of completing such construction, a"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:101:f82f0bc7cc",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 101,
+    "quote": "Designated Noncash Consideration received pursuant to this clause (iii) that is at that time outstanding, not to exceed an amount equal to the greater of (x) $32,500,000 and (y) 25.0% of Consolidated EBITDA for the then most recently ended Test Period at the time of the receipt of such Designated Noncash Consideration, with the Fair Market Value of each item of Designated Noncash Consideration being measured at the time received and without giving effect to subsequent changes"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:101:d4588ce29a",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 101,
+    "quote": "(c) repurchase, redemption or other acquisition for value by the Borrower of, Equity Interests of the Borrower or any publicly traded entity that is a direct or indirect parent of Borrower held by officers, directors or employees or former officers, directors or employees of the Borrower or any publicly traded entity that is a direct or indirect parent of Borrower and any Restricted Subsidiary (or their transferees, estates or beneficiaries under their estates), upon their de"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:103:193e5ebf38",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 103,
+    "quote": "The Borrower will not, and will not permit any of its Restricted Subsidiaries to, sell, lease or otherwise transfer any property or assets to, or purchase, lease or otherwise acquire any property or assets from, or otherwise engage in any other transactions (including amendments or modifications to prior or existing transactions) with, any of its Affiliates involving payment or consideration in excess of the greater of (x) $7,800,000 and (y) 6.0% of Consolidated EBITDA for th"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:105:80db2d3d6e",
+    "name": "Total Net Leverage Ratio",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 105,
+    "quote": "As of the last day of any Test Period ending on or after December 31, 2025, if the Testing Condition is satisfied, then the Borrower will not permit the Total Net Leverage Ratio as of the last day of such Test Period to exceed 4.00 to 1.00."
+   }
+  ]
+ },
+ "HA13": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 41.9,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "ICR",
+    "name": "Minimum Interest Coverage",
+    "category": "FINANCIAL",
+    "operator": "<",
+    "threshold": 2.75,
+    "unit": null,
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [
+     "OPERATOR_UNEXPECTED: usually a minimum (>=)"
+    ],
+    "page": 180,
+    "quote": "7.11 Financial Covenants. (a) Consolidated Interest Coverage Ratio. Permit the Consolidated Interest Coverage Ratio as of the end of any fiscal quarter of the Company to be less than 2.75 to 1.00."
+   },
+   {
+    "metric_raw": "NET_LEVERAGE_RATIO",
+    "name": "Maximum Net Leverage",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 4.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 78,
+    "quote": "Indebtedness that is secured by Liens on the Collateral that are junior to the Liens on the Collateral securing the Obligations, the Consolidated Secured Net Leverage Ratio shall not exceed 4.00:1.00 and (c) in the case of any such Indebtedness that is"
+   },
+   {
+    "metric_raw": "NET_LEVERAGE_RATIO:CONSOLIDATED_NET_LEVERAGE_RATIO",
+    "name": "Consolidated Net Leverage Ratio",
+    "category": "FINANCIAL",
+    "operator": "<",
+    "threshold": 2.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "SECOND_COVENANT_OF_FAMILY: check the formula measures this covenant",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 55,
+    "quote": "(b), (c), (d), and (e)), (b) either (i) the Consolidated Net Leverage Ratio of the Company and its Restricted Subsidiaries is less than 2.00 to 1.00 both (x) as of the last day of each of the two most recently ended fiscal quarters for which a"
+   },
+   {
+    "metric_raw": "BOOKS_AND_RECORDS",
+    "name": "Books and Records",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 33,
+    "quote": "6.08 Compliance with Laws 134 6.09 Books and Records 134"
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 40,
+    "quote": "DEFINITIONS AND ACCOUNTING TERMS 1.01 Defined Terms. As used in this Agreement, the following terms shall have the meanings set forth below:"
+   },
+   {
+    "metric_raw": "CHANGE_OF_CONTROL",
+    "name": "No Change of Control",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 40,
+    "quote": "DEFINITIONS AND ACCOUNTING TERMS 1.01 Defined Terms. As used in this Agreement, the following terms shall have the meanings set forth below:"
+   },
+   {
+    "metric_raw": "NEGATIVE_PLEDGE",
+    "name": "Negative Pledge",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 179,
+    "quote": "expressly permitted by Sections 7.02, 7.03, and 7.05, respectively. 7.09 Burdensome Agreements. Enter into or permit to exist any Contractual Obligation (other than (1) this Agreement or"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 207,
+    "quote": "making such MNPI Representation. 10.07 Treatment of Certain Information; Confidentiality. Each of the Administrative Agent, the Lenders and the L/C"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:134:b684383958",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 134,
+    "quote": "purpose of any other Indebtedness of a Loan Party or (B) unless each of its direct and indirect Subsidiaries is also designated an Unrestricted Subsidiary pursuant to this Section 2.14(a), and (vi) the Company and its Restricted Subsidiaries (excluding the proposed Unrestricted Subsidiary) shall at the time of the designation represent, on a combined basis (and without taking into account the assets or Consolidated EBITDA of any Unrestricted Subsidiary (including the proposed"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:172:551195e559",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 172,
+    "quote": "(i) Liens not otherwise permitted by the foregoing clauses of this Section 7.01 securing outstanding obligations in an aggregate principal amount (including unmatured obligations) at any time outstanding not to exceed the greater of (i) $165,000,000 and (ii) 50.0% of Consolidated EBITDA for the most recently completed Measurement Period; provided that so long as no Collateral Release Period is in effect, no such Lien shall attach to any asset that is, or is required to be, Co"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:173:e08787c61c",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 173,
+    "quote": "(c) intercompany Indebtedness owing (i) by a Domestic Obligor to a Domestic Obligor, (ii) by a Foreign Obligor to a Foreign Obligor, (iii) by a non-Loan Party to a non-Loan Party, (iv) by a non-Loan Party to a Loan Party, (v) by a Foreign Obligor to a Domestic Obligor, (vi) by a Domestic Obligor to a Foreign Obligor or (vii) by a Loan Party to a non- Loan Party; provided that (A) in the case of clauses (vi) and (vii), such Indebtedness in an aggregate principal amount exceedi"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:173:00c96ad2ea",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 173,
+    "quote": "(e) Indebtedness in respect of Capitalized Leases, Synthetic Lease Obligations and purchase money obligations for fixed or capital assets within the limitations set forth in Section 7.01(g); provided, however, that the aggregate amount of all such Indebtedness at any one time outstanding shall not exceed the greater of (1) $165,000,000 and (2) 50.0% of Consolidated EBITDA for the most recently completed Measurement Period;"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:180:dbeafa82be",
+    "name": "Consolidated Net Leverage Ratio",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 180,
+    "quote": "(i) Permit the Consolidated Net Leverage Ratio as of the last day of any Measurement Period to be greater than 4.25 to 1.00 or (ii) in lieu of the foregoing, at the Company\u2019s option, solely to the extent (x) the Company has consummated a Qualified Notes Offering, (y) a Collateral Release shall not have occurred and be continuing and (z) the Term Facilities and Revolving Credit Facility are secured by the Collateral, permit the Consolidated Secured Net Leverage Ratio as of the"
+   }
+  ]
+ },
+ "HA14": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 56.7,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "NET_LEVERAGE_RATIO",
+    "name": "Maximum Net Leverage",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 5.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 122,
+    "quote": "on a pari passu basis with the Liens securing the Obligations, the First Lien Net Leverage Ratio being equal to or less than 5.00:1.00 and (B) in the case of any such Liens on the Collateral securing obligations on a junior basis with the Liens securing the"
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 69,
+    "quote": "designated by it for such purpose by notice to the Lenders; provided that Swingline Loans shall be made as provided in Section 2.04. The Administrative Agent will make such Loans available to the applicable Borrower by wire transfer, automated clearing"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 69,
+    "quote": "designated by it for such purpose by notice to the Lenders; provided that Swingline Loans shall be made as provided in Section 2.04. The Administrative Agent will make such Loans available to the applicable Borrower by wire transfer, automated clearing"
+   },
+   {
+    "metric_raw": "BOOKS_AND_RECORDS",
+    "name": "Books and Records",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 107,
+    "quote": "shall be available on the website of the SEC at http://www.sec.gov. Information required to be delivered pursuant to this Section 5.01 may also be delivered by electronic communications pursuant to procedures approved by the Administrative Agent; provided,"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:138:0893d7e9d8",
+    "name": "Total Net Leverage Ratio",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 138,
+    "quote": "Until the Date of Full Satisfaction, the Parent Borrower covenants and agrees with Lenders that, as of the last day of each Fiscal Quarter (commencing with the Fiscal Quarter ended immediately prior to the Closing Date), the Parent Borrower shall not permit the Total Net Leverage Ratio for any Test Period set forth below to exceed the applicable level set forth below opposite such Test Period under the heading \u201cTotal Net Leverage Ratio\u201d: Test Periods Ending Total Net Leverage"
+   }
+  ]
+ },
+ "HA15": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 28.2,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "DSCR",
+    "name": "Minimum DSCR",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 2.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 38,
+    "quote": "16. Debt Services Coverage Ratio Throughout the period of this Agreement, the Borrower shall maintain its Debt Services Coverage Ratio (DSCR) to be not less than 2 (two) times. For the purpose of this Agreement, \u201cDebt Service Coverage Ratio\u201d or \u201cDSCR\u201d means the ratio of EBITDA"
+   },
+   {
+    "metric_raw": "DEBT_TO_EQUITY",
+    "name": "Debt to Equity Ceiling",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 1.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 38,
+    "quote": "17. Interest Bearing Debt to Equity Ratio Throughout the period of this Agreement, the Borrower shall maintain its Interest Bearing Debt to Equity Ratio (IBD/E) to be not more than 1 (one) times, to be tested annually in respect of each financial year of the Borrower."
+   }
+  ]
+ },
+ "HA16": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 10.8,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "DSCR",
+    "name": "Minimum DSCR",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 1.15,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_FROM_DEFINITION: 'DSCR Minimum' means one point one five to one (1.15:1.00)",
+     "THRESHOLD_NOT_IN_QUOTE",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 107,
+    "quote": "[Amended and Restated Term Loan Agreement] (i) If the DSCR on any DSCR Test Date is less than the DSCR Minimum, a \u201cDSCR Failure\u201d shall have"
+   },
+   {
+    "metric_raw": "LOAN_TO_VALUE",
+    "name": "Maximum Loan to Value",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 73.0,
+    "unit": "PERCENT",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_FROM_DEFINITION: 'LTV Maximum Ratio' means 73.0%",
+     "THRESHOLD_NOT_IN_QUOTE",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 106,
+    "quote": "Collateral. SECTION 7.12 Financial Ratios and Tests. (a) Loan-to-Value Ratio. (i) If the Loan-to-Value Ratio on any LTV Test Date exceeds the LTV Maximum Ratio (a \u201cLTV Breach\u201d),"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 132,
+    "quote": "benefit of right of setoff contained in Section 11.08 and the yield protection provisions contained in Sections 3.01 and 3.03 solely to the extent that the Lender from which such participant acquired its participation would be entitled to the"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:56:a16a1faf69",
+    "name": "Possible covenant",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 56,
+    "quote": "The Borrower shall have the right to voluntarily prepay the Loans, either in whole or in part (each, a \u201cNon-Railcar Partial Prepayment\u201d); provided, however, that (A) other than in respect of a Non-Railcar Partial Prepayment relating to a DSCR Cure or an LTV Cure, each such partial prepayment shall be in a minimum principal amount equal to $2,000,000, and (B) no Asset Disposition or release of the Lien of the Collateral Documents shall occur in connection with such Non-Railcar"
+   }
+  ]
+ },
+ "HA17": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 38.6,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "DSCR",
+    "name": "Minimum DSCR",
+    "category": "FINANCIAL",
+    "operator": "<",
+    "threshold": 1.4,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "OPERATOR_UNEXPECTED: usually a minimum (>=)",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 97,
+    "quote": "Repurchases made after December 31, 2025. Section 6.4. Minimum Debt Service Coverage Ratio. Not permit the Consolidated Debt Service Coverage Ratio, as of the end of any Fiscal Quarter, commencing with the Fiscal Quarter ending September 30, 2026, to be less than 1.40:1.00."
+   },
+   {
+    "metric_raw": "MIN_NET_WORTH",
+    "name": "Minimum Net Worth",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 392400000.0,
+    "unit": "USD",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "AMOUNT_NOT_IN_INR: convert the threshold to INR crore before applying",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 81,
+    "quote": "have been no change which has had or would reasonably be expected to have a Material Adverse Effect and (D) the Consolidated Net Worth of Holdings and its Subsidiaries as of December 31, 2025 is $392,400,000;"
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 50,
+    "quote": "amended from time to time) promulgated by the United Kingdom Prudential Regulation Authority) or any person falling within IFPRU 11.6 of the FCA Handbook (as amended from time to time) promulgated by the United Kingdom Financial Conduct Authority, which"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:97:59ba2772c4",
+    "name": "Consolidated Net Worth",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 97,
+    "quote": "Not permit Consolidated Net Worth, as of the end of any Fiscal Quarter, commencing with the Fiscal Quarter ending September 30, 2026, to be less than the sum of: (i) eighty percent (80.0%) of Consolidated Net Worth determined as of December 31, 2025, plus (ii) to the extent a positive number, fifty percent (50.0%) of Consolidated Net Income for each Fiscal Quarter ending after December 31, 2025, plus (iii) fifty percent (50.0%) of capital contributions received by Holdings af"
+   }
+  ]
+ },
+ "HA18": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 18.8,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "POSSIBLE_COVENANT:26:ebc803350d",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 26,
+    "quote": "(10) Metal Price Lag; provided that the aggregate amount added to Consolidated EBITDA pursuant to this clause (10) shall not exceed in the aggregate 5% of Consolidated EBITDA for any such period;"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:181:d92beb71c5",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 181,
+    "quote": "(d) If, at any time and from time to time after the Closing Date, Restricted Subsidiaries that are not Loan Parties because they are Excluded Collateral Subsidiaries comprise in the aggregate more than 7.5% of the Consolidated Total Assets of Intermediate Holdings and its Subsidiaries as of the end of the most recently ended fiscal quarter or more than 7.5% of Consolidated EBITDA of Intermediate Holdings and its Restricted Subsidiaries as of the end of the most recently ended"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:182:1d049282e2",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 182,
+    "quote": "(j) Notwithstanding anything herein or in any other Loan Document to the contrary, on the Closing Date, the Specified Guarantors shall not be required to pledge or grant any of their assets as Collateral; provided that if, at any time and from time to time after the Closing Date, a Specified Guarantor comprises in the aggregate more than 25% of the Consolidated Total Assets, or more than 50% of Consolidated EBITDA, of Intermediate Holdings and its Restricted Subsidiaries as o"
+   },
+   {
+    "metric_raw": "AGREEMENT_DATE",
+    "name": "Agreement date",
+    "category": "INFO",
+    "operator": null,
+    "threshold": null,
+    "unit": "DATE",
+    "confidence": 0.9,
+    "method": "REGEX",
+    "issues": [],
+    "page": 67,
+    "quote": "\u201cNovelis AG Cash Pooling Agreements\u201d shall mean a Cash Management Agreement entered into among Novelis AG and certain \u201cEuropean Affiliates\u201d (as identified therein) dated 1 February 2007, together with all ancillary"
+   }
+  ]
+ },
+ "HA19": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 16.0,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "ICR",
+    "name": "Minimum Interest Coverage",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 2.0,
+    "unit": null,
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [],
+    "page": 141,
+    "quote": "1.00 at any time. (d) Consolidated Interest Coverage Ratio. The Borrower will not permit the Consolidated Interest Coverage Ratio to be less than 2.00 to 1.00 as of the last day of any fiscal quarter of the Borrower."
+   },
+   {
+    "metric_raw": "DEBT_TO_EBITDA",
+    "name": "Total Debt to EBITDA Ceiling",
+    "category": "FINANCIAL",
+    "operator": ">",
+    "threshold": 6.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "OPERATOR_UNEXPECTED: usually a maximum (<=)",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 121,
+    "quote": "(l) the portion of the Borrowing Base attributable to Eligible Portfolio Investments issued by one or more Portfolio Companies with a trailing twelve-month total debt to EBITDA ratio of greater than 6.00 to 1.00 shall not"
+   },
+   {
+    "metric_raw": "DEBT_TO_EBITDA:WEIGHTED_AVERAGE_LEVERAGE_RATIO",
+    "name": "Weighted Average Leverage Ratio",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 4.75,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "SECOND_COVENANT_OF_FAMILY: check the formula measures this covenant",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 121,
+    "quote": "reduced by removing Debt Eligible Portfolio Investments therefrom (but not from the Collateral) to the extent necessary to cause the Weighted Average Leverage Ratio to be no greater than 4.75 (subject to all other constraints,"
+   },
+   {
+    "metric_raw": "MIN_NET_WORTH",
+    "name": "Minimum Net Worth",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 384526500.0,
+    "unit": "USD",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "AMOUNT_NOT_IN_INR: convert the threshold to INR crore before applying",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 141,
+    "quote": "greater than 90% of the Adjusted Borrowing Base. (f) Obligors\u2019 Net Worth Test. The Borrower will not permit the Obligors\u2019 Net Worth to be less than $384,526,500."
+   },
+   {
+    "metric_raw": "LOAN_TO_VALUE",
+    "name": "Maximum Loan to Value",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 10.0,
+    "unit": "PERCENT",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 122,
+    "quote": "Base; and (s) the portion of the Borrowing Base attributable to LTV Transactions shall not exceed 10% of the"
+   },
+   {
+    "metric_raw": "SECURITY_COVER",
+    "name": "Minimum Security Cover",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 167.0,
+    "unit": "%",
+    "confidence": 0.75,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 137,
+    "quote": "giving effect to such sale, transfer or other disposition (and any concurrent acquisitions of Portfolio Investments or payment of outstanding Loans or Other Covered Indebtedness), the Consolidated Asset Coverage Ratio is not less than 167%, and"
+   },
+   {
+    "metric_raw": "NEGATIVE_PLEDGE",
+    "name": "Negative Pledge",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 141,
+    "quote": "(c) Senior Coverage Ratio. The Borrower will not permit the Senior Coverage Ratio to be less than 2.00 to 1.00 at any time."
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:119:af3a29e3d4",
+    "name": "Net Worth",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 119,
+    "quote": "(b) with respect to all Eligible Portfolio Investments issued by a single issuer, the Advance Rate applicable to that portion of such Eligible Portfolio Investments that exceeds 5.0% of the Obligors\u2019 Net Worth shall be 0%; provided that, with respect to each of the five (5) largest Portfolio Companies that constitute Eligible Portfolio Investments"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:120:0513da9fb1",
+    "name": "Net Worth",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 120,
+    "quote": "(based on the fair value of the Eligible Portfolio Investments), only that portion of such Eligible Portfolio Investments issued by such Portfolio Companies that exceeds 7.5% of the Obligors\u2019 Net Worth shall have an Advance Rate of 0%;"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:123:8c4e5c86e5",
+    "name": "Performing High Yield",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 123,
+    "quote": "Government Securities n/a 85% Performing First Lien Bank Loans 70% 75% Performing Last Out Loans 55% 65% Performing Second Lien Bank Loans 50% 60% Performing High Yield Securities 45% 55% Performing Mezzanine Investments and Performing Covenant-Lite Loans 40% 50% Performing PIK Obligations and Performing DIP Loans 35% 40% Notwithstanding the foregoing, at any time the Consolidated Asset Coverage Ratio is less than 167%, every Advance Rate in the table above that is below the "
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:141:68be4467e3",
+    "name": "Consolidated Asset Coverage Ratio",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 141,
+    "quote": "The Borrower will not permit the Consolidated Asset Coverage Ratio to be less than 150% at any time."
+   },
+   {
+    "metric_raw": "CURE_PERIOD_DAYS",
+    "name": "Cure period",
+    "category": "INFO",
+    "operator": null,
+    "threshold": 90.0,
+    "unit": "DAYS",
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [],
+    "page": 125,
+    "quote": "otice to the Portfolio Company declaring such Indebtedness in default and such default has not been remedied, cured or waived within 90 days after delivery of such notice; or (vi) as to which the Borrower otherwise exercises significant"
+   }
+  ]
+ },
+ "HA20": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 26.5,
+  "heavy": false,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "DEBT_TO_EBITDA",
+    "name": "Total Debt to EBITDA Ceiling",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 3.0,
+    "unit": null,
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [],
+    "page": 74,
+    "quote": "7.09 Financial Covenants. (a) Consolidated Leverage Ratio. The Borrower will not permit the Consolidated Leverage Ratio, as of the last day of any fiscal quarter of the Borrower, to be greater than 3.00:1.00; provided, that, at the Borrower\u2019s election, after the"
+   },
+   {
+    "metric_raw": "ICR",
+    "name": "Minimum Interest Coverage",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 4.0,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "LOW_CONFIDENCE"
+    ],
+    "page": 74,
+    "quote": "this Agreement. (b) Consolidated Interest Coverage Ratio. The Borrower will not permit the Consolidated Interest Coverage Ratio, as of the last day of any fiscal quarter of the Borrower for the period of four (4) fiscal quarters ending on such date, to be less than 4.00:1.00."
+   },
+   {
+    "metric_raw": "BOOKS_AND_RECORDS",
+    "name": "Books and Records",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 3,
+    "quote": "6.05 Notices of Material Events 67 6.06 Books and Records; Access to Properties and Inspections 68"
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 6,
+    "quote": "DEFINITIONS AND ACCOUNTING TERMS 1.01 Defined Terms. As used in this Agreement, the following terms shall have the meanings set forth below:"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 18,
+    "quote": "doubt, a holder of Obligations in respect of Guaranteed Cash Management Agreements shall be subject to the last paragraph of Section 8.03 and Section 9.11."
+   },
+   {
+    "metric_raw": "CHANGE_OF_CONTROL",
+    "name": "No Change of Control",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 74,
+    "quote": "EVENTS OF DEFAULT AND REMEDIES 8.01 Events of Default. Any of the following shall constitute an event of default (each, an \u201cEvent of Default\u201d):"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:71:85e45c3bac",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 71,
+    "quote": "(e) sales, transfers and other dispositions of assets that are not permitted by any other clause of this Section 7.04; provided, that, the aggregate fair market value of all assets sold, transferred or otherwise disposed of in reliance upon this Section 7.04(e) during any fiscal year of the Borrower shall not exceed the greater of $25,000,000 and 10% of Consolidated EBITDA for the period of the prior four consecutive fiscal quarters of the Borrower as of its most recently end"
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:73:6c29271c64",
+    "name": "Consolidated EBITDA",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 73,
+    "quote": "(ii) the aggregate amount of such distributions to persons other than the Borrower or Wholly-Owned Subsidiaries of the Borrower in any fiscal quarter shall not exceed an amount equal to 30% of Consolidated EBITDA for such quarter; and (iii) such distributions shall be made in respect of Equity Interests which have been awarded to persons other than the Borrower or a Wholly-Owned Subsidiary in accordance with the approval by Artisan Partners Asset Management Inc.\u2019s compensatio"
+   }
+  ]
+ },
+ "HA10": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 453.5,
+  "heavy": true,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "MIN_NET_WORTH",
+    "name": "Minimum Net Worth",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 50.0,
+    "unit": "USD",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "AMOUNT_NOT_IN_INR: convert the threshold to INR crore before applying",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 36,
+    "quote": "Shareholder's Equity (Net Worth). Bor ower shal at al times maintain a Total Shareholder's Equity (net worth) calculated in ac ordance with GAAP of not les than FIVE HUNDRED MIL ION AND NO/10 DOL ARS ($50 ,0 0,0 0.0 ), as reflected on its an ual and quarterly Financial Statements. 6.3 Minimum Liqui"
+   },
+   {
+    "metric_raw": "MINIMUM_LIQUIDITY",
+    "name": "Minimum Liquidity",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 300.0,
+    "unit": "USD",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "AMOUNT_NOT_IN_INR: convert the threshold to INR crore before applying",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 36,
+    "quote": "NO/10 DOL ARS ($50 ,0 0,0 0.0 ), as reflected on its an ual and quarterly Financial Statements. 6.3 Minimum Liquidity. Bor ower shal at al times maintain liquidity of not les than THIRTY MIL ION AND NO/10 DOL ARS ($30,0 0,0 0.0 ), as reflected on its an ual and quarterly Financial Statements. Liquid"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 12,
+    "quote": "1.15 Guaranty Agre ment. The term \"Guaranty Agre ment\" shal mean a continuing guaranty of the Loan executed by Guarantor. 1.16 Hazardous Materials."
+   },
+   {
+    "metric_raw": "POSSIBLE_COVENANT:36:52259f3eb6",
+    "name": "Equity Ratio",
+    "category": "CANDIDATE",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.5,
+    "method": "REGEX",
+    "issues": [
+     "POSSIBLE_COVENANT_NOT_UNDERSTOOD"
+    ],
+    "page": 36,
+    "quote": "Bor ower shal at al times maintain a Liabil ty to Equity Ratio of not greater than one-to-one, as reflected on its an ual and quarterly Financial Statements."
+   },
+   {
+    "metric_raw": "CURE_PERIOD_DAYS",
+    "name": "Cure period",
+    "category": "INFO",
+    "operator": null,
+    "threshold": 10.0,
+    "unit": "DAYS",
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [],
+    "page": 36,
+    "quote": "ent of Default until (a) Lender shal notify Bor ower of such failure, and (b) Bor ower shal fail to cure such failure within ten (10) days fol owing notice from Lender. This provision shal not be subject o any Notice and Cure under Section 1.26. 6.2 Minimum Total Shareholder's Equity (Net Worth). Bo"
+   }
+  ]
+ }
+}

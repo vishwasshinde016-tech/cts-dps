@@ -1,3 +1,5 @@
 # semgrep scans the service code, deployment files and CI workflows; test data and test code are left out.
 golden-set/
 **/tests/
+# Measurement scripts run by hand on public filings; not shipped in any image.
+benchmarks/

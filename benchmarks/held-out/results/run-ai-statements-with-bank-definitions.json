@@ -1,0 +1,2230 @@
+{
+ "HI01": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 2.2,
+  "heavy": false,
+  "ai": true,
+  "values": [],
+  "issues": [
+   "MISSING_LINE_ITEMS: EBITDA, TOTAL_DEBT, NET_WORTH"
+  ],
+  "likely": [],
+  "confirmed": [],
+  "unit": "crore"
+ },
+ "HI02": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 22.0,
+  "heavy": false,
+  "ai": true,
+  "values": [
+   {
+    "key": "CURRENT_ASSETS",
+    "value": 0.009688,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 14,
+    "cell": null,
+    "label": "Total Current Assets"
+   },
+   {
+    "key": "TOTAL_ASSETS",
+    "value": 0.010688,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 14,
+    "cell": null,
+    "label": "Total Assets"
+   },
+   {
+    "key": "SHARE_CAPITAL",
+    "value": 0.05,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 14,
+    "cell": null,
+    "label": "Equity Share Capital"
+   },
+   {
+    "key": "RESERVES",
+    "value": 6e-05,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 14,
+    "cell": null,
+    "label": "Other Equity"
+   },
+   {
+    "key": "NET_WORTH",
+    "value": 0.004414,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 14,
+    "cell": null,
+    "label": "Total Equity"
+   },
+   {
+    "key": "CURRENT_LIABILITIES",
+    "value": 0.006274,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 14,
+    "cell": null,
+    "label": "Total Current Liabilities"
+   },
+   {
+    "key": "TOTAL_EQUITY_AND_LIABILITIES",
+    "value": 0.010688,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 14,
+    "cell": null,
+    "label": "Total Equity and Liabilities"
+   },
+   {
+    "key": "OTHER_INCOME",
+    "value": 0.000397,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 15,
+    "cell": null,
+    "label": "Other Income"
+   },
+   {
+    "key": "TOTAL_INCOME",
+    "value": 0.000397,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 15,
+    "cell": null,
+    "label": "Total Income"
+   },
+   {
+    "key": "OTHER_EXPENSES",
+    "value": 0.005544,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 15,
+    "cell": null,
+    "label": "Other Expenses"
+   },
+   {
+    "key": "TOTAL_EXPENSES",
+    "value": 0.005544,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 15,
+    "cell": null,
+    "label": "Total Expenses"
+   },
+   {
+    "key": "CFO",
+    "value": -0.00506,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 16,
+    "cell": null,
+    "label": "Net cash used in Operating Activities (A)"
+   },
+   {
+    "key": "INVESTMENTS",
+    "value": -0.000363,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 16,
+    "cell": null,
+    "label": "Purchase of investments"
+   },
+   {
+    "key": "CFI",
+    "value": 0.005,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 16,
+    "cell": null,
+    "label": "Net Cash used in Investing Activities (B)"
+   },
+   {
+    "key": "CASH",
+    "value": 0.004204,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 16,
+    "cell": null,
+    "label": "Cash and Cash Equivalents as at end of the year"
+   }
+  ],
+  "issues": [
+   "MISSING_LINE_ITEMS: EBITDA, TOTAL_DEBT"
+  ],
+  "likely": [
+   {
+    "key": "PBT",
+    "label": "Loss before tax (458.39) (514.64)",
+    "value": -0.004584,
+    "page": 15,
+    "cell": null,
+    "source": "second reader"
+   },
+   {
+    "key": "PAT",
+    "label": "Loss after tax (467.83) (524.79)",
+    "value": -0.004678,
+    "page": 15,
+    "cell": null,
+    "source": "second reader"
+   },
+   {
+    "key": "ST_DEBT",
+    "label": "- Borrowings 7 5 00.00 500.00",
+    "value": 0.005,
+    "page": 14,
+    "cell": null,
+    "source": "second reader"
+   },
+   {
+    "key": "TAX",
+    "label": "Loss after tax",
+    "value": -0.005248,
+    "page": 15,
+    "cell": null
+   }
+  ],
+  "confirmed": [
+   "TOTAL_ASSETS",
+   "CFO"
+  ],
+  "unit": "hundred"
+ },
+ "HL01": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 45.3,
+  "heavy": false,
+  "ai": true,
+  "values": [
+   {
+    "key": "INVESTMENTS",
+    "value": 0.00153,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 146,
+    "cell": null,
+    "label": "Fair value through OCI Investments"
+   },
+   {
+    "key": "INVENTORY",
+    "value": 54.6189,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 146,
+    "cell": null,
+    "label": "Inventories"
+   },
+   {
+    "key": "RECEIVABLES",
+    "value": 31.1467,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 146,
+    "cell": null,
+    "label": "Trade and Other Receivables"
+   },
+   {
+    "key": "CASH",
+    "value": 14.6997,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 146,
+    "cell": null,
+    "label": "Cash and Cash Equivalents"
+   },
+   {
+    "key": "CURRENT_ASSETS",
+    "value": 102.2245,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 146,
+    "cell": null,
+    "label": "Total Current Assets"
+   },
+   {
+    "key": "TOTAL_ASSETS",
+    "value": 943.2361,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 146,
+    "cell": null,
+    "label": "Total Assets"
+   },
+   {
+    "key": "SHARE_CAPITAL",
+    "value": 157.1362,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 146,
+    "cell": null,
+    "label": "Stated Capital"
+   },
+   {
+    "key": "NET_WORTH",
+    "value": 236.91,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 146,
+    "cell": null,
+    "label": "Total Equity"
+   },
+   {
+    "key": "LT_DEBT",
+    "value": 44.9463,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 147,
+    "cell": null,
+    "label": "Long-term borrowings"
+   },
+   {
+    "key": "ST_DEBT",
+    "value": 76.3832,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 147,
+    "cell": null,
+    "label": "Short-term borrowings"
+   },
+   {
+    "key": "TRADE_PAYABLES",
+    "value": 112.6872,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 147,
+    "cell": null,
+    "label": "Trade & Other Payables"
+   },
+   {
+    "key": "CURRENT_LIABILITIES",
+    "value": 224.5046,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 147,
+    "cell": null,
+    "label": "Total Current Liabilities"
+   },
+   {
+    "key": "TOTAL_EQUITY_AND_LIABILITIES",
+    "value": 943.2361,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 147,
+    "cell": null,
+    "label": "Total Equity and Liabilities"
+   },
+   {
+    "key": "REVENUE",
+    "value": 506.8576,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 145,
+    "cell": null,
+    "label": "Revenue"
+   },
+   {
+    "key": "MATERIAL_COST",
+    "value": 416.5076,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 145,
+    "cell": null,
+    "label": "Cost of Sales"
+   },
+   {
+    "key": "INTEREST_PAID",
+    "value": 37.6033,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 145,
+    "cell": null,
+    "label": "Finance Cost"
+   },
+   {
+    "key": "PBT",
+    "value": 61.1308,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 145,
+    "cell": null,
+    "label": "Profit before Income Tax Expense"
+   },
+   {
+    "key": "TAX",
+    "value": 23.4,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 145,
+    "cell": null,
+    "label": "Income Tax Expense 9"
+   },
+   {
+    "key": "PAT",
+    "value": 37.7308,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 145,
+    "cell": null,
+    "label": "Profit / (Loss) for the year"
+   },
+   {
+    "key": "DEPRECIATION",
+    "value": 31.7566,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 150,
+    "cell": null,
+    "label": "Depreciation/Amortisation 11/12/13/14"
+   },
+   {
+    "key": "FIXED_ASSETS",
+    "value": -0.0966,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 150,
+    "cell": null,
+    "label": "Profit on Disposal of Property, Plant and Equipment"
+   },
+   {
+    "key": "EBIT",
+    "value": 125.0553,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 150,
+    "cell": null,
+    "label": "Operating Profit before working capital changes"
+   },
+   {
+    "key": "CFO",
+    "value": 46.4845,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 150,
+    "cell": null,
+    "label": "Net Cash from Operating Activities"
+   },
+   {
+    "key": "CAPEX",
+    "value": 10.9803,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 150,
+    "cell": null,
+    "label": "Purchase of Property, Plant and Equipment"
+   },
+   {
+    "key": "CFI",
+    "value": -3.1751,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 150,
+    "cell": null,
+    "label": "Net cash used in Investing Activities"
+   },
+   {
+    "key": "CFF",
+    "value": -37.7341,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 150,
+    "cell": null,
+    "label": "Net Cash from/( used in) Financing Activities"
+   },
+   {
+    "key": "TOTAL_DEBT",
+    "value": 121.3295,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from ST_DEBT + LT_DEBT"
+   },
+   {
+    "key": "EBITDA",
+    "value": 156.8119,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from EBIT + DEPRECIATION"
+   },
+   {
+    "key": "NET_DEBT",
+    "value": 106.6298,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from TOTAL_DEBT + -CASH"
+   }
+  ],
+  "issues": [
+   "SECOND_READER_DIFFERS: INTEREST_PAID read 37.6033, second reader 37.288"
+  ],
+  "likely": [],
+  "confirmed": [
+   "REVENUE",
+   "PBT",
+   "PAT",
+   "DEPRECIATION",
+   "TOTAL_ASSETS",
+   "NET_WORTH",
+   "CURRENT_ASSETS",
+   "CURRENT_LIABILITIES",
+   "LT_DEBT",
+   "ST_DEBT",
+   "CASH",
+   "CFO",
+   "INVENTORY",
+   "RECEIVABLES"
+  ],
+  "unit": "thousand"
+ },
+ "HL02": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 16.0,
+  "heavy": false,
+  "ai": true,
+  "values": [
+   {
+    "key": "OTHER_INCOME",
+    "value": 9.9e-05,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 1,
+    "cell": null,
+    "label": "Other Income"
+   },
+   {
+    "key": "PBT",
+    "value": 0.00041,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 1,
+    "cell": null,
+    "label": "Profit / (Loss) Before Tax"
+   },
+   {
+    "key": "PAT",
+    "value": 0.000173,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 1,
+    "cell": null,
+    "label": "Profit / (Loss) After Tax"
+   },
+   {
+    "key": "CASH",
+    "value": 0.000148,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 1,
+    "cell": null,
+    "label": "Cash & Bank Balance"
+   },
+   {
+    "key": "RECEIVABLES",
+    "value": 0.003572,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 1,
+    "cell": null,
+    "label": "Deposits from Customers for credit losses on loans and receivables"
+   },
+   {
+    "key": "TOTAL_EQUITY_AND_LIABILITIES",
+    "value": 0.008156,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 1,
+    "cell": null,
+    "label": "Total Equity and Liabilities calculations with key variables used in the \u2022 For loans and receivables individually"
+   }
+  ],
+  "issues": [
+   "MISSING_LINE_ITEMS: EBITDA, TOTAL_DEBT, NET_WORTH",
+   "SECOND_READER_DIFFERS: PBT read 0.00041, second reader 409.9",
+   "SECOND_READER_DIFFERS: PAT read 0.000173, second reader 173.5",
+   "SECOND_READER_DIFFERS: CASH read 0.000148, second reader 147.6"
+  ],
+  "likely": [
+   {
+    "key": "INTEREST_PAID",
+    "label": "Interest Expense (6,472) 44% (7,298) 55%",
+    "value": 647.2,
+    "page": 1,
+    "cell": null,
+    "source": "second reader"
+   },
+   {
+    "key": "TOTAL_ASSETS",
+    "label": "Total Assets 81,565 100% 60,175 100%",
+    "value": 8156.5,
+    "page": 1,
+    "cell": null,
+    "source": "second reader"
+   },
+   {
+    "key": "NET_WORTH",
+    "label": "Total Equity 9,349 12% 8,129 13%",
+    "value": 934.9,
+    "page": 1,
+    "cell": null,
+    "source": "second reader"
+   }
+  ],
+  "confirmed": [],
+  "unit": "rupee"
+ },
+ "HU01": {
+  "outcome": "REPORTED",
+  "error": "",
+  "seconds": 49.4,
+  "heavy": false,
+  "ai": true,
+  "values": [
+   {
+    "key": "CASH",
+    "value": 92.5859,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Cash and cash equivalents"
+   },
+   {
+    "key": "RECEIVABLES",
+    "value": 72.9547,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Accounts receivable\u2014trade, net"
+   },
+   {
+    "key": "INVENTORY",
+    "value": 142.9254,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Inventories"
+   },
+   {
+    "key": "CURRENT_ASSETS",
+    "value": 358.8899,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Total current assets"
+   },
+   {
+    "key": "FIXED_ASSETS",
+    "value": 352.9608,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Property, plant and equipment, net"
+   },
+   {
+    "key": "TOTAL_ASSETS",
+    "value": 1374.1297,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Total assets"
+   },
+   {
+    "key": "TRADE_PAYABLES",
+    "value": 125.5701,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Accounts payable"
+   },
+   {
+    "key": "ST_DEBT",
+    "value": 21.8546,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Short-term debt"
+   },
+   {
+    "key": "CURRENT_LIABILITIES",
+    "value": 301.1896,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Total current liabilities"
+   },
+   {
+    "key": "LT_DEBT",
+    "value": 468.1194,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Long-term debt"
+   },
+   {
+    "key": "NET_WORTH",
+    "value": 463.675,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Total stockholders\u2019 equity"
+   },
+   {
+    "key": "REVENUE",
+    "value": 1169.2576,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 56,
+    "cell": null,
+    "label": "Net sales"
+   },
+   {
+    "key": "MATERIAL_COST",
+    "value": 776.9885,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 56,
+    "cell": null,
+    "label": "Cost of sales"
+   },
+   {
+    "key": "EBIT",
+    "value": 144.1528,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 56,
+    "cell": null,
+    "label": "Operating profit"
+   },
+   {
+    "key": "INTEREST_PAID",
+    "value": 19.0206,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 56,
+    "cell": null,
+    "label": "Interest expense, net"
+   },
+   {
+    "key": "PBT",
+    "value": 121.4208,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 56,
+    "cell": null,
+    "label": "Income before income taxes"
+   },
+   {
+    "key": "TAX",
+    "value": 33.0949,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 56,
+    "cell": null,
+    "label": "Provision for income taxes"
+   },
+   {
+    "key": "PAT",
+    "value": 88.3259,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 56,
+    "cell": null,
+    "label": "Net income"
+   },
+   {
+    "key": "DEPRECIATION",
+    "value": 50.3701,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Depreciation and amortization"
+   },
+   {
+    "key": "INVESTMENTS",
+    "value": 2.4483,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Write-down of equity investments"
+   },
+   {
+    "key": "CFO",
+    "value": 227.7367,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Net cash provided by operating activities"
+   },
+   {
+    "key": "INTANGIBLES",
+    "value": -7.3597,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Purchase of intangible assets"
+   },
+   {
+    "key": "CFI",
+    "value": -127.8717,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Net cash used in investing activities"
+   },
+   {
+    "key": "DIVIDENDS_PAID",
+    "value": 108.5296,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Cash dividends paid"
+   },
+   {
+    "key": "CFF",
+    "value": -80.3357,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Net cash used in financing activities"
+   },
+   {
+    "key": "TOTAL_DEBT",
+    "value": 489.974,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from ST_DEBT + LT_DEBT"
+   },
+   {
+    "key": "EBITDA",
+    "value": 194.5229,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from EBIT + DEPRECIATION"
+   },
+   {
+    "key": "NET_DEBT",
+    "value": 397.3881,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from TOTAL_DEBT + -CASH"
+   }
+  ],
+  "issues": [],
+  "likely": [],
+  "confirmed": [
+   "REVENUE",
+   "PBT",
+   "PAT",
+   "INTEREST_PAID",
+   "DEPRECIATION",
+   "TOTAL_ASSETS",
+   "NET_WORTH",
+   "CURRENT_ASSETS",
+   "CURRENT_LIABILITIES",
+   "LT_DEBT",
+   "ST_DEBT",
+   "CASH",
+   "CFO",
+   "INVENTORY",
+   "RECEIVABLES"
+  ],
+  "unit": "thousand"
+ },
+ "HU02": {
+  "outcome": "REPORTED",
+  "error": "",
+  "seconds": 54.9,
+  "heavy": false,
+  "ai": true,
+  "values": [
+   {
+    "key": "CASH",
+    "value": 68.8,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "Cash and cash equivalents"
+   },
+   {
+    "key": "RECEIVABLES",
+    "value": 189.2,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "Accounts receivable, net"
+   },
+   {
+    "key": "INVENTORY",
+    "value": 147.5,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "Inventories"
+   },
+   {
+    "key": "CURRENT_ASSETS",
+    "value": 531.0,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "Total Current Assets"
+   },
+   {
+    "key": "FIXED_ASSETS",
+    "value": 677.5,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "Property, Plant and Equipment, Net"
+   },
+   {
+    "key": "INVESTMENTS",
+    "value": 33.0,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "Investments in Equity Companies"
+   },
+   {
+    "key": "TOTAL_ASSETS",
+    "value": 1709.8,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "TOTAL ASSETS"
+   },
+   {
+    "key": "TRADE_PAYABLES",
+    "value": 338.8,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "Trade accounts payable"
+   },
+   {
+    "key": "CURRENT_LIABILITIES",
+    "value": 712.5,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "Total Current Liabilities"
+   },
+   {
+    "key": "LT_DEBT",
+    "value": 647.4,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "Long-Term Debt"
+   },
+   {
+    "key": "NET_WORTH",
+    "value": 163.0,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 47,
+    "cell": null,
+    "label": "Total Stockholders' Equity"
+   },
+   {
+    "key": "REVENUE",
+    "value": 1644.7,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Net Sales"
+   },
+   {
+    "key": "EBIT",
+    "value": 235.1,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Operating Profit"
+   },
+   {
+    "key": "INTEREST_PAID",
+    "value": 25.6,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Interest expense"
+   },
+   {
+    "key": "TAX",
+    "value": -59.9,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Provision for income taxes"
+   },
+   {
+    "key": "PAT",
+    "value": 204.9,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Net Income"
+   },
+   {
+    "key": "DEPRECIATION",
+    "value": 80.5,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 49,
+    "cell": null,
+    "label": "Depreciation and amortization"
+   },
+   {
+    "key": "DIVIDENDS_PAID",
+    "value": 3.5,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 49,
+    "cell": null,
+    "label": "Equity companies' earnings (in excess of) less than dividends paid"
+   },
+   {
+    "key": "TOTAL_DEBT",
+    "value": 647.4,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from LT_DEBT"
+   },
+   {
+    "key": "EBITDA",
+    "value": 315.6,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from EBIT + DEPRECIATION"
+   },
+   {
+    "key": "NET_DEBT",
+    "value": 578.6,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from TOTAL_DEBT + -CASH"
+   }
+  ],
+  "issues": [],
+  "likely": [
+   {
+    "key": "ST_DEBT",
+    "label": "Debt payable within one year $ 694 $ 564",
+    "value": 69.4,
+    "page": 47,
+    "cell": null,
+    "source": "second reader"
+   },
+   {
+    "key": "CFO",
+    "label": "Cash Provided by Operations 2,777 3,234 3,542",
+    "value": 277.7,
+    "page": 49,
+    "cell": null,
+    "source": "second reader"
+   }
+  ],
+  "confirmed": [
+   "REVENUE",
+   "PAT",
+   "INTEREST_PAID",
+   "DEPRECIATION",
+   "TOTAL_ASSETS",
+   "NET_WORTH",
+   "CURRENT_ASSETS",
+   "CURRENT_LIABILITIES",
+   "LT_DEBT",
+   "CASH",
+   "INVENTORY",
+   "RECEIVABLES"
+  ],
+  "unit": "million"
+ },
+ "HU03": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 59.1,
+  "heavy": false,
+  "ai": true,
+  "values": [
+   {
+    "key": "CASH",
+    "value": 3.42,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 44,
+    "cell": null,
+    "label": "Cash and cash equivalents"
+   },
+   {
+    "key": "INVESTMENTS",
+    "value": 0.05,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 44,
+    "cell": null,
+    "label": "Short-term investments"
+   },
+   {
+    "key": "INVENTORY",
+    "value": 115.26,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 44,
+    "cell": null,
+    "label": "Inventories, net"
+   },
+   {
+    "key": "CURRENT_ASSETS",
+    "value": 190.38,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 44,
+    "cell": null,
+    "label": "Total current assets"
+   },
+   {
+    "key": "TOTAL_ASSETS",
+    "value": 408.18,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 44,
+    "cell": null,
+    "label": "Total assets"
+   },
+   {
+    "key": "LEASE_LIABILITIES",
+    "value": 8.89,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 44,
+    "cell": null,
+    "label": "Current operating lease liabilities"
+   },
+   {
+    "key": "TRADE_PAYABLES",
+    "value": 43.8,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 44,
+    "cell": null,
+    "label": "Accounts payable"
+   },
+   {
+    "key": "CURRENT_LIABILITIES",
+    "value": 119.18,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 44,
+    "cell": null,
+    "label": "Total current liabilities"
+   },
+   {
+    "key": "LT_DEBT",
+    "value": 114.41,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 44,
+    "cell": null,
+    "label": "Long-term debt"
+   },
+   {
+    "key": "NET_WORTH",
+    "value": 116.31,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 44,
+    "cell": null,
+    "label": "Total stockholders' equity"
+   },
+   {
+    "key": "REVENUE",
+    "value": 519.53,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Net sales"
+   },
+   {
+    "key": "MATERIAL_COST",
+    "value": 346.05,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Cost of goods sold"
+   },
+   {
+    "key": "OTHER_EXPENSES",
+    "value": 1.2,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Losses and other expenses, net"
+   },
+   {
+    "key": "INTEREST_PAID",
+    "value": 4.09,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Interest expense, net"
+   },
+   {
+    "key": "PBT",
+    "value": 99.68,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Income before income taxes"
+   },
+   {
+    "key": "TAX",
+    "value": 19.1,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Provision for income taxes"
+   },
+   {
+    "key": "PAT",
+    "value": 80.58,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 45,
+    "cell": null,
+    "label": "Net income"
+   },
+   {
+    "key": "DEPRECIATION",
+    "value": 11.25,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 48,
+    "cell": null,
+    "label": "Depreciation and amortization"
+   },
+   {
+    "key": "CFO",
+    "value": 75.76,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 48,
+    "cell": null,
+    "label": "Net cash provided by operating activities"
+   },
+   {
+    "key": "FIXED_ASSETS",
+    "value": 0.14,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 48,
+    "cell": null,
+    "label": "Proceeds from the disposal of property, plant and equipment"
+   },
+   {
+    "key": "CAPEX",
+    "value": 11.88,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 48,
+    "cell": null,
+    "label": "Purchases of property, plant and equipment"
+   },
+   {
+    "key": "CFI",
+    "value": -65.56,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 48,
+    "cell": null,
+    "label": "Net cash used in investing activities"
+   },
+   {
+    "key": "DIVIDENDS_PAID",
+    "value": 17.3,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 48,
+    "cell": null,
+    "label": "Cash dividends paid"
+   },
+   {
+    "key": "CFF",
+    "value": -46.57,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 48,
+    "cell": null,
+    "label": "Net cash used in financing activities"
+   },
+   {
+    "key": "INTANGIBLES",
+    "value": 3.69,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 88,
+    "cell": null,
+    "label": "Intangible assets acquired"
+   },
+   {
+    "key": "TOTAL_DEBT",
+    "value": 114.41,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from LT_DEBT"
+   },
+   {
+    "key": "NET_DEBT",
+    "value": 110.99,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from TOTAL_DEBT + -CASH"
+   }
+  ],
+  "issues": [
+   "MISSING_LINE_ITEMS: EBITDA"
+  ],
+  "likely": [
+   {
+    "key": "ST_DEBT",
+    "label": "Commercial paper $ 226.0 $ \u2014",
+    "value": 22.6,
+    "page": 44,
+    "cell": null,
+    "source": "second reader"
+   },
+   {
+    "key": "RECEIVABLES",
+    "label": "Accounts and notes receivable, net of allowances of $8.5 and $17.8 in 2025 and 2024, respectively 578.8 661.1",
+    "value": 57.88,
+    "page": 44,
+    "cell": null,
+    "source": "second reader"
+   }
+  ],
+  "confirmed": [
+   "REVENUE",
+   "PBT",
+   "PAT",
+   "INTEREST_PAID",
+   "DEPRECIATION",
+   "TOTAL_ASSETS",
+   "NET_WORTH",
+   "CURRENT_ASSETS",
+   "CURRENT_LIABILITIES",
+   "LT_DEBT",
+   "CASH",
+   "CFO",
+   "INVENTORY"
+  ],
+  "unit": "million"
+ },
+ "HU04": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 87.1,
+  "heavy": false,
+  "ai": true,
+  "values": [
+   {
+    "key": "CASH",
+    "value": 34.1,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Cash and cash equivalents"
+   },
+   {
+    "key": "RECEIVABLES",
+    "value": 2.16,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Receivables from finance affiliate"
+   },
+   {
+    "key": "INVENTORY",
+    "value": 92.08,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Inventories, net"
+   },
+   {
+    "key": "CURRENT_ASSETS",
+    "value": 170.51,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Total current assets"
+   },
+   {
+    "key": "TOTAL_ASSETS",
+    "value": 343.88,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Total assets"
+   },
+   {
+    "key": "TRADE_PAYABLES",
+    "value": 36.76,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Accounts payable"
+   },
+   {
+    "key": "LEASE_LIABILITIES",
+    "value": 1.93,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Short-term lease liabilities"
+   },
+   {
+    "key": "CURRENT_LIABILITIES",
+    "value": 91.24,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Total current liabilities"
+   },
+   {
+    "key": "LT_DEBT",
+    "value": 92.15,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Long-term debt"
+   },
+   {
+    "key": "NET_WORTH",
+    "value": 145.33,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Total stockholders' equity"
+   },
+   {
+    "key": "REVENUE",
+    "value": 451.04,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Net sales"
+   },
+   {
+    "key": "MATERIAL_COST",
+    "value": 300.56,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Cost of sales"
+   },
+   {
+    "key": "INTEREST_PAID",
+    "value": 5.91,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Interest expense"
+   },
+   {
+    "key": "OTHER_INCOME",
+    "value": 2.68,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Other income, net"
+   },
+   {
+    "key": "PBT",
+    "value": 37.76,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Earnings before income taxes"
+   },
+   {
+    "key": "TAX",
+    "value": 6.15,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Provision for income taxes"
+   },
+   {
+    "key": "PAT",
+    "value": 31.61,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Net earnings"
+   },
+   {
+    "key": "DEPRECIATION",
+    "value": 11.22,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 61,
+    "cell": null,
+    "label": "Depreciation of property, plant, and equipment"
+   },
+   {
+    "key": "INTANGIBLES",
+    "value": 3.07,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 61,
+    "cell": null,
+    "label": "Amortization of other intangible assets"
+   },
+   {
+    "key": "CFO",
+    "value": 66.2,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 61,
+    "cell": null,
+    "label": "Net cash provided by operating activities"
+   },
+   {
+    "key": "CAPEX",
+    "value": 8.37,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 61,
+    "cell": null,
+    "label": "Purchases of property, plant, and equipment"
+   },
+   {
+    "key": "CFI",
+    "value": -7.74,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 61,
+    "cell": null,
+    "label": "Net cash used in investing activities"
+   },
+   {
+    "key": "DIVIDENDS_PAID",
+    "value": 15.11,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 61,
+    "cell": null,
+    "label": "Dividends paid on common stock"
+   },
+   {
+    "key": "CFF",
+    "value": -44.61,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 61,
+    "cell": null,
+    "label": "Net cash used in financing activities"
+   },
+   {
+    "key": "TOTAL_DEBT",
+    "value": 92.15,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from LT_DEBT"
+   },
+   {
+    "key": "NET_DEBT",
+    "value": 58.05,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from TOTAL_DEBT + -CASH"
+   }
+  ],
+  "issues": [
+   "MISSING_LINE_ITEMS: EBITDA",
+   "SECOND_READER_DIFFERS: RECEIVABLES read 2.16, second reader 33.23"
+  ],
+  "likely": [
+   {
+    "key": "ST_DEBT",
+    "label": "Current portion of long-term debt",
+    "value": 1.0,
+    "page": 60,
+    "cell": null
+   }
+  ],
+  "confirmed": [
+   "REVENUE",
+   "PBT",
+   "PAT",
+   "INTEREST_PAID",
+   "TOTAL_ASSETS",
+   "NET_WORTH",
+   "CURRENT_ASSETS",
+   "CURRENT_LIABILITIES",
+   "LT_DEBT",
+   "CASH",
+   "CFO",
+   "INVENTORY"
+  ],
+  "unit": "million"
+ },
+ "HU05": {
+  "outcome": "REPORTED",
+  "error": "",
+  "seconds": 45.4,
+  "heavy": false,
+  "ai": true,
+  "values": [
+   {
+    "key": "CASH",
+    "value": 58.74,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Cash and cash equivalents"
+   },
+   {
+    "key": "RECEIVABLES",
+    "value": 43.37,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Trade receivables, net"
+   },
+   {
+    "key": "INVENTORY",
+    "value": 62.26,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Inventories"
+   },
+   {
+    "key": "CURRENT_ASSETS",
+    "value": 174.36,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Total current assets"
+   },
+   {
+    "key": "FIXED_ASSETS",
+    "value": 222.91,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Total property, plant and equipment"
+   },
+   {
+    "key": "DEPRECIATION",
+    "value": 156.51,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Less accumulated depreciation"
+   },
+   {
+    "key": "TOTAL_ASSETS",
+    "value": 353.64,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "TOTAL ASSETS"
+   },
+   {
+    "key": "ST_DEBT",
+    "value": 0.15,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Current maturities of long-term debt and short-term debt"
+   },
+   {
+    "key": "LEASE_LIABILITIES",
+    "value": 5.15,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Current portion of operating lease liabilities"
+   },
+   {
+    "key": "TRADE_PAYABLES",
+    "value": 46.66,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Accounts payable"
+   },
+   {
+    "key": "CURRENT_LIABILITIES",
+    "value": 77.5,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Total current liabilities"
+   },
+   {
+    "key": "LT_DEBT",
+    "value": 149.62,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Long-term debt"
+   },
+   {
+    "key": "NET_WORTH",
+    "value": 102.26,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "Total equity"
+   },
+   {
+    "key": "TOTAL_EQUITY_AND_LIABILITIES",
+    "value": 353.64,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 78,
+    "cell": null,
+    "label": "TOTAL LIABILITIES AND EQUITY"
+   },
+   {
+    "key": "MATERIAL_COST",
+    "value": 331.1,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 79,
+    "cell": null,
+    "label": "Cost of goods sold"
+   },
+   {
+    "key": "INTEREST_PAID",
+    "value": 7.29,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 79,
+    "cell": null,
+    "label": "Interest expense"
+   },
+   {
+    "key": "PBT",
+    "value": 28.97,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 79,
+    "cell": null,
+    "label": "Earnings (loss) before income taxes"
+   },
+   {
+    "key": "TAX",
+    "value": 5.43,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 79,
+    "cell": null,
+    "label": "Income taxes"
+   },
+   {
+    "key": "PAT",
+    "value": 23.54,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 79,
+    "cell": null,
+    "label": "Net earnings (loss)"
+   },
+   {
+    "key": "CFO",
+    "value": 33.82,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 81,
+    "cell": null,
+    "label": "Net Cash Provided by Operating Activities"
+   },
+   {
+    "key": "CAPEX",
+    "value": 5.72,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 81,
+    "cell": null,
+    "label": "Additions to property, plant and equipment"
+   },
+   {
+    "key": "CFI",
+    "value": 29.33,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 81,
+    "cell": null,
+    "label": "Net Cash Provided by (Used for) Investing Activities"
+   },
+   {
+    "key": "DIVIDENDS_PAID",
+    "value": 2.7,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 81,
+    "cell": null,
+    "label": "Dividends paid"
+   },
+   {
+    "key": "CFF",
+    "value": -41.32,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 81,
+    "cell": null,
+    "label": "Net Cash Used for Financing Activities"
+   },
+   {
+    "key": "INVESTMENTS",
+    "value": 5.59,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 103,
+    "cell": null,
+    "label": "Diversified investments associated with stock-based compensation plans (see Note L)"
+   },
+   {
+    "key": "EBIT",
+    "value": -34.42,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 93,
+    "cell": null,
+    "label": "Segment EBIT"
+   },
+   {
+    "key": "TOTAL_DEBT",
+    "value": 149.77,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from ST_DEBT + LT_DEBT"
+   },
+   {
+    "key": "EBITDA",
+    "value": 122.09,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from EBIT + DEPRECIATION"
+   },
+   {
+    "key": "NET_DEBT",
+    "value": 91.03,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from TOTAL_DEBT + -CASH"
+   }
+  ],
+  "issues": [],
+  "likely": [
+   {
+    "key": "REVENUE",
+    "label": "Net trade sales $ 4,055.1 $ 4,383.6 $ 4,725.3",
+    "value": 405.51,
+    "page": 79,
+    "cell": null,
+    "source": "second reader"
+   }
+  ],
+  "confirmed": [
+   "PBT",
+   "PAT",
+   "INTEREST_PAID",
+   "TOTAL_ASSETS",
+   "NET_WORTH",
+   "CURRENT_ASSETS",
+   "CURRENT_LIABILITIES",
+   "LT_DEBT",
+   "ST_DEBT",
+   "CASH",
+   "CFO",
+   "INVENTORY",
+   "RECEIVABLES"
+  ],
+  "unit": "million"
+ },
+ "HU06": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 39.2,
+  "heavy": false,
+  "ai": true,
+  "values": [
+   {
+    "key": "CASH",
+    "value": 25.68,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Cash and cash equivalents, at cost, which approximates fair value"
+   },
+   {
+    "key": "INVESTMENTS",
+    "value": 0.08,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Short-term investments in marketable securities"
+   },
+   {
+    "key": "INVENTORY",
+    "value": 119.23,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Net inventories"
+   },
+   {
+    "key": "CURRENT_ASSETS",
+    "value": 206.33,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Current assets"
+   },
+   {
+    "key": "DEPRECIATION",
+    "value": 129.11,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Accumulated depreciation"
+   },
+   {
+    "key": "TOTAL_ASSETS",
+    "value": 531.22,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 58,
+    "cell": null,
+    "label": "Total assets"
+   },
+   {
+    "key": "ST_DEBT",
+    "value": 29.54,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Short-term debt and current maturities of long-term debt"
+   },
+   {
+    "key": "TRADE_PAYABLES",
+    "value": 37.49,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Accounts payable"
+   },
+   {
+    "key": "CURRENT_LIABILITIES",
+    "value": 142.87,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Current liabilities"
+   },
+   {
+    "key": "LEASE_LIABILITIES",
+    "value": 15.17,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Operating lease liabilities"
+   },
+   {
+    "key": "NET_WORTH",
+    "value": 162.56,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 59,
+    "cell": null,
+    "label": "Shareholders' equity"
+   },
+   {
+    "key": "REVENUE",
+    "value": 536.28,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 35,
+    "cell": null,
+    "label": "Net sales"
+   },
+   {
+    "key": "MATERIAL_COST",
+    "value": 403.06,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 35,
+    "cell": null,
+    "label": "Cost of sales"
+   },
+   {
+    "key": "INTEREST_PAID",
+    "value": 11.17,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 35,
+    "cell": null,
+    "label": "Interest expense"
+   },
+   {
+    "key": "PBT",
+    "value": -13.57,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 35,
+    "cell": null,
+    "label": "(Loss) earnings before income taxes"
+   },
+   {
+    "key": "TAX",
+    "value": 0.02,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 35,
+    "cell": null,
+    "label": "Income tax provision"
+   },
+   {
+    "key": "PAT",
+    "value": -13.59,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 35,
+    "cell": null,
+    "label": "Net (loss) earnings from continuing operations"
+   },
+   {
+    "key": "CFO",
+    "value": 58.57,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Net cash provided by operating activities of continuing operations"
+   },
+   {
+    "key": "CAPEX",
+    "value": 16.58,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Capital expenditures"
+   },
+   {
+    "key": "FIXED_ASSETS",
+    "value": 1.26,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Proceeds from the sale of property, plant and equipment"
+   },
+   {
+    "key": "CFI",
+    "value": -14.16,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Net cash used for investing activities"
+   },
+   {
+    "key": "DIVIDENDS_PAID",
+    "value": 11.26,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Cash dividends paid"
+   },
+   {
+    "key": "CFF",
+    "value": -44.12,
+    "unit": "INR_CR",
+    "derived": false,
+    "page": 60,
+    "cell": null,
+    "label": "Net cash used for financing activities"
+   },
+   {
+    "key": "TOTAL_DEBT",
+    "value": 29.54,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from ST_DEBT"
+   },
+   {
+    "key": "NET_DEBT",
+    "value": 3.86,
+    "unit": "INR_CR",
+    "derived": true,
+    "page": null,
+    "cell": null,
+    "label": "derived from TOTAL_DEBT + -CASH"
+   }
+  ],
+  "issues": [
+   "MISSING_LINE_ITEMS: EBITDA",
+   "SECOND_READER_DIFFERS: PAT read -13.59, second reader -13.73",
+   "SECOND_READER_DIFFERS: DEPRECIATION read 129.11, second reader 29.25",
+   "SECOND_READER_DIFFERS: CFO read 58.57, second reader 56.21"
+  ],
+  "likely": [
+   {
+    "key": "LT_DEBT",
+    "label": "Debt 1,806.8 2,097.8",
+    "value": 180.68,
+    "page": 59,
+    "cell": null,
+    "source": "second reader"
+   },
+   {
+    "key": "RECEIVABLES",
+    "label": "Accounts and notes receivable, less allowances of $10.6 and $10.3 522.8 429.0",
+    "value": 52.28,
+    "page": 58,
+    "cell": null,
+    "source": "second reader"
+   }
+  ],
+  "confirmed": [
+   "REVENUE",
+   "PBT",
+   "INTEREST_PAID",
+   "TOTAL_ASSETS",
+   "NET_WORTH",
+   "CURRENT_ASSETS",
+   "CURRENT_LIABILITIES",
+   "ST_DEBT",
+   "CASH",
+   "INVENTORY"
+  ],
+  "unit": "million"
+ }
+}

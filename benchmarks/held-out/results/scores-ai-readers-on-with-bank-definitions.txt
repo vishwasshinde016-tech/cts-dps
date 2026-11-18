@@ -1,0 +1,14 @@
+AGREEMENTS {"docs": 0, "held": 0, "covenants": 0, "clean": 0, "flagged": 0, "shown": 0, "missed": 0, "proposed": 0, "proposed_flagged": 0, "silent_wrong": 0, "flagged_wrong": 0, "not_read": 0, "not_read_covenants": 0}
+  recall seen by a person (clean+flagged+shown): 0/0  missed: 0  silent wrong terms: 0  docs held: 0/0
+STATEMENTS {"docs": 10, "held": 7, "values": 133, "right_published": 42, "right_held": 70, "wrong_published": 1, "wrong_held": 5, "missing": 15, "no_figure_docs_published": 0, "not_read": 0, "ai_confirmed_right": 76, "ai_confirmed_wrong": 1, "ai_questioned_a_wrong_figure": 5, "ai_questioned_a_right_figure": 1, "ai_suggested_right": 9, "ai_suggested_wrong": 0}
+  published values: 43, wrong among them (silent): 1; held docs: 7/10; missing: 15/133
+  HU01 REPORTED     unit=thousand issues=[] bad={'INTEREST_PAID': ('wrong_published', 19.0206, 22.4806), 'CAPEX': ('missing', None, 45.4622)}
+  HU02 REPORTED     unit=million issues=[] bad={'PBT': ('missing', None, 205.2), 'CFO': ('missing', None, 277.7), 'CFI': ('missing', None, -95.1), 'CFF': ('missing', None, -217.9)}
+  HU03 NEEDS_REVIEW unit=million issues=['MISSING_LINE_ITEMS'] bad={}
+  HU04 NEEDS_REVIEW unit=million issues=['MISSING_LINE_ITEMS', 'SECOND_READER_DIFFERS'] bad={}
+  HU05 REPORTED     unit=million issues=[] bad={'REVENUE': ('missing', None, 405.51)}
+  HU06 NEEDS_REVIEW unit=million issues=['MISSING_LINE_ITEMS', 'SECOND_READER_DIFFERS', 'SECOND_READER_DIFFERS', 'SECOND_READER_DIFFERS'] bad={'PAT': ('wrong_held', -13.59, -13.73), 'LT_DEBT': ('missing', None, 180.68), 'CFO': ('wrong_held', 58.57, 56.21)}
+  HI01 NEEDS_REVIEW unit=crore issues=['MISSING_LINE_ITEMS'] bad={}
+  HI02 NEEDS_REVIEW unit=hundred issues=['MISSING_LINE_ITEMS'] bad={'ST_DEBT': ('missing', None, 0.005), 'PBT': ('missing', None, -0.0045839), 'TAX': ('missing', None, 9.43e-05), 'PAT': ('missing', None, -0.0046783)}
+  HL01 NEEDS_REVIEW unit=thousand issues=['SECOND_READER_DIFFERS'] bad={}
+  HL02 NEEDS_REVIEW unit=rupee issues=['MISSING_LINE_ITEMS', 'SECOND_READER_DIFFERS', 'SECOND_READER_DIFFERS', 'SECOND_READER_DIFFERS'] bad={'REVENUE': ('missing', None, 1461.6000000000001), 'INTEREST_PAID': ('missing', None, 647.2), 'PBT': ('wrong_held', 0.00041, 409.90000000000003), 'PAT': ('wrong_held', 0.000173, 173.5), 'CASH': ('wrong_held', 0.000148, 147.6), 'TOTAL_ASSETS': ('missing', None, 8156.5), 'NET_WORTH': ('missing', None, 934.9000000000001)}
