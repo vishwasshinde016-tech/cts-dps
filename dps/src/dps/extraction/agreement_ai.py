@@ -227,7 +227,7 @@ def skill_terms(pages: list[Page], proposals: list[dict]) -> tuple[list[Term], i
     older reader (a % coverage is times, a ratio above MAX_RATIO is not that ratio, a certificate form is not the
     covenant). Non-financial covenants are kept: a library key the rules also hold confirms it; anything else is a
     possible covenant for a person."""
-    from dps.skills.covenants.names import FINANCIAL, OTHER
+    from dps.skills.covenants.names import FINANCIAL, OTHER, SECURITY
 
     texts = {p.no: p.text for p in pages}
     out: list[Term] = []
@@ -245,8 +245,10 @@ def skill_terms(pages: list[Page], proposals: list[dict]) -> tuple[list[Term], i
         if metric in FINANCIAL and isinstance(threshold, (int, float)):
             threshold = float(threshold)
             unit = _unit(value.get("unit"))
-            if metric == "LOAN_TO_VALUE":
+            if metric == "LOAN_TO_VALUE" or (metric in SECURITY and "%" in quote):
                 unit = "%"
+            elif metric in SECURITY:
+                pass  # a cover in times or an amount: no ratio range applies
             elif metric in _COVERAGE and threshold > MAX_RATIO and "%" in quote:
                 threshold = round(threshold / 100, 6)
             elif metric not in AMOUNT_METRICS and threshold > MAX_RATIO:
