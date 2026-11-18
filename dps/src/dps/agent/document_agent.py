@@ -144,7 +144,7 @@ class _DpsTool(BaseTool):
 
 class PageTextTool(_DpsTool):
     name: str = "page_text"
-    description: str = "The text of one page of the document (only the pages selected for this job)."
+    description: str = "The text of any page of the document, by page number."
     args_schema: type[BaseModel] = PageArgs
 
     def _run(self, page: int) -> str:
@@ -153,14 +153,15 @@ class PageTextTool(_DpsTool):
             return stop
         p = self._ctx.page(int(page))
         if p is None:
-            allowed = ", ".join(str(x.get("no")) for x in self._ctx.pages)
-            return f"Page {page} is not available. Pages you may read: {allowed}."
+            numbers = [int(x.get("no")) for x in self._ctx.pages if x.get("no") is not None]
+            span = f"{min(numbers)} to {max(numbers)}" if numbers else "none"
+            return f"Page {page} is not in the document. Pages: {span}."
         return (p.get("text") or "")[:PAGE_LIMIT] or "(this page has no readable text)"
 
 
 class SearchTextTool(_DpsTool):
     name: str = "search_text"
-    description: str = "Lines of the selected pages that contain the words, with their page numbers."
+    description: str = "Lines of the whole document that contain the words, with their page numbers."
     args_schema: type[BaseModel] = QueryArgs
 
     def _run(self, query: str) -> str:
@@ -194,7 +195,7 @@ class FindDefinitionTool(_DpsTool):
             if m:
                 end = text.find("\n\n", m.end())
                 return f"page {p.get('no')}: {text[m.start(): end if end != -1 else m.start() + 800][:800]}"
-        return f"No definition of {term!r} on the selected pages."
+        return f"No definition of {term!r} in the document."
 
 
 class CovenantLibraryTool(_DpsTool):
@@ -291,13 +292,15 @@ def _raw(output) -> str:
 
 def read(pack, gateway, pages: list[dict], task: str, route: str | None = None, spring=None,
          correlation_id: str | None = None, lookup_context: dict | None = None,
-         check: Callable[[object], str | None] | None = None) -> tuple[dict, ToolContext]:
+         check: Callable[[object], str | None] | None = None,
+         all_pages: list[dict] | None = None) -> tuple[dict, ToolContext]:
     """Runs the job's agent on ``task`` (the pack prompt, schema and pages). Returns the parsed answer and the tool
     log. A wrong answer is repaired once on the same route; then ``ModelOutputInvalid``. Gateway errors (model down,
     budget used) pass through unchanged so the caller degrades to rules only."""
     route = route or pack.routes.get("extract", "strong")
     limits = pack.limits or {}
-    ctx = ToolContext(pages, spring, correlation_id, lookup_context, int(limits.get("max_tool_calls", 6)))
+    # The prompt holds ``pages``; the tools reach every page of the document (``all_pages``).
+    ctx = ToolContext(all_pages or pages, spring, correlation_id, lookup_context, int(limits.get("max_tool_calls", 6)))
     agent = make_agent(gateway, route, pack.name, pack.tools, ctx, int(limits.get("max_model_turns", 3)),
                        int(limits.get("max_seconds", 180)))
     prompt = f"{task}\n\n{FINAL}"
@@ -312,7 +315,7 @@ def read(pack, gateway, pages: list[dict], task: str, route: str | None = None, 
     error = Gateway._invalid(answer, pack.schema, check)
     if error is None:
         return parse_json(answer), ctx
-    raise ModelOutputInvalid(error)
+    raise ModelOutputInvalid(error, Gateway.valid_data(answer, pack.schema))
 
 
 def completion(gateway, route: str, skill: str, tool_names=(), spring=None,

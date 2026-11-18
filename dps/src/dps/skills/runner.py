@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from dps import jobs
 from dps.models import Artifact, Job
 from dps.skills import Pack, for_job_type, load
-from dps.skills.common import agent_proposals, issue, make_field, select_pages, vote
+from dps.skills.common import MAX_PROMPT_CHARS, agent_proposals, issue, make_field, select_pages, vote
 
 log = logging.getLogger(__name__)
 SCHEMA = "dps.result/1.0"
@@ -267,12 +267,19 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
         elif db is not None:
             ctx["base"], ctx["baseSource"] = base_fields(db, job, pipeline_version), "DPS_EXTRACTION"
     fields = pack.rules(pages, ctx)
-    selected = select_pages(pages, fields, KEYWORDS.get(pack.name), pack.page_selection.get("max_pages", 25))
+    page_note = None
+    if pack.page_selection.get("rules") == "covenant_section":  # rules, sections, duty sentences, definitions
+        from dps.skills.covenants.pages import covenant_pages
+
+        selected, page_note = covenant_pages(pages, fields, pack.page_selection.get("max_pages", 25),
+                                             MAX_PROMPT_CHARS)
+    else:
+        selected = select_pages(pages, fields, KEYWORDS.get(pack.name), pack.page_selection.get("max_pages", 25))
     lookup_ctx = {"cpIds": ctx.get("cpIds") or [], "obligorId": ctx.get("obligorId"),
                   "facilityIds": ctx.get("facilityIds") or []}
     notes: list[dict] = []
     proposals = agent_proposals(pack, gateway, selected, spring=tools, correlation_id=job.correlation_id,
-                                lookup_context=lookup_ctx, notes=notes)
+                                lookup_context=lookup_ctx, notes=notes, all_pages=pages)
     if pack.name in ("covenants", "amendment_diff"):  # library metric keys; agreements also drop loan mechanics
         from dps.skills.covenants import names
 
@@ -300,7 +307,7 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
             sched_pages = select_pages(pages, sched_fields, KEYWORDS["schedule_terms"],
                                        sched.page_selection.get("max_pages", 20))
             sched_proposals = agent_proposals(sched, gateway, sched_pages, spring=tools,
-                                              correlation_id=job.correlation_id, notes=notes)
+                                              correlation_id=job.correlation_id, notes=notes, all_pages=pages)
             sched_fields = vote(sched_fields, sched_proposals)
             sched_fields += _agent_only(sched, pages, sched_fields, sched_proposals)
         warnings += sched.checks(sched_fields, {**ctx, "sanctionedAmount": amount})
@@ -313,6 +320,9 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
             if n["code"] not in seen_codes:
                 seen_codes.add(n["code"])
                 warnings.append(n)
+    if page_note and page_note["notSent"] and gateway is not None:
+        warnings.append(issue("PAGES_NOT_SENT", "duty pages not in the agent's prompt (it could open them with its "
+                                                "tools): " + ", ".join(map(str, page_note["notSent"][:30]))))
     warnings += verify_with_spring(fields, tools, job.correlation_id)
     warnings += pack.checks(fields, ctx)
     extra = {}

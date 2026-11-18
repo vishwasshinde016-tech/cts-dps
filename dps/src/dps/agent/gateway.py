@@ -51,6 +51,10 @@ class AiBudgetExceeded(GatewayError):
 class ModelOutputInvalid(GatewayError):
     code = "MODEL_OUTPUT_INVALID"
 
+    def __init__(self, message: str = "", data: object | None = None) -> None:
+        super().__init__(message)
+        self.data = data  # the parsed, schema-valid answer when only the caller's check failed
+
 
 class TransientModelError(RuntimeError):
     """Raised by providers (or mapped from their errors) for timeouts, 429 and 5xx."""
@@ -250,7 +254,14 @@ class Gateway:
         error = self._invalid(answer, schema, check)
         if error is None:
             return parse_json(answer)
-        raise ModelOutputInvalid(error)
+        raise ModelOutputInvalid(error, self.valid_data(answer, schema))
+
+    @staticmethod
+    def valid_data(answer: str, schema: dict | None):
+        """The parsed answer when it is JSON and matches ``schema``; else None."""
+        if Gateway._invalid(answer, schema, None) is not None:
+            return None
+        return parse_json(answer)
 
     @staticmethod
     def _invalid(answer: str, schema: dict | None, check) -> str | None:

@@ -124,11 +124,11 @@ def test_agent_is_fresh_per_job_with_only_the_skill_tools():
     assert len(build_tools(["page_text", "rm_rf", "shell"], ctx)) == 1
 
 
-def test_page_tools_see_only_the_selected_pages_and_respect_the_limit():
+def test_page_tools_see_the_document_and_respect_the_limit():
     pages = [{"no": 2, "text": 'Definitions\n"EBITDA" means earnings before interest.\n\nOther text'},
              {"no": 5, "text": "The Borrower shall maintain DSCR of 1.2"}]
     ctx = ToolContext(pages, None, limit=4)
-    assert "not available" in PageTextTool(ctx)._run(1) and "2, 5" in PageTextTool(ctx)._run(9)
+    assert "not in the document" in PageTextTool(ctx)._run(1) and "2 to 5" in PageTextTool(ctx)._run(9)
     assert SearchTextTool(ctx)._run("dscr").startswith("page 5:")
     assert FindDefinitionTool(ctx)._run("EBITDA").startswith('page 2: "EBITDA" means')
     assert "Tool limit of 4" in FindDefinitionTool(ctx)._run("EBITDA")  # fifth call

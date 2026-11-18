@@ -43,10 +43,30 @@ def locate(pages: list[dict], page_no: int | None, quote: str | None) -> tuple[s
     return None, None
 
 
+_HYPHEN_BREAK = re.compile(r"(\w)-[ \t]*\n[ \t]*(\w)")
+
+
+def _flat(text: str | None) -> str:
+    return squash(_HYPHEN_BREAK.sub(r"\1\2", text or ""))
+
+
 def grounded(pages: list[dict], page_no: int | None, quote: str | None) -> bool:
+    """The quote is on the cited page, on the page just before or after it (a page number one off), or runs across
+    the break between the cited page and a neighbour. Line breaks and hyphenated line ends are ignored."""
+    q = _flat(quote)
     page = page_of(pages, page_no)
-    q = squash(quote)
-    return bool(page is not None and len(q) >= 4 and q in squash(page.get("text")))
+    if page is None or len(q) < 4:
+        return False
+    here = _flat(page.get("text"))
+    if q in here:
+        return True
+    before, after = page_of(pages, (page_no or 0) - 1), page_of(pages, (page_no or 0) + 1)
+    for other in (before, after):
+        if other is not None and q in _flat(other.get("text")):
+            return True
+    if after is not None and q in f"{here} {_flat(after.get('text'))}":
+        return True
+    return before is not None and q in f"{_flat(before.get('text'))} {here}"
 
 
 def field_id(pack: str, group: str, name: str, page: int | None, key: str = "") -> str:
@@ -103,20 +123,30 @@ UNGROUNDED_PREFIX = "quote not on page"
 
 def agent_proposals(pack, gateway, pages: list[dict], extra: str = "", route: str | None = None, spring=None,
                     correlation_id: str | None = None, lookup_context: dict | None = None,
-                    notes: list | None = None) -> list[dict] | None:
+                    notes: list | None = None, all_pages: list[dict] | None = None) -> list[dict] | None:
     """The Document Agent's grounded proposals ({name, value, page, quote}); None when no model is available.
 
     With a live gateway and a pack that lists tools, a CrewAI Document Agent reads with the pack's prompt, schema and
     tools (agent/document_agent.py). Otherwise one schema-checked model call reads the same pages. Either way every
     quote must be on the page it names. Why a read failed goes into ``notes`` (AI_UNAVAILABLE, AI_BUDGET_EXCEEDED,
-    AI_UNGROUNDED, MODEL_OUTPUT_INVALID) for the result's warnings."""
+    AI_UNGROUNDED, MODEL_OUTPUT_INVALID) for the result's warnings.
+
+    ``pages`` go into the prompt; ``all_pages`` (the whole document, default ``pages``) are what the agent's tools
+    search and what quotes are checked against, so the agent can cite a page it found with a tool. When a repaired
+    answer still has quotes that are not on their pages, the grounded items are kept and the others dropped."""
     if gateway is None:
         return None
-    from dps.agent.gateway import AiBudgetExceeded, GatewayError
+    from dps.agent.gateway import GatewayError, ModelOutputInvalid
+
+    every = all_pages or pages
+
+    def bad(item) -> bool:
+        return bool(item.get("page") is not None and item.get("quote") and not grounded(every, item["page"],
+                                                                                         item["quote"]))
 
     def check(answer) -> str | None:
         for item in (answer or {}).get("items", []):
-            if item.get("page") is not None and item.get("quote") and not grounded(pages, item["page"], item["quote"]):
+            if bad(item):
                 return f"{UNGROUNDED_PREFIX} {item['page']}: {str(item['quote'])[:60]!r}"
         return None
 
@@ -128,7 +158,7 @@ def agent_proposals(pack, gateway, pages: list[dict], extra: str = "", route: st
 
             try:
                 answer, ctx = document_agent.read(pack, gateway, pages, messages[0]["content"], route, spring,
-                                                  correlation_id, lookup_context, check)
+                                                  correlation_id, lookup_context, check, all_pages=every)
                 log.info("%s agent read with %d tool call(s): %s", pack.name, ctx.used, ",".join(ctx.calls))
             except GatewayError:
                 raise
@@ -137,17 +167,34 @@ def agent_proposals(pack, gateway, pages: list[dict], extra: str = "", route: st
                 answer = gateway.call_json(route, messages, pack.schema, check)
         else:
             answer = gateway.call_json(route, messages, pack.schema, check)
-    except GatewayError as ex:
-        code = ex.code
-        if isinstance(ex, AiBudgetExceeded):
-            code = "AI_BUDGET_EXCEEDED"
-        elif str(ex).startswith(UNGROUNDED_PREFIX):
-            code = "AI_UNGROUNDED"
-        log.info("%s agent unavailable: %s", pack.name, code)
+    except ModelOutputInvalid as ex:
+        kept = [i for i in ((ex.data or {}).get("items") or []) if isinstance(i, dict) and not bad(i)]
+        if not str(ex).startswith(UNGROUNDED_PREFIX) or not kept:
+            return _failed(pack, ex, notes)
+        dropped = len((ex.data or {}).get("items") or []) - len(kept)
+        log.info("%s agent: kept %d grounded item(s), dropped %d", pack.name, len(kept), dropped)
         if notes is not None:
-            notes.append(issue(code, f"{pack.name}: {str(ex)[:200]}"))
-        return None
+            notes.append(issue("AI_UNGROUNDED", f"{pack.name}: {dropped} answer(s) quoted text not on their page "
+                                                 "and were dropped"))
+        answer = {"items": kept}
+    except GatewayError as ex:
+        return _failed(pack, ex, notes)
     return list(answer.get("items", []))
+
+
+def _failed(pack, ex, notes: list | None) -> None:
+    """Why the agent gave nothing usable, for the result's warnings; the rules' answer stands."""
+    from dps.agent.gateway import AiBudgetExceeded
+
+    code = ex.code
+    if isinstance(ex, AiBudgetExceeded):
+        code = "AI_BUDGET_EXCEEDED"
+    elif str(ex).startswith(UNGROUNDED_PREFIX):
+        code = "AI_UNGROUNDED"
+    log.info("%s agent unavailable: %s", pack.name, code)
+    if notes is not None:
+        notes.append(issue(code, f"{pack.name}: {str(ex)[:200]}"))
+    return None
 
 
 def normalise(value):
