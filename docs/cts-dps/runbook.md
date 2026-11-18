@@ -30,6 +30,8 @@ ops endpoints need the SUPPORT or ADMIN role.
 | SealLate | Check that a worker holds the scheduler lock (`dps_leader`); restart one worker if none does. |
 | ReviewBacklog: over 200 waiting, or one waiting over 24 h | Open `/ops/queues` → `review.byReason`. Many `ENTITY_MISMATCH` / `TYPE_MISMATCH` = wrong documents or wrong cycle data from Spring; tell the Spring team. Many `FIELDS_TO_REVIEW` = ask the review team for more people. |
 | AiUnavailable | Documents are read by rules only and sent to review (no job fails). Check the Azure deployment health and quota (429), the key in the vault and `DPS_AI_ALLOWED_HOSTS`; the gateway's breaker closes by itself 30 s after Azure recovers. |
+| COVERAGE_GAP on many agreements | The listed duty sentences are not explained by any extracted covenant. Open a few: real undertakings the rules do not know (escrow, subordination, insurance ...) are wording to teach the rules or the skill; noise (board resolutions, arbitration) is a duty-word to exclude in `skills/covenants/pages.py`. |
+| SECOND_READER_EMPTY on statements | The AI checker answered nothing twice. Check the Azure deployment and the statement's page text; the figures were not double-checked, so the statement waits for a person. |
 | AiBudget | Check `/ops/usage` for the job type using the most tokens; lower `page_selection.max_pages` or the pack's token budget (pull request), or raise the monthly budget with approval. |
 
 ## Sizing

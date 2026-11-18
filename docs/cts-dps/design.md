@@ -583,6 +583,18 @@ Every tool and setting is in one of three states: **Final** (decided, no test ne
 
 **Decision note, Phase 4 skill packs (17 Nov 2026):** seven packs under `dps/skills/` (covenants 1.5.0, schedule_terms, amendment_diff, sanction, statement_lines 2.0.0, certificate, commentary). EXTRACT_AGREEMENT and EXTRACT_STATEMENT keep their proven flows (golden scores unchanged); their results gain schedule terms from the page model and the statement identities. EXTRACT_SANCTION, EXTRACT_CERTIFICATE, EXTRACT_AMENDMENT and DRAFT_COMMENTARY run the generic flow: rules, page selection, the agent through the gateway (grounded answers only), voting, Java formula validation and covenant-library match through the Spring tools, the pack's cross-checks, and the challenger on disputed, high-risk and low-confidence fields (the challenger was removed on 18 Nov 2026). Results are stored per run in `dps_run`. Per-pack golden targets need labelled sanction letters, certificates and amendments from the bank; the golden set today has agreements and statements only.
 
+**Decision note, covenant recall (18 Nov 2026):** review found the agent saw only the pages the rules had used, so a
+covenant the rules missed elsewhere could not be found. Changes: (1) covenant page finder without a model call (rule
+pages, section headings, duty sentences, definitions, within the page and prompt budget; `PAGES_NOT_SENT` names duty
+pages that did not fit); (2) agent tools reach the whole document; (3) grounding allows a neighbour page and a page
+break, and a repaired answer keeps its grounded items; (4) one-to-one covenant vote by metric, test, basis and page;
+(5) coverage check on every duty sentence (`document.coverage`, `COVERAGE_GAP`); (6) EXTRACT_AGREEMENT reads with the
+covenants skill; (7) statements: the AI check runs on spreadsheets, an empty AI answer is retried and then held
+(`SECOND_READER_EMPTY`); (8) long documents: OCR opens a PDF once, pdfplumber pages are freed, Docling reads only its
+batch. A stand-in Spring (`tests/stub_spring.py`) runs the onboarding flow end to end against `spring-tools.yaml`.
+The challenger was removed the same day. Held for later, with the architect: skipping the agent when the rules are
+complete, and removing the Core-demo modules.
+
 **Decision note, Phases 5-7 (17 Nov 2026):** confidence comes from a documented rule table until a document type has 200 labelled fields, then from a logistic regression per type calibrated by isotonic regression (expected calibration error and Brier score reported); every field keeps its top three reasons. Routing: high-risk fields always reviewed in the first release, medium auto-accepted at >= 0.95, low at >= 0.90 (thresholds in each `pack.yaml`), plus a deterministic 3% QA sample. Review decisions are kept in `dps_review_decision`; every review saves a new run (old runs never change). One worker holds the scheduler lock; the audit trail is sealed daily as a hash chain (`/ops/audit-seals`). Rollout per job type is SHADOW, ASSISTED or NORMAL by configuration, recorded on every job; `/ops/go-live` measures each type against the go-live targets.
 
 Each bake-off is recorded as a short decision note (what was compared, numbers, chosen, why) under this table, so the team and the architect can see why each tool was picked.

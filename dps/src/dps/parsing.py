@@ -94,8 +94,8 @@ class RapidOcrBackend:
         if self._doc is not None:
             try:
                 self._doc.close()
-            except Exception:  # noqa: BLE001, S110 - closing is best effort
-                pass
+            except Exception as ex:  # noqa: BLE001 - closing is best effort; the document is dropped anyway
+                log.debug("Closing the OCR document failed: %s", type(ex).__name__)
         self._doc, self._doc_key, self._doc_bytes = None, None, None
 
     def _ensure(self):  # pragma: no cover - exercised only where the optional OCR stack is installed
