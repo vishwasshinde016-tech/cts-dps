@@ -961,6 +961,20 @@
           "items": {
             "type": "string"
           }
+        },
+        "coverage": {
+          "type": "object",
+          "description": "Covenant jobs: duty sentences on the covenant pages and how many an extracted field explains; the rest are listed for the reviewer",
+          "properties": {
+            "dutySentences": { "type": "integer" },
+            "explained": { "type": "integer" },
+            "percent": { "type": "number" },
+            "unexplainedCount": { "type": "integer" },
+            "unexplained": {
+              "type": "array",
+              "items": { "type": "object", "properties": { "page": { "type": "integer" }, "text": { "type": "string" } } }
+            }
+          }
         }
       }
     },

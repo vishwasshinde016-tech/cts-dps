@@ -282,7 +282,8 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         "pipeline": {"version": pipeline_version, "skillPack": pack.ref,
                      "models": dict(budget.models) if budget and budget.models else None},
         "classification": None, "identifiers": [], "fields": fields,
-        "document": {"confidence": None, "route": route, "reasons": reasons},
+        "document": {"confidence": None, "route": route, "reasons": reasons,
+                     **({"coverage": extra.pop("_coverage")} if "_coverage" in extra else {})},
         "warnings": warnings, "timingMs": {"total": round((time.monotonic() - started) * 1000, 1)},
         "usage": {"model_calls": budget.calls, "tokens": budget.used} if budget else None,
         "rollout": getattr(job, "rollout", None) or "NORMAL",
@@ -358,6 +359,17 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     warnings += verify_with_spring(fields, tools, job.correlation_id)
     warnings += pack.checks(fields, ctx)
     extra = {}
+    if page_note:  # every duty sentence on the covenant pages is explained by a field, or listed for the reviewer
+        from dps.skills.covenants import coverage
+
+        duty_pages = {s["page"] for s in page_note["sent"] if s["why"] in ("RULES", "SECTION", "DUTY")}
+        cov = coverage.check([p for p in pages if p["no"] in duty_pages], fields)
+        extra["_coverage"] = cov
+        if cov["unexplainedCount"]:
+            at = sorted({u["page"] for u in cov["unexplained"]})
+            warnings.append(issue("COVERAGE_GAP", f"{cov['unexplainedCount']} duty sentence(s) not explained by any "
+                                                  f"field ({cov['percent']}% covered); check pages "
+                                                  + ", ".join(map(str, at))))
     if pack.name == "amendment_diff":
         from dps.skills.amendment_diff.rules import amended_set
 

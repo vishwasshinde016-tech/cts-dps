@@ -30,19 +30,49 @@ DEFINITIONS = re.compile(r"(?im)^[ \t]*(?:article|section|clause)?[ \t]*[\dIVX.]
                          r"definitions\s+and\s+interpretation|interpretation)\b")
 DEFINED_TERM = re.compile(r"[\"“'][^\"”'\n]{2,60}[\"”']\s+(?:means|shall\s+mean|has\s+the\s+meaning)", re.I)
 METRIC_WORD = re.compile(r"ebitda|debt|net\s+worth|coverage|leverage|interest|liquidity|equity|cash\s+flow", re.I)
-SENTENCE = re.compile(r"[^.;\n]*(?:[.;]|\n|$)")
+# A sentence ends at ". " or "; " or a blank line; single line breaks inside a paragraph are joined (PDF text).
+SENTENCE_END = re.compile(r"(?<=[.;])\s+|\n[ \t]*\n")
+# Not duties: lead-ins ("the Borrower shall comply with the following covenants:") and what a breach leads to.
+NOT_A_DUTY = re.compile(r":\s*$|\bevents?\s+of\s+default\b|\bshall\s+constitute\b", re.I)
+NON_FINANCIAL_DUTY = re.compile(
+    r"\b(?:lien|charge|encumbrance|pledge|mortgage|security\s+interest|dispos|sell|transfer|lease|merge|amalgamat|"
+    r"consolidat|demerge|reorgani[sz]|dividend|distribution|guarantee|invest|lend|loan|borrow|indebtedness|"
+    r"change\s+(?:in|of)|nature\s+of\s+(?:its\s+)?business|control|shareholding|constitution|articles|deliver|"
+    r"furnish|provide|submit|notify|inform|insur|comply|maintain|keep|books|records|inspect|tax|licen[cs]|consent)",
+    re.I)
+BORROWER_DUTY = re.compile(r"\b(?:borrower|obligor|guarantor|company|issuer|promoter)s?\b[^.;]{0,80}?"
+                           r"\b(?:shall|will|must|undertakes?|agrees?|covenants?)\b", re.I)
+
+
+# Conditions precedent are one-time conditions before a drawdown, not covenants: "the Borrower shall have delivered",
+# "shall execute and deliver to the Lender", "conditions precedent".
+CONDITION_PRECEDENT = re.compile(r"\bshall\s+have\s+(?:been\s+)?\w+(?:ed|en|ne)\b|\bconditions?\s+precedent\b|"
+                                 r"\bexecute\s+and\s+deliver\b|"
+                                 r"\bprior\s+to\s+(?:the\s+)?(?:first\s+)?(?:drawdown|disbursement)", re.I)
+
+
+def is_duty(sentence: str) -> bool:
+    """A financial duty (obligation with a comparison or a financial word), or a non-financial one that binds
+    the borrower ("the Borrower shall not create any lien"; not "the Lender shall disburse the Loan")."""
+    if len(sentence) <= 12 or not _OBLIGATION.search(sentence) or CONDITION_PRECEDENT.search(sentence) \
+            or NOT_A_DUTY.search(sentence):
+        return False
+    if _COMPARISON.search(sentence) or _FINANCIAL.search(sentence):
+        return True
+    return bool(NON_FINANCIAL_DUTY.search(sentence) and BORROWER_DUTY.search(sentence))
 RESERVED_CHARS = 10_000  # room in the prompt for the skill text and schema
 
 
+def sentences(text: str) -> list[str]:
+    """The sentences of a page, each on one line."""
+    return [" ".join(s.split()) for s in SENTENCE_END.split(text or "") if s and s.strip()]
+
+
 def duty_sentences(text: str) -> int:
-    """Sentences that set a duty a covenant could come from: an obligation word with a comparison or a financial
-    word ("shall maintain ... not less than", "shall not permit ... Debt")."""
-    count = 0
-    for m in SENTENCE.finditer(text or ""):
-        s = m.group(0)
-        if len(s) > 12 and _OBLIGATION.search(s) and (_COMPARISON.search(s) or _FINANCIAL.search(s)):
-            count += 1
-    return count
+    """Sentences that set a duty a covenant could come from: an obligation word with a comparison, a financial
+    word or a non-financial covenant subject ("shall maintain ... not less than", "shall not permit ... Debt",
+    "shall not create any lien", "shall deliver its audited accounts")."""
+    return sum(1 for s in sentences(text) if is_duty(s))
 
 
 def _definition_score(text: str) -> int:

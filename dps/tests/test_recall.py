@@ -198,3 +198,31 @@ def test_reporting_duties_merge_per_clause_but_far_apart_duties_stay_separate():
              {"name": "Lender's information request", "page": 31, "value": {"metric": "INFORMATION_REQUEST"}}]
     out = names.clean(items)
     assert [(p["value"]["metric"], p["page"]) for p in out] == [("REPORTING_COVENANT", 5), ("REPORTING_COVENANT", 31)]
+
+
+# ---------- coverage: every duty sentence on the covenant pages is explained or listed ----------
+
+def test_coverage_counts_explained_duties_and_lists_the_rest():
+    from dps.skills.covenants import coverage
+
+    page = ("The Borrower shall maintain a Debt Service Coverage Ratio of not less than 1.25 times. "
+            "The Borrower shall not change the general nature of its business without consent of the Lender. "
+            "The Borrower may request a drawdown by giving not less than 5 days notice. "
+            "\"EBITDA\" shall mean profit before interest and tax.")
+    field = {"source": {"page": 4, "quote": "Debt Service Coverage Ratio of not less than 1.25 times"}}
+    cov = coverage.check([{"no": 4, "text": page}], [field])
+    assert cov["dutySentences"] == 2  # the drawdown mechanic and the definition do not count
+    assert cov["explained"] == 1 and cov["percent"] == 50.0
+    assert cov["unexplained"][0]["page"] == 4 and "general nature" in cov["unexplained"][0]["text"]
+    assert coverage.check([], [])["percent"] == 100.0
+
+
+def test_a_covenant_job_reports_coverage_and_a_gap_warning():
+    texts = ["NEGATIVE COVENANTS\nThe Borrower shall maintain a Debt Service Coverage Ratio of not less than 1.25 "
+             "times.\nThe Borrower shall not permit any change in its business without the consent of the Lender."]
+    result = skills.run(load("covenants"), fake_job("ONBOARD"), model_of(*texts), None, None)
+    cov = result["document"]["coverage"]
+    assert cov["dutySentences"] >= 2 and cov["explained"] >= 1
+    gaps = [w for w in result["warnings"] if w["code"] == "COVERAGE_GAP"]
+    if cov["unexplainedCount"]:
+        assert gaps and "page" in gaps[0]["message"]
