@@ -278,3 +278,52 @@ def test_skill_terms_apply_the_older_sense_checks():
     assert (out[0].metric, out[0].threshold) == ("DSCR", 1.25)  # 125% coverage is 1.25 times
     assert out[1].category == "CANDIDATE"  # 70 is not a leverage ratio: a person decides
     assert dropped == 0
+
+
+# ---------- statements: spreadsheets are checked too; an empty AI answer is retried, then flagged ----------
+
+def test_a_spreadsheet_statement_reaches_the_ai_checker_with_its_units_line(tmp_path):
+    from datetime import date
+
+    from test_real_documents import FakeParser, add_document
+
+    from dps.db import Database
+    from dps.extraction.statement_ai import SecondReading
+    from dps.models import Base
+
+    database = Database(f"sqlite:///{tmp_path / 'stmt.db'}")
+    Base.metadata.create_all(database.engine)
+    from dps.flows.statement import StatementDeps, StatementProcessingFlow
+
+    csv = (b"Amounts in INR crore,\nRevenue from operations,100\nEBITDA,50\nTotal debt,120\nTotal equity,300\n")
+    seen = []
+
+    def second(text, values):
+        seen.append(text)
+        return SecondReading(confirmed=["NET_WORTH"])
+
+    doc_id = add_document(database, "FINANCIAL_STATEMENT", "fs.csv", date(2026, 3, 31), ("CP-1",))
+    deps = StatementDeps(database.session_factory, lambda d: csv, FakeParser([]), "ds-dps", False, None, second)
+    flow = StatementProcessingFlow(deps)
+    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
+    assert seen and "Amounts in INR crore" in seen[0] and "Revenue from operations 100" in seen[0]
+    assert flow.state.confirmed == ["NET_WORTH"]
+
+
+def test_an_empty_ai_answer_is_asked_again_then_flagged():
+    from dps.extraction.statement import extract_values
+    from dps.extraction.statement_ai import check
+
+    values = extract_values([("Revenue", 100.0, 1, None), ("Total debt", 120.0, 1, None)], "Rs. in crore").values
+    calls = []
+
+    def empty(messages):
+        calls.append(1)
+        return '{"unit": "crore", "values": {}}'
+
+    reading = check("=== Page 1 ===\nRevenue 100\nTotal debt 120", values, empty)
+    assert len(calls) == 2 and reading.issues[0].startswith("SECOND_READER_EMPTY")
+    answers = iter(['{"unit": "crore", "values": {}}',
+                    '{"unit": "crore", "values": {"REVENUE": {"value": 100, "page": 1, "line": "Revenue 100"}}}'])
+    reading = check("=== Page 1 ===\nRevenue 100\nTotal debt 120", values, lambda m: next(answers))
+    assert reading.confirmed == ["REVENUE"] and not reading.issues  # the second try answered
