@@ -92,6 +92,9 @@ def _pdf_geometry(data: bytes) -> dict[int, dict]:
                                    "cells": cells})
                 out[i] = {"width": round(float(page.width), 1), "height": round(float(page.height), 1),
                           "lines": lines, "tables": tables}
+                close = getattr(page, "close", None)  # free the page's layout cache: long PDFs stay small
+                if callable(close):
+                    close()
     except Exception as ex:  # noqa: BLE001 - positions are an extra; the text is already read
         log.warning("pdfplumber geometry failed: %s", type(ex).__name__)
         return out

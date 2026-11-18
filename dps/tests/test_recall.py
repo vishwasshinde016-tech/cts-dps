@@ -327,3 +327,44 @@ def test_an_empty_ai_answer_is_asked_again_then_flagged():
                     '{"unit": "crore", "values": {"REVENUE": {"value": 100, "page": 1, "line": "Revenue 100"}}}'])
     reading = check("=== Page 1 ===\nRevenue 100\nTotal debt 120", values, lambda m: next(answers))
     assert reading.confirmed == ["REVENUE"] and not reading.issues  # the second try answered
+
+
+# ---------- long documents: OCR opens a PDF once; Docling reads only its batch ----------
+
+def test_pdf_slice_keeps_only_the_batch_pages():
+    from pypdf import PdfReader
+    from test_phase2_ingest import text_pdf
+
+    from dps.parsing import pdf_slice
+
+    data = text_pdf([f"Page number {n} of the agreement" for n in range(1, 13)])
+    part = pdf_slice(data, 5, 8)
+    reader = PdfReader(__import__("io").BytesIO(part))
+    assert len(reader.pages) == 4
+    assert "Page number 5" in reader.pages[0].extract_text() and "Page number 8" in reader.pages[3].extract_text()
+    assert len(PdfReader(__import__("io").BytesIO(pdf_slice(data, 11, 99))).pages) == 2  # clipped at the end
+
+
+def test_ocr_opens_a_pdf_once_per_document_and_closes_it(monkeypatch):
+    import pypdfium2 as pdfium
+    from test_phase2_ingest import text_pdf
+
+    from dps.parsing import RapidOcrBackend
+
+    opened, real = [], pdfium.PdfDocument
+
+    def counting(data, *a, **k):
+        opened.append(len(data))
+        return real(data, *a, **k)
+
+    monkeypatch.setattr(pdfium, "PdfDocument", counting)
+    ocr = RapidOcrBackend(dpi=36)
+    ocr._engine = lambda image: ([([[0, 0], [1, 0], [1, 1], [0, 1]], "text", 0.9)], None)
+    first, second = text_pdf(["a", "b", "c"]), text_pdf(["d", "e"])
+    for i in range(3):
+        assert ocr.ocr_boxes(first, i, 36)[0][1] == "text"
+    assert len(opened) == 1  # three pages, one open (before: one per page)
+    ocr.ocr_boxes(second, 0, 36)
+    assert len(opened) == 2 and ocr._doc_key[1] == len(second)  # a new document replaces the old one
+    ocr.close()
+    assert ocr._doc is None
