@@ -74,6 +74,29 @@ class RapidOcrBackend:
     def __init__(self, dpi: int = 200) -> None:
         self._dpi = dpi
         self._engine = None
+        # The open PDF of the document being read: opened once, not once per page (a 300-page scan used to be
+        # parsed 300 times and never closed). The bytes are kept so their id cannot be reused while cached.
+        self._doc = None
+        self._doc_key: tuple[int, int] | None = None
+        self._doc_bytes: bytes | None = None
+
+    def _document(self, pdf_bytes: bytes):  # pragma: no cover - exercised where pypdfium2 is installed
+        import pypdfium2 as pdfium
+
+        key = (id(pdf_bytes), len(pdf_bytes))
+        if self._doc is None or self._doc_key != key:
+            self.close()
+            self._doc, self._doc_key, self._doc_bytes = pdfium.PdfDocument(pdf_bytes), key, pdf_bytes
+        return self._doc
+
+    def close(self) -> None:
+        """Releases the cached PDF (after a document, or when the next one arrives)."""
+        if self._doc is not None:
+            try:
+                self._doc.close()
+            except Exception as ex:  # noqa: BLE001 - closing is best effort; the document is dropped anyway
+                log.debug("Closing the OCR document failed: %s", type(ex).__name__)
+        self._doc, self._doc_key, self._doc_bytes = None, None, None
 
     def _ensure(self):  # pragma: no cover - exercised only where the optional OCR stack is installed
         if self._engine is None:
@@ -92,10 +115,11 @@ class RapidOcrBackend:
 
     def ocr_boxes(self, pdf_bytes: bytes, page_index: int, dpi: int) -> list:  # pragma: no cover
         """RapidOCR's raw result for one page: [(four corner points in pixels, text, confidence), ...]."""
-        import pypdfium2 as pdfium
-
-        pdf = pdfium.PdfDocument(pdf_bytes)
-        image = pdf[page_index].render(scale=dpi / 72).to_pil()
+        page = self._document(pdf_bytes)[page_index]
+        try:
+            image = page.render(scale=dpi / 72).to_pil()
+        finally:
+            page.close()
         result, _ = self._ensure()(image)
         return list(result or [])
 
@@ -121,6 +145,9 @@ class ParserEngine:
                 pages.append(Page(i + 1, text, "BLANK", 0.0))
             else:
                 pages.append(self._ocr_or_empty(pdf_bytes, i, text))
+        close = getattr(self._ocr, "close", None)
+        if callable(close):
+            close()
         return pages
 
     def _ocr_or_empty(self, pdf_bytes: bytes, index: int, native: str) -> Page:
@@ -204,6 +231,19 @@ class HeavyEngine:
         return pages
 
 
+def pdf_slice(pdf_bytes: bytes, first: int, last: int) -> bytes:
+    """Pages ``first``..``last`` (1-based, inclusive) as a PDF of their own, so a slow reader loads only them."""
+    from pypdf import PdfWriter
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    for i in range(max(first, 1) - 1, min(last, len(reader.pages))):
+        writer.add_page(reader.pages[i])
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
 class DoclingConverter:  # pragma: no cover - heavy optional dependency, run only by dps-worker-heavy
     """Layout-aware reader, about 45-55x slower than the fast path (03-flows-design §8). One converter is kept,
     so its models load once per worker rather than once per document."""
@@ -217,6 +257,13 @@ class DoclingConverter:  # pragma: no cover - heavy optional dependency, run onl
 
         if self._converter is None:
             self._converter = DocumentConverter()
+        try:  # only the run's pages: a 500-page agreement no longer loads in full for every 10-page run
+            part = pdf_slice(pdf_bytes, first, last)
+            result = self._converter.convert(DocumentStream(name="part.pdf", stream=io.BytesIO(part)))
+            doc = result.document
+            return {first + no - 1: doc.export_to_markdown(page_no=no) for no in sorted(doc.pages)}
+        except Exception as ex:  # noqa: BLE001 - a PDF pypdf cannot split: the whole file, as before
+            log.info("Docling slice failed (%s); reading pages %d-%d of the whole file", type(ex).__name__, first, last)
         result = self._converter.convert(DocumentStream(name="doc.pdf", stream=io.BytesIO(pdf_bytes)),
                                          page_range=(first, last))
         doc = result.document

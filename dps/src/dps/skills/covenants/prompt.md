@@ -21,6 +21,7 @@ One item per covenant. A list of reporting duties under one clause is one REPORT
 restricts several things gives one item per library key it touches (for example NEGATIVE_PLEDGE and
 ASSET_DISPOSAL_RESTRICTION), never more than one item per key.
 
-For each give: name (as written), metric (the library key), operator (>=, >, <=, <; null for non-financial),
+For each give: name (as written), metric (the library key), basis (STANDALONE or CONSOLIDATED when the clause
+says whose figures are tested; else null), operator (>=, >, <=, <; null for non-financial),
 threshold (a number; null for non-financial), unit (TIMES, PERCENT, or a currency amount unit), test frequency,
 step-downs as [{"from", "to", "threshold"}], cure period in days, and the page and verbatim quote of the clause.

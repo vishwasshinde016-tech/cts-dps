@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from dps import jobs
 from dps.models import Artifact, Job
 from dps.skills import Pack, for_job_type, load
-from dps.skills.common import agent_proposals, issue, make_field, select_pages, vote
+from dps.skills.common import MAX_PROMPT_CHARS, agent_proposals, issue, make_field, select_pages, vote
 
 log = logging.getLogger(__name__)
 SCHEMA = "dps.result/1.0"
@@ -142,13 +142,45 @@ def _same_change(a: dict, b: dict | None) -> bool:
     return _same_test(a, b) and ((a.get("change") or {}).get("type") == ((b or {}).get("change") or {}).get("type"))
 
 
+def _basis(f: dict) -> str | None:
+    return ((f.get("test") or {}).get("basis") or (f.get("value") or {}).get("basis") or None)
+
+
+def _vote_covenants(fields: list[dict], proposals: list[dict], compare) -> list[dict]:
+    """Rules vs agent, one to one. Two covenants on the same metric (a DSCR for the company and one for the group, or
+    two levels) each get their own match: an unmatched rule covenant with the same test first, then the same basis
+    (STANDALONE / CONSOLIDATED), then the same page, then any unmatched one. An agent item that repeats a covenant
+    already matched with the same test is a duplicate and changes nothing."""
+    taken: set[int] = set()
+    by_key: dict[str, list[dict]] = {}
+    for f in fields:
+        by_key.setdefault(_covenant_key(f), []).append(f)
+    for p in proposals:
+        group = by_key.get(p.get("name")) or []
+        if not group:
+            continue
+        free = [f for f in group if id(f) not in taken]
+        value, page, basis = p.get("value") or {}, p.get("page"), (p.get("value") or {}).get("basis")
+        pick = (next((f for f in free if compare(f["value"], value)), None)
+                or next((f for f in free if basis and _basis(f) == basis), None)
+                or next((f for f in free if page is not None and (f.get("source") or {}).get("page") == page), None)
+                or (free[0] if free else None))
+        if pick is None:
+            if any(compare(f["value"], value) for f in group):
+                p["_matched"] = True  # the same covenant read twice by the agent
+            continue
+        taken.add(id(pick))
+        vote([pick], [{**p, "name": _covenant_key(pick)}], key=_covenant_key, compare=compare)
+        p["_matched"] = True
+    return fields
+
+
 def _vote(pack: Pack, fields: list[dict], proposals: list[dict] | None) -> list[dict]:
     if pack.name in ("covenants", "amendment_diff") and proposals:
         for p in proposals:  # covenants are matched by metric, not by the name as written
             p.setdefault("_written", p.get("name"))
             p["name"] = _covenant_key({"value": p.get("value"), "name": p.get("name")}) or p.get("name")
-        return vote(fields, proposals, key=_covenant_key,
-                    compare=_same_change if pack.name == "amendment_diff" else _same_test)
+        return _vote_covenants(fields, proposals, _same_change if pack.name == "amendment_diff" else _same_test)
     return vote(fields, proposals)
 
 
@@ -250,7 +282,8 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         "pipeline": {"version": pipeline_version, "skillPack": pack.ref,
                      "models": dict(budget.models) if budget and budget.models else None},
         "classification": None, "identifiers": [], "fields": fields,
-        "document": {"confidence": None, "route": route, "reasons": reasons},
+        "document": {"confidence": None, "route": route, "reasons": reasons,
+                     **({"coverage": extra.pop("_coverage")} if "_coverage" in extra else {})},
         "warnings": warnings, "timingMs": {"total": round((time.monotonic() - started) * 1000, 1)},
         "usage": {"model_calls": budget.calls, "tokens": budget.used} if budget else None,
         "rollout": getattr(job, "rollout", None) or "NORMAL",
@@ -267,12 +300,19 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
         elif db is not None:
             ctx["base"], ctx["baseSource"] = base_fields(db, job, pipeline_version), "DPS_EXTRACTION"
     fields = pack.rules(pages, ctx)
-    selected = select_pages(pages, fields, KEYWORDS.get(pack.name), pack.page_selection.get("max_pages", 25))
+    page_note = None
+    if pack.page_selection.get("rules") == "covenant_section":  # rules, sections, duty sentences, definitions
+        from dps.skills.covenants.pages import covenant_pages
+
+        selected, page_note = covenant_pages(pages, fields, pack.page_selection.get("max_pages", 25),
+                                             MAX_PROMPT_CHARS)
+    else:
+        selected = select_pages(pages, fields, KEYWORDS.get(pack.name), pack.page_selection.get("max_pages", 25))
     lookup_ctx = {"cpIds": ctx.get("cpIds") or [], "obligorId": ctx.get("obligorId"),
                   "facilityIds": ctx.get("facilityIds") or []}
     notes: list[dict] = []
     proposals = agent_proposals(pack, gateway, selected, spring=tools, correlation_id=job.correlation_id,
-                                lookup_context=lookup_ctx, notes=notes)
+                                lookup_context=lookup_ctx, notes=notes, all_pages=pages)
     if pack.name in ("covenants", "amendment_diff"):  # library metric keys; agreements also drop loan mechanics
         from dps.skills.covenants import names
 
@@ -300,7 +340,7 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
             sched_pages = select_pages(pages, sched_fields, KEYWORDS["schedule_terms"],
                                        sched.page_selection.get("max_pages", 20))
             sched_proposals = agent_proposals(sched, gateway, sched_pages, spring=tools,
-                                              correlation_id=job.correlation_id, notes=notes)
+                                              correlation_id=job.correlation_id, notes=notes, all_pages=pages)
             sched_fields = vote(sched_fields, sched_proposals)
             sched_fields += _agent_only(sched, pages, sched_fields, sched_proposals)
         warnings += sched.checks(sched_fields, {**ctx, "sanctionedAmount": amount})
@@ -313,9 +353,23 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
             if n["code"] not in seen_codes:
                 seen_codes.add(n["code"])
                 warnings.append(n)
+    if page_note and page_note["notSent"] and gateway is not None:
+        warnings.append(issue("PAGES_NOT_SENT", "duty pages not in the agent's prompt (it could open them with its "
+                                                "tools): " + ", ".join(map(str, page_note["notSent"][:30]))))
     warnings += verify_with_spring(fields, tools, job.correlation_id)
     warnings += pack.checks(fields, ctx)
     extra = {}
+    if page_note:  # every duty sentence on the covenant pages is explained by a field, or listed for the reviewer
+        from dps.skills.covenants import coverage
+
+        duty_pages = {s["page"] for s in page_note["sent"] if s["why"] in ("RULES", "SECTION", "DUTY")}
+        cov = coverage.check([p for p in pages if p["no"] in duty_pages], fields)
+        extra["_coverage"] = cov
+        if cov["unexplainedCount"]:
+            at = sorted({u["page"] for u in cov["unexplained"]})
+            warnings.append(issue("COVERAGE_GAP", f"{cov['unexplainedCount']} duty sentence(s) not explained by any "
+                                                  f"field ({cov['percent']}% covered); check pages "
+                                                  + ", ".join(map(str, at))))
     if pack.name == "amendment_diff":
         from dps.skills.amendment_diff.rules import amended_set
 

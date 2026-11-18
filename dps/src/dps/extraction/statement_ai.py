@@ -179,7 +179,13 @@ def check(text: str, values: list[LineValue], completion: Completion, entity: st
           scale: float = 1.0) -> SecondReading:
     """The second reading; an empty one when the model fails (a check, not a step the flow depends on)."""
     try:
-        return vote(values, ai_read(text, completion, entity), scale)
+        readings = ai_read(text, completion, entity)
+        if not readings and values:  # an empty answer: asked once more
+            readings = ai_read(text, completion, entity)
+        if not readings and values:
+            return SecondReading(issues=["SECOND_READER_EMPTY: the AI checker read none of the figures, twice; "
+                                         "please check them"])
+        return vote(values, readings, scale)
     except Exception as ex:  # noqa: BLE001 - a model outage must not stop statements from being read
         log.warning("Second reader unavailable: %s", type(ex).__name__)
         return SecondReading()

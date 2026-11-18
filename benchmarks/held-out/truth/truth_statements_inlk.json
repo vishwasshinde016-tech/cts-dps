@@ -1,0 +1,29 @@
+{
+ "rules": "Figures read by hand from the primary statements, in the unit the statement prints ('to_crore' converts to DPS's output space, INR/LKR crore-equivalent). Where a report prints group and company columns, either is accepted. A key with several accepted values lists them all. A document with no figures ('no_figures') is scored on whether DPS published anything from it.",
+ "docs": {
+  "HI01": {"company": "Vitagreen Products Private Limited (MCA form AOC-4, scanned)", "period_end": "2025-03-31",
+           "no_figures": true,
+           "note": "the filing cover form only; the financial statements are separate attachments not in this PDF"},
+  "HI02": {"company": "Reliance SED Limited", "period_end": "2025-03-31", "unit": "hundred", "to_crore": 1e-05,
+           "pages": {"BS": 14, "PL": 15, "CF": 16},
+           "values": {"CASH": [420.38], "CURRENT_ASSETS": [968.83], "TOTAL_ASSETS": [1068.83], "NET_WORTH": [441.40],
+                      "ST_DEBT": [500.0], "CURRENT_LIABILITIES": [627.43], "PBT": [-458.39], "TAX": [9.43],
+                      "PAT": [-467.83], "CFO": [-506.02]},
+           "note": "prints 'Rs. In Hundreds'; revenue from operations is nil (other income only), so REVENUE is not scored"},
+  "HL01": {"company": "Kotagala Plantations PLC", "period_end": "2025-03-31", "unit": "thousand", "to_crore": 0.0001,
+           "pages": {"PL": 145, "BS": 146, "CF": 150},
+           "values": {"REVENUE": [5186237, 5068576], "PBT": [619761, 611308], "TAX": [234000], "PAT": [385761, 377308],
+                      "INTEREST_PAID": [378930, 376033, 378007, 375110, 425285, 423023],
+                      "CASH": [147915, 146997], "INVENTORY": [607065, 546189], "RECEIVABLES": [313959, 311467],
+                      "CURRENT_ASSETS": [1086409, 1022245], "TOTAL_ASSETS": [9612154, 9432361],
+                      "CURRENT_LIABILITIES": [2309965, 2245046], "NET_WORTH": [2483408, 2369100],
+                      "LT_DEBT": [449463], "TRADE_PAYABLES": [1138956, 1126872], "CFO": [455795, 464845],
+                      "CFI": [-31751], "CFF": [-377340, -377341], "CAPEX": [109803, 220763]},
+           "note": "three balance-sheet columns per entity (2025, 2024 restated, 1 April 2023 restated); the 2025 one is right"},
+  "HL02": {"company": "Alliance Finance Company PLC", "period_end": "2025-03-31", "unit": "million", "to_crore": 0.1,
+           "pages": {"ALL": 1},
+           "values": {"REVENUE": [14616], "INTEREST_PAID": [6472], "PBT": [4099], "PAT": [1735], "CASH": [1476],
+                      "TOTAL_ASSETS": [81565], "NET_WORTH": [9349]},
+           "note": "a finance company's newspaper-style publication: key figures in a multi-column page shared with the auditor's report and Tamil text"}
+ }
+}

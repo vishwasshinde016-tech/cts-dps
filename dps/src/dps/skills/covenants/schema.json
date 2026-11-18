@@ -1,7 +1,8 @@
 {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {
   "type": "object", "required": ["name", "value", "page", "quote"],
   "properties": {"name": {"type": "string"}, "page": {"type": ["integer", "null"]}, "quote": {"type": ["string", "null"]},
-    "value": {"type": "object", "properties": {"metric": {"type": "string"}, "operator": {"type": ["string", "null"]},
+    "value": {"type": "object", "properties": {"metric": {"type": "string"},
+      "basis": {"type": ["string", "null"]}, "operator": {"type": ["string", "null"]},
       "threshold": {"type": ["number", "null"]}, "unit": {"type": ["string", "null"]},
       "frequency": {"type": ["string", "null"]}, "schedule": {"type": ["array", "null"]},
       "cureDays": {"type": ["integer", "null"]}}}}}}}}

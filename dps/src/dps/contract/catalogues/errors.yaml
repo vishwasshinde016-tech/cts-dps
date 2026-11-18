@@ -67,6 +67,8 @@ errors:
   - { code: AI_UNAVAILABLE, class: DEGRADED, http: null, retry: false, message: "Read without the AI checker; please review." }
   - { code: AI_BUDGET_EXCEEDED, class: DEGRADED, http: null, retry: false, message: "Read without the AI checker; please review." }
   - { code: AI_UNGROUNDED, class: DEGRADED, http: null, retry: false, message: "The AI answer quoted text that is not on the page and was dropped; please review." }
+  - { code: PAGES_NOT_SENT, class: DEGRADED, http: null, retry: false, message: "Some pages with duty sentences did not fit the agent's prompt (it could still open them with its tools); please check them." }
+  - { code: COVERAGE_GAP, class: DEGRADED, http: null, retry: false, message: "Some duty sentences on the covenant pages are not explained by any extracted covenant; please check them." }
   - { code: MODEL_OUTPUT_INVALID, class: DEGRADED, http: null, retry: false, message: "The AI answer was not usable; read by the rules only. Please review." }
   # --- resource ---
   - { code: PARSE_TIMEOUT, class: RESOURCE, http: null, retry: false, message: "The file is too large or complex. Split it and upload the parts." }

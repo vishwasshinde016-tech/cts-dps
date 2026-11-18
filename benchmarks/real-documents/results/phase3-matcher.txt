@@ -1,0 +1,27 @@
+distinct catalog-mapped labels: 931; matcher names the same line 672 (72.2%), another line 41 (4.4%), unsure (<0.6) 218 (23.4%)
+most common disagreements: [(('CASH', 'CFO'), 8), (('NET_WORTH', 'TOTAL_EQUITY_AND_LIABILITIES'), 7), (('LT_DEBT', 'PRINCIPAL_PAID'), 3), (('ST_DEBT', 'PRINCIPAL_PAID'), 3), (('CASH', 'CFI'), 3), (('OTHER_INCOME', 'TAX'), 3), (('PAT', 'EBIT'), 2), (('CASH', 'CFF'), 2)]
+IN04 TAX other line: Current tax 25.14 truth 29.54
+IN22 TAX other line: (a) Current tax 44.0601 truth 40.0462
+IN27 TRADE_PAYABLES missing, no suggestion
+IN44 TOTAL_INCOME missing, no suggestion
+IN46 OTHER_INCOME missing, no suggestion
+IN46 TOTAL_INCOME missing, no suggestion
+LK04 LT_DEBT missing, no suggestion
+LK04 ST_DEBT missing, no suggestion
+US01 PAT RIGHT: Profit 888.4
+US01 LT_DEBT missing, no suggestion
+US01 CAPEX missing, no suggestion
+US03 PBT missing, no suggestion
+US04 RECEIVABLES missing, no suggestion
+US06 RECEIVABLES missing, no suggestion
+US07 REVENUE missing, no suggestion
+US07 TOTAL_ASSETS missing, no suggestion
+US08 RECEIVABLES missing, no suggestion
+US08 NET_WORTH RIGHT: Hormel Foods Corporation Shareholders’ Investment 790.1171
+US10 CFO missing, no suggestion
+US10 CFI missing, no suggestion
+US10 CFF missing, no suggestion
+US11 TAX other line: Tax (provision) benefit -24.0 truth 24.0
+US14 INVENTORY missing, no suggestion
+
+missing values with truth: suggestion right 2, other line 3, none 18; suggestions shown over all docs: 37

@@ -1,0 +1,185 @@
+{
+ "HA10": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 805.1,
+  "heavy": true,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "MIN_NET_WORTH",
+    "name": "Minimum Net Worth",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 50.0,
+    "unit": "INR_CR",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_NOT_IN_QUOTE",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 36,
+    "quote": "iation, depletion and amortization expenses, and les interest expense. 6.5 Minimum Liabil ty to Equity Ratio. Bor ower shal at al times maintain a Liabil ty to Equity Ratio of not greater than one-to-one, as reflected on its an ual and quarterly Financial Statements. ARTICLE 7 - PARTIAL RELEASES 7.1"
+   },
+   {
+    "metric_raw": "MINIMUM_LIQUIDITY",
+    "name": "Minimum Liquidity",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 300.0,
+    "unit": "INR_CR",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_NOT_IN_QUOTE",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 36,
+    "quote": "iation, depletion and amortization expenses, and les interest expense. 6.5 Minimum Liabil ty to Equity Ratio. Bor ower shal at al times maintain a Liabil ty to Equity Ratio of not greater than one-to-one, as reflected on its an ual and quarterly Financial Statements. ARTICLE 7 - PARTIAL RELEASES 7.1"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 12,
+    "quote": "1.15 Guaranty Agre ment. The term \"Guaranty Agre ment\" shal mean a continuing guaranty of the Loan executed by Guarantor. 1.16 Hazardous Materials."
+   },
+   {
+    "metric_raw": "CURE_PERIOD_DAYS",
+    "name": "Cure period",
+    "category": "INFO",
+    "operator": null,
+    "threshold": 10.0,
+    "unit": "DAYS",
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_NOT_IN_QUOTE"
+    ],
+    "page": 36,
+    "quote": "iation, depletion and amortization expenses, and les interest expense. 6.5 Minimum Liabil ty to Equity Ratio. Bor ower shal at al times maintain a Liabil ty to Equity Ratio of not greater than one-to-one, as reflected on its an ual and quarterly Financial Statements. ARTICLE 7 - PARTIAL RELEASES 7.1"
+   }
+  ]
+ },
+ "HA02": {
+  "outcome": "NEEDS_REVIEW",
+  "error": "",
+  "seconds": 1101.6,
+  "heavy": true,
+  "ai": false,
+  "proposals": [
+   {
+    "metric_raw": "DSCR",
+    "name": "Minimum DSCR",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 1.2,
+    "unit": null,
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_NOT_IN_QUOTE",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 108,
+    "quote": "or casualty and in any event one hundred eighty (180) days prior to the Maturity Date; (vi) Bor ower promptly commences and is dil gently pursuing restoration of the Project and (vi ) the los is not, directly or indirectly the result of any act of ter orism; (c) if the condit ons et forth in Section"
+   },
+   {
+    "metric_raw": "MIN_NET_WORTH",
+    "name": "Minimum Net Worth",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 500.0,
+    "unit": "INR_CR",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_NOT_IN_QUOTE",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 186,
+    "quote": "ecurit es traded on a major U.S. domestic, public stock exchange). Lender shal test Guarantor's net worth, liquidity and contingent liabil ties on an an ual basis. The foregoing financial requirements and covenants imposed upon Guarantor are refer ed to in this Agre ment as the \"Financial Covenants."
+   },
+   {
+    "metric_raw": "MINIMUM_LIQUIDITY",
+    "name": "Minimum Liquidity",
+    "category": "FINANCIAL",
+    "operator": ">=",
+    "threshold": 1710.0,
+    "unit": "INR_CR",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_NOT_IN_QUOTE",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 186,
+    "quote": "ecurit es traded on a major U.S. domestic, public stock exchange). Lender shal test Guarantor's net worth, liquidity and contingent liabil ties on an an ual basis. The foregoing financial requirements and covenants imposed upon Guarantor are refer ed to in this Agre ment as the \"Financial Covenants."
+   },
+   {
+    "metric_raw": "LOAN_TO_VALUE",
+    "name": "Maximum Loan to Value",
+    "category": "FINANCIAL",
+    "operator": "<=",
+    "threshold": 67.0,
+    "unit": "PERCENT",
+    "confidence": 0.7,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_NOT_IN_QUOTE",
+     "LOW_CONFIDENCE"
+    ],
+    "page": 108,
+    "quote": "or casualty and in any event one hundred eighty (180) days prior to the Maturity Date; (vi) Bor ower promptly commences and is dil gently pursuing restoration of the Project and (vi ) the los is not, directly or indirectly the result of any act of ter orism; (c) if the condit ons et forth in Section"
+   },
+   {
+    "metric_raw": "INSURANCE_MAINTENANCE",
+    "name": "Insurance Cover Maintained",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 147,
+    "quote": "erved. Section 6.24 CFIUS. Either (a) the Loan is not a Covered Transaction and Bor ower's acquisit on of the Project was not a Covered Transaction, or (b) Bor ower has previously obtained CFIUS Ap roval with respect o the Loan and Bor ower's acquisit on of the Project. Section 6.25 Cash Management."
+   },
+   {
+    "metric_raw": "COMPLIANCE_CERTIFICATE",
+    "name": "Compliance Certificate",
+    "category": "NON_FINANCIAL",
+    "operator": null,
+    "threshold": null,
+    "unit": null,
+    "confidence": 0.8,
+    "method": "REGEX",
+    "issues": [],
+    "page": 189,
+    "quote": "e coverage has not already be n delivered to Lender, the failure of Bor ower to deliver such insurance policy within thirty (30) days after the date hereof or (c) the failure of any certif cate of insurance delivered to Lender to ac urately reflect in any respect he insurance coverage provided under"
+   },
+   {
+    "metric_raw": "CURE_PERIOD_DAYS",
+    "name": "Cure period",
+    "category": "INFO",
+    "operator": null,
+    "threshold": 5.0,
+    "unit": "DAYS",
+    "confidence": 0.85,
+    "method": "REGEX",
+    "issues": [
+     "THRESHOLD_NOT_IN_QUOTE"
+    ],
+    "page": 195,
+    "quote": "ng anything herein or in the other Loan Documents to the contrary, if an Event of Default oc urs (after expiration of any ap licable cure periods in this Article 9 or any of the other Loan Documents), no Bor ower nor any other Bor ower Party shal have a right o cure such Event of Default, and Lender"
+   }
+  ]
+ }
+}

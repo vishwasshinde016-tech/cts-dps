@@ -4,7 +4,9 @@ Live run on Azure OpenAI (18 Nov 2026): the agent found every labelled covenant 
 (drawdown and prepayment notice, payment default, cure period) that the schedule_terms skill already reads, and
 (2) split one clause into several items with names of its own ("RESTRICTION_ON_CHARGED_ASSET_DISPOSAL_...") that
 Spring's covenant library does not know. Here every proposal gets a library metric key (or OTHER, with the name as
-written kept for the reviewer), loan mechanics are dropped, and one non-financial key is proposed once.
+written kept for the reviewer), loan mechanics are dropped, and a non-financial key is proposed once per clause
+area (the same page or the next: a list of reporting duties under one clause is one item; the same kind of duty far
+away in the agreement stays a separate item).
 """
 
 from __future__ import annotations
@@ -78,7 +80,7 @@ def clean(proposals: list[dict] | None, drop_mechanics: bool = True, collapse: b
     if proposals is None:
         return None
     out: list[dict] = []
-    seen: set[str] = set()
+    seen: dict[str, list[int | None]] = {}
     for p in proposals:
         value = dict(p.get("value") or {})
         written = p.get("_written") or p.get("name") or value.get("metric")
@@ -89,9 +91,11 @@ def clean(proposals: list[dict] | None, drop_mechanics: bool = True, collapse: b
                 and is_mechanics(value.get("metric"), p.get("name")):
             continue
         if collapse and key in NON_FINANCIAL:
-            if key in seen:
+            page = p.get("page") if isinstance(p.get("page"), int) else None
+            pages = seen.setdefault(key, [])
+            if any(q is None or page is None or abs(q - page) <= 1 for q in pages):
                 continue
-            seen.add(key)
+            pages.append(page)
         value["metric"] = key
         if key == OTHER:
             value["nameAsWritten"] = str(written or "")[:120]

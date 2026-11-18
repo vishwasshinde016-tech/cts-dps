@@ -1,0 +1,53 @@
+
+India / Sri Lanka, hand-checked
+  model answers: 147, on the page: 136 (93%)
+  confirmed by both: 88 values, wrong among them: 0
+  sent to review as different: 14 (1 really wrong, 13 were right)
+  wrong and neither confirmed nor flagged (reader alone): 0
+  suggestions for missing values: 2 right, 0 wrong
+
+US 10-K, XBRL
+  model answers: 175, on the page: 175 (100%)
+  confirmed by both: 123 values, wrong among them: 2
+  sent to review as different: 15 (5 really wrong, 10 were right)
+  wrong and neither confirmed nor flagged (reader alone): 2
+  suggestions for missing values: 8 right, 0 wrong
+
+== agreements, original labels (truth_ag.json)
+set                                         found   of  recall  false precision
+Rules alone                                    53   60   88.3%     23     69.7%
+Rules + AI (all proposals)                     54   60   90.0%     28     65.9%
+Confirmed by both (auto-publish quality)       48   60   80.0%      5     90.6%
+Rules only, not confirmed                       5   60    8.3%     18     21.7%
+Added by AI only                                1   60    1.7%      5     16.7%
+
+AI answers kept after grounding: 81; dropped (quote or number not on the page): 20
+AI questioned a rules covenant: 6 times; the rules were wrong in 4, right in 2
+possible-covenant rows: 22 before, 33 after; errors: []
+seconds per agreement: 5.9
+
+== corrected labels (truth_ag_v2.json)
+set                                         found   of  recall  false precision
+Rules alone                                    53   62   85.5%     23     69.7%
+Rules + AI (all proposals)                     56   62   90.3%     26     68.3%
+Confirmed by both (auto-publish quality)       48   62   77.4%      5     90.6%
+Rules only, not confirmed                       5   62    8.1%     18     21.7%
+Added by AI only                                3   62    4.8%      3     50.0%
+
+AI answers kept after grounding: 81; dropped (quote or number not on the page): 20
+AI questioned a rules covenant: 6 times; the rules were wrong in 4, right in 2
+possible-covenant rows: 22 before, 33 after; errors: []
+seconds per agreement: 5.9
+
+== first run, before fixes (r_p2_ag.json)
+set                                         found   of  recall  false precision
+Rules alone                                    53   60   88.3%     23     69.7%
+Rules + AI (all proposals)                     54   60   90.0%     35     60.7%
+Confirmed by both (auto-publish quality)       47   60   78.3%      6     88.7%
+Rules only, not confirmed                       6   60   10.0%     17     26.1%
+Added by AI only                                1   60    1.7%     12      7.7%
+
+AI answers kept after grounding: 93; dropped (quote or number not on the page): 18
+AI questioned a rules covenant: 6 times; the rules were wrong in 4, right in 2
+possible-covenant rows: 22 before, 32 after; errors: []
+seconds per agreement: 6.1

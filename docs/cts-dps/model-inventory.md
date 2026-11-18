@@ -20,14 +20,20 @@ and a person decide. Only the pages a job needs are sent, only to the bank's own
 - **Switch and endpoint:** the agent runs only with `DPS_LLM_ENABLED=true`, a model route file, and a model host
   listed in `DPS_AI_ALLOWED_HOSTS`. Any other host (for example api.openai.com) is refused at start-up
   (`tests/test_llm_policy.py`, `tests/test_document_agent.py`). `GET /dps/v1/capabilities` reports `llmEnabled`.
-- **Least data:** each job sends only its selected pages (`page_selection` in the skill pack), never the whole file.
-  Personal data (PAN, Aadhaar, e-mail, phone, account numbers) is masked before a call. Prompts are not stored:
+- **Least data:** each job's prompt holds only its selected pages (`page_selection` in the skill pack), never the
+  whole file. Since 18 Nov 2026 the agent's tools (`page_text`, `search_text`, `find_definition`) may open other pages
+  of the same document, within the pack's tool-call limit (8 calls, at most 12,000 characters each), so it can follow
+  definitions and schedule references; tool results go through the same masking. Personal data (PAN, Aadhaar, e-mail, phone, account numbers) is masked before a call. Prompts are not stored:
   the call log keeps model, prompt hash, tokens, time and outcome (`DPS_AI_TRACE_TEXT=false`, the default).
-- **Grounding:** every agent value must quote text found on the page it names; otherwise it is repaired once and
-  then dropped (`AI_UNGROUNDED`). Values read from page images cannot be grounded, so they always go to a person.
+- **Grounding:** every agent value must quote text found on the page it names (or the page before or after, or
+  across a page break); otherwise it is repaired once, and then only the grounded items are kept (`AI_UNGROUNDED`
+  says how many were dropped). Values read from page images cannot be grounded, so they always go to a person.
 - **Covenant names:** every covenant the agent proposes gets a covenant-library metric key (or OTHER, with the
   name as written kept for the reviewer); loan mechanics (drawdown, prepayment, default, cure) are left to the
-  schedule skill; one item per non-financial key (`skills/covenants/names.py`, `tests/test_covenant_names.py`).
+  schedule skill; one item per non-financial key and clause area (`skills/covenants/names.py`).
+- **Covenant pages and coverage:** the agent reads the covenant sections, duty pages and definitions, not only the
+  pages the rules used (`skills/covenants/pages.py`). Every duty sentence on those pages must be explained by an
+  extracted field or is listed for the reviewer (`document.coverage`, `COVERAGE_GAP`; `skills/covenants/coverage.py`).
 - **Vote:** rules and agent agree → higher confidence; disagree → a person sees both; agent-only
   values on high-risk fields and every agent-only covenant → a person. There is no second-model re-read (removed 18 Nov 2026).
 - **Numbers:** the LLM never decides compliance or calculates; formulas are validated by the Spring app (Java).

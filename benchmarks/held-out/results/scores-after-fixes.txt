@@ -1,0 +1,33 @@
+AGREEMENTS {"docs": 18, "held": 18, "covenants": 44, "clean": 2, "flagged": 12, "shown": 27, "missed": 3, "proposed": 72, "proposed_flagged": 70, "silent_wrong": 0, "flagged_wrong": 29, "not_read": 1, "not_read_covenants": 1}
+  recall seen by a person (clean+flagged+shown): 41/44  missed: 3  silent wrong terms: 0  docs held: 18/18
+  HA01 NEEDS_REVIEW  MIN_NW 75000000 p72 flagged; LIQUIDITY 1500000 p73 shown
+  HA02 NEEDS_REVIEW  MIN_NW 50000000 p186 shown; LIQUIDITY 17100000 p186 shown
+  HA03 NEEDS_REVIEW  LEVERAGE 7.75 p183 flagged
+  HA04 NEEDS_REVIEW  LEVERAGE 5.0 p224 shown; ICR 2.5 p224 flagged
+  HA05 HEAVY         
+  HA07 NEEDS_REVIEW  DEBT_TO_CAP 65 p42 shown; OTHER 15 p42 shown; ICR 1.5 p42 shown
+  HA08 NEEDS_REVIEW  LEVERAGE 0.75 p62 shown; MIN_NW 1000000000 p62 flagged; OTHER 115 p62 shown; OTHER 115 p62 shown; ICR 1.15 p62 shown; OTHER 1.0 p62 shown
+  HA09 NEEDS_REVIEW  MIN_NW 2701014000 p80 flagged; LEVERAGE 0.6 p81 shown; ICR 1.5 p81 shown
+  HA10 NEEDS_REVIEW  LIQUIDITY 30000000 p36 shown; OTHER 25000000 p36 shown; DEBT_TO_NW 1.0 p36 missed
+  HA11 NEEDS_REVIEW  LEVERAGE 3.0 p17 shown; LIQUIDITY 500000 p17 flagged
+  HA12 NEEDS_REVIEW  LEVERAGE 4.0 p105 flagged
+  HA13 NEEDS_REVIEW  ICR 2.75 p180 shown; LEVERAGE 4.25 p180 shown
+  HA14 NEEDS_REVIEW  LEVERAGE 5.0 p138 flagged
+  HA15 NEEDS_REVIEW  DSCR 2.0 p38 flagged; DEBT_TO_NW 1.0 p38 flagged
+  HA16 NEEDS_REVIEW  LTV 73 p106 missed; DSCR 1.15 p106 missed
+  HA17 NEEDS_REVIEW  OTHER 300 p97 shown; DEBT_TO_CAP 45 p97 shown; MIN_NW None p97 shown; DSCR 1.4 p97 shown
+  HA18 NEEDS_REVIEW  
+  HA19 NEEDS_REVIEW  MIN_NW 687996400 p141 shown; OTHER 150 p141 shown; OTHER 2.0 p141 shown; ICR 2.0 p141 clean; OTHER 10 p141 shown; MIN_NW 384526500 p141 flagged
+  HA20 NEEDS_REVIEW  LEVERAGE 3.0 p74 clean; ICR 4.0 p74 flagged
+STATEMENTS {"docs": 10, "held": 6, "values": 133, "right_published": 60, "right_held": 51, "wrong_published": 1, "wrong_held": 6, "missing": 15, "no_figure_docs_published": 0, "not_read": 0, "ai_confirmed_right": 0, "ai_confirmed_wrong": 0, "ai_questioned_a_wrong_figure": 0, "ai_questioned_a_right_figure": 0, "ai_suggested_right": 0, "ai_suggested_wrong": 0}
+  published values: 61, wrong among them (silent): 1; held docs: 6/10; missing: 15/133
+  HU01 REPORTED     unit=thousand issues=[] bad={'INTEREST_PAID': ('wrong_published', 19.0206, 22.4806), 'CAPEX': ('missing', None, 45.4622)}
+  HU02 REPORTED     unit=million issues=[] bad={'PBT': ('missing', None, 205.2), 'CFO': ('missing', None, 277.7), 'CFI': ('missing', None, -95.1), 'CFF': ('missing', None, -217.9)}
+  HU03 NEEDS_REVIEW unit=million issues=['MISSING_LINE_ITEMS'] bad={}
+  HU04 NEEDS_REVIEW unit=million issues=['MISSING_LINE_ITEMS'] bad={}
+  HU05 REPORTED     unit=million issues=[] bad={'REVENUE': ('missing', None, 405.51)}
+  HU06 NEEDS_REVIEW unit=million issues=['MISSING_LINE_ITEMS'] bad={'PAT': ('wrong_held', -13.59, -13.73), 'LT_DEBT': ('missing', None, 180.68), 'CFO': ('wrong_held', 58.57, 56.21)}
+  HI01 NEEDS_REVIEW unit=crore issues=['MISSING_LINE_ITEMS'] bad={}
+  HI02 NEEDS_REVIEW unit=hundred issues=['MISSING_LINE_ITEMS'] bad={'CASH': ('wrong_held', 0.009264, 0.004203800000000001), 'ST_DEBT': ('missing', None, 0.005), 'PBT': ('missing', None, -0.0045839), 'TAX': ('missing', None, 9.43e-05), 'PAT': ('missing', None, -0.0046783)}
+  HL01 REPORTED     unit=thousand issues=[] bad={}
+  HL02 NEEDS_REVIEW unit=rupee issues=['MISSING_LINE_ITEMS'] bad={'REVENUE': ('missing', None, 1461.6000000000001), 'INTEREST_PAID': ('missing', None, 647.2), 'PBT': ('wrong_held', 0.00041, 409.90000000000003), 'PAT': ('wrong_held', 0.000173, 173.5), 'CASH': ('wrong_held', 0.000148, 147.6), 'TOTAL_ASSETS': ('missing', None, 8156.5), 'NET_WORTH': ('missing', None, 934.9000000000001)}

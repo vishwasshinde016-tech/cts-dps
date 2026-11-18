@@ -1,0 +1,348 @@
+{
+ "HU01": {
+  "company": "HERSHEY CO",
+  "period_end": "2025-12-31",
+  "unit": "thousand",
+  "balance_sheet_page": 58,
+  "values": {
+   "REVENUE": [
+    1169.2576
+   ],
+   "PAT": [
+    88.3259
+   ],
+   "INTEREST_PAID": [
+    22.4806,
+    23.6784
+   ],
+   "PBT": [
+    121.4208
+   ],
+   "TAX": [
+    33.0949
+   ],
+   "INVENTORY": [
+    142.9254
+   ],
+   "RECEIVABLES": [
+    72.9547
+   ],
+   "CURRENT_ASSETS": [
+    358.8899
+   ],
+   "TOTAL_ASSETS": [
+    1374.1297
+   ],
+   "CURRENT_LIABILITIES": [
+    301.1896
+   ],
+   "NET_WORTH": [
+    463.675
+   ],
+   "TRADE_PAYABLES": [
+    125.5701
+   ],
+   "CFO": [
+    227.7367
+   ],
+   "CFI": [
+    -127.8717
+   ],
+   "CFF": [
+    -80.3357
+   ],
+   "CAPEX": [
+    45.4622
+   ]
+  }
+ },
+ "HU02": {
+  "company": "KIMBERLY CLARK CORP",
+  "period_end": "2025-12-31",
+  "unit": "million",
+  "balance_sheet_page": 47,
+  "values": {
+   "REVENUE": [
+    1644.7
+   ],
+   "PAT": [
+    202.1,
+    204.9
+   ],
+   "INTEREST_PAID": [
+    25.6
+   ],
+   "PBT": [
+    205.2
+   ],
+   "TAX": [
+    59.9
+   ],
+   "CASH": [
+    68.8
+   ],
+   "INVENTORY": [
+    147.5
+   ],
+   "RECEIVABLES": [
+    189.2
+   ],
+   "CURRENT_ASSETS": [
+    531.0
+   ],
+   "TOTAL_ASSETS": [
+    1709.8
+   ],
+   "CURRENT_LIABILITIES": [
+    712.5
+   ],
+   "NET_WORTH": [
+    150.2,
+    163.0
+   ],
+   "TRADE_PAYABLES": [
+    338.8
+   ],
+   "CFO": [
+    277.7
+   ],
+   "CFI": [
+    -95.1
+   ],
+   "CFF": [
+    -217.9
+   ]
+  }
+ },
+ "HU03": {
+  "company": "LENNOX INTERNATIONAL INC",
+  "period_end": "2025-12-31",
+  "unit": "million",
+  "balance_sheet_page": 44,
+  "values": {
+   "REVENUE": [
+    519.53
+   ],
+   "PAT": [
+    80.58
+   ],
+   "INTEREST_PAID": [
+    4.09
+   ],
+   "PBT": [
+    99.68
+   ],
+   "TAX": [
+    19.1
+   ],
+   "CASH": [
+    3.42
+   ],
+   "INVENTORY": [
+    115.26
+   ],
+   "CURRENT_ASSETS": [
+    190.38
+   ],
+   "TOTAL_ASSETS": [
+    408.18
+   ],
+   "CURRENT_LIABILITIES": [
+    119.18
+   ],
+   "NET_WORTH": [
+    116.31
+   ],
+   "TRADE_PAYABLES": [
+    43.8
+   ],
+   "CFO": [
+    75.76
+   ],
+   "CFI": [
+    -65.56
+   ],
+   "CFF": [
+    -46.57
+   ],
+   "CAPEX": [
+    11.88
+   ]
+  }
+ },
+ "HU04": {
+  "company": "TORO CO",
+  "period_end": "2025-10-31",
+  "unit": "million",
+  "balance_sheet_page": 60,
+  "values": {
+   "REVENUE": [
+    451.04
+   ],
+   "PAT": [
+    31.61
+   ],
+   "INTEREST_PAID": [
+    5.91
+   ],
+   "PBT": [
+    37.76
+   ],
+   "TAX": [
+    6.15
+   ],
+   "INVENTORY": [
+    92.08
+   ],
+   "CURRENT_ASSETS": [
+    170.51
+   ],
+   "TOTAL_ASSETS": [
+    343.88
+   ],
+   "CURRENT_LIABILITIES": [
+    91.24
+   ],
+   "NET_WORTH": [
+    145.33
+   ],
+   "LT_DEBT": [
+    92.15
+   ],
+   "TRADE_PAYABLES": [
+    36.76
+   ],
+   "CFO": [
+    66.2
+   ],
+   "CFI": [
+    -7.74
+   ],
+   "CFF": [
+    -44.61
+   ],
+   "CAPEX": [
+    8.37
+   ]
+  }
+ },
+ "HU05": {
+  "company": "LEGGETT & PLATT INC",
+  "period_end": "2025-12-31",
+  "unit": "million",
+  "balance_sheet_page": 78,
+  "values": {
+   "REVENUE": [
+    405.51
+   ],
+   "PAT": [
+    23.54
+   ],
+   "INTEREST_PAID": [
+    7.29
+   ],
+   "PBT": [
+    28.97
+   ],
+   "TAX": [
+    5.43
+   ],
+   "CASH": [
+    58.74
+   ],
+   "INVENTORY": [
+    62.26
+   ],
+   "RECEIVABLES": [
+    43.37
+   ],
+   "CURRENT_ASSETS": [
+    174.36
+   ],
+   "TOTAL_ASSETS": [
+    353.64
+   ],
+   "CURRENT_LIABILITIES": [
+    77.5
+   ],
+   "NET_WORTH": [
+    102.21,
+    102.26
+   ],
+   "TRADE_PAYABLES": [
+    46.66
+   ],
+   "CFO": [
+    33.82
+   ],
+   "CFI": [
+    29.33
+   ],
+   "CFF": [
+    -41.32
+   ],
+   "CAPEX": [
+    5.72
+   ]
+  }
+ },
+ "HU06": {
+  "company": "BRUNSWICK CORP",
+  "period_end": "2025-12-31",
+  "unit": "million",
+  "balance_sheet_page": 0,
+  "values": {
+   "REVENUE": [
+    536.28
+   ],
+   "PAT": [
+    -13.73
+   ],
+   "INTEREST_PAID": [
+    11.17
+   ],
+   "PBT": [
+    -13.57
+   ],
+   "TAX": [
+    0.02
+   ],
+   "CASH": [
+    25.68
+   ],
+   "INVENTORY": [
+    119.23
+   ],
+   "CURRENT_ASSETS": [
+    206.33
+   ],
+   "TOTAL_ASSETS": [
+    531.22
+   ],
+   "CURRENT_LIABILITIES": [
+    142.87
+   ],
+   "NET_WORTH": [
+    162.56
+   ],
+   "LT_DEBT": [
+    180.68
+   ],
+   "TRADE_PAYABLES": [
+    37.49
+   ],
+   "CFO": [
+    56.21
+   ],
+   "CFI": [
+    -14.16
+   ],
+   "CFF": [
+    -44.12
+   ],
+   "CAPEX": [
+    16.58
+   ]
+  }
+ }
+}

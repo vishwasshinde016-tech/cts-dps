@@ -492,17 +492,19 @@ def build_runners(settings: Settings, database: Database, store: FileStore, core
 
     ai_covenants = None
     if settings.agreement_ai_check and gateway is not None:  # pragma: no cover - live model
-        from dps.agent.document_agent import completion as agent_completion
-        from dps.extraction.agreement_ai import read as read_covenants
+        from dps.extraction.agreement_ai import read_with_skill
         from dps.spring_tools import SpringTools
 
-        # The agreement's AI reader is the Document Agent with the covenant skill and the Java covenant tools.
-        agreement_completion = agent_completion(gateway, "strong", "covenants",
-                                                ("covenant_library", "validate_formula"),
-                                                SpringTools.from_settings(settings))
+        # The agreement's AI reader is the Document Agent running the covenants skill (the same pack, page finder,
+        # tools, grounding and library names as ONBOARD), with the Java covenant tools.
+        spring = SpringTools.from_settings(settings)
 
         def ai_covenants(pages, terms):
-            return read_covenants(pages, terms, agreement_completion)
+            gateway.begin_job(None)
+            try:
+                return read_with_skill(pages, terms, gateway, spring)
+            finally:
+                gateway.end_job()
 
     def learn() -> None:
         # Phase 4: the wordings an administrator promoted (and not retired) apply to every new document.

@@ -1,0 +1,21 @@
+Several ratios in one clause (BUG-48), 9 November 2026, rules only. The same 16 agreements as scores-bug-hunt-2.txt.
+AGREEMENTS {"docs": 16, "held": 16, "covenants": 39, "clean": 2, "flagged": 15, "shown": 22, "missed": 0, "proposed": 78, "proposed_flagged": 76, "silent_wrong": 0, "flagged_wrong": 25, "not_read": 0, "not_read_covenants": 0}
+  recall seen by a person (clean+flagged+shown): 39/39  missed: 0  silent wrong terms: 0  docs held: 16/16
+  HA01 NEEDS_REVIEW  MIN_NW 75000000 p72 flagged; LIQUIDITY 1500000 p73 flagged
+  HA03 NEEDS_REVIEW  LEVERAGE 7.75 p183 flagged
+  HA04 NEEDS_REVIEW  LEVERAGE 5.0 p224 shown; ICR 2.5 p224 flagged
+  HA07 NEEDS_REVIEW  DEBT_TO_CAP 65 p42 shown; OTHER 15 p42 shown; ICR 1.5 p42 shown
+  HA08 NEEDS_REVIEW  LEVERAGE 0.75 p62 shown; MIN_NW 1000000000 p62 flagged; OTHER 115 p62 shown; OTHER 115 p62 shown; ICR 1.15 p62 shown; OTHER 1.0 p62 shown
+  HA09 NEEDS_REVIEW  MIN_NW 2701014000 p80 flagged; LEVERAGE 0.6 p81 shown; ICR 1.5 p81 shown
+  HA11 NEEDS_REVIEW  LEVERAGE 3.0 p17 shown; LIQUIDITY 500000 p17 flagged
+  HA12 NEEDS_REVIEW  LEVERAGE 4.0 p105 flagged
+  HA13 NEEDS_REVIEW  ICR 2.75 p180 shown; LEVERAGE 4.25 p180 shown
+  HA14 NEEDS_REVIEW  LEVERAGE 5.0 p138 flagged
+  HA15 NEEDS_REVIEW  DSCR 2.0 p38 flagged; DEBT_TO_NW 1.0 p38 flagged
+  HA16 NEEDS_REVIEW  LTV 73 p106 flagged; DSCR 1.15 p106 flagged
+  HA17 NEEDS_REVIEW  OTHER 300 p97 shown; DEBT_TO_CAP 45 p97 shown; MIN_NW None p97 shown; DSCR 1.4 p97 shown
+  HA18 NEEDS_REVIEW  
+  HA19 NEEDS_REVIEW  MIN_NW 687996400 p141 shown; OTHER 150 p141 shown; OTHER 2.0 p141 shown; ICR 2.0 p141 clean; OTHER 10 p141 shown; MIN_NW 384526500 p141 flagged
+  HA20 NEEDS_REVIEW  LEVERAGE 3.0 p74 clean; ICR 4.0 p74 flagged
+STATEMENTS {"docs": 0, "held": 0, "values": 0, "right_published": 0, "right_held": 0, "wrong_published": 0, "wrong_held": 0, "missing": 0, "no_figure_docs_published": 0, "not_read": 0, "ai_confirmed_right": 0, "ai_confirmed_wrong": 0, "ai_questioned_a_wrong_figure": 0, "ai_questioned_a_right_figure": 0, "ai_suggested_right": 0, "ai_suggested_wrong": 0}
+  published values: 0, wrong among them (silent): 0; held docs: 0/0; missing: 0/0

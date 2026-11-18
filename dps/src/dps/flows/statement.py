@@ -268,9 +268,12 @@ class StatementProcessingFlow(Flow[StatementState]):
             self.state.issues.append(f"LANGUAGE_NOT_READ: the statement is in {language_name(lang)}; the rules read "
                                      "English only. Switch on the AI reader (DPS_AI_MODEL) or enter the figures "
                                      "by hand")
-        if foreign and not self.state.page_text and self.state.rows:
-            # A spreadsheet has no page text: its lines, as read, are what the AI reader reads and is checked against.
-            self.state.page_text = mark_pages([(1, "\n".join(f"{r[0]} {r[1]}" for r in self.state.rows))])
+        if not self.state.page_text and self.state.rows:
+            # A spreadsheet has no page text: its heading (with the units, "Amounts in INR lakhs") and its lines, as
+            # read, are what the AI checker reads and is checked against, so spreadsheets are checked too.
+            lines = [self.state.header_text] if self.state.header_text else []
+            lines += [" ".join(str(c) for c in r if c not in (None, "")) for r in self.state.rows]
+            self.state.page_text = mark_pages([(1, "\n".join(line for line in lines if line.strip()))])
         if self._deps.second_reader is not None and self.state.page_text and (result.values or foreign):
             scale = to_money_unit(1e7, "unit", ccy, rate)  # the model answers in crore of the printed currency
             extra = {} if self.state.entity in ("", self._deps.entity) else {"entity": self.state.entity}
