@@ -209,3 +209,116 @@ def flag_unconfirmed(voted: list[Term]) -> list[Term]:
                 i.startswith("AI_READ_DIFFERENT") for i in t.issues):
             t.issues.append("AI_DID_NOT_CONFIRM")
     return voted
+
+
+# ---------- the covenants skill as this flow's reader (18 Nov 2026) ----------
+
+_UNITS = {"crore": "crore", "crores": "crore", "cr": "crore", "lakh": "lakh", "lakhs": "lakh", "lac": "lakh",
+          "million": "million", "mn": "million"}
+
+
+def _unit(raw) -> str | None:
+    text = str(raw or "").lower()
+    return next((u for k, u in _UNITS.items() if re.search(rf"\b{k}\b", text)), None)
+
+
+def skill_terms(pages: list[Page], proposals: list[dict]) -> tuple[list[Term], int]:
+    """The covenants skill's grounded proposals as this flow's Terms (method AI), with the same sense checks as the
+    older reader (a % coverage is times, a ratio above MAX_RATIO is not that ratio, a certificate form is not the
+    covenant). Non-financial covenants are kept: a library key the rules also hold confirms it; anything else is a
+    possible covenant for a person."""
+    from dps.skills.covenants.names import FINANCIAL, OTHER
+
+    texts = {p.no: p.text for p in pages}
+    out: list[Term] = []
+    dropped = 0
+    for p in proposals:
+        value = p.get("value") or {}
+        quote = normalize_quote(str(p.get("quote") or ""))
+        page = p.get("page") if isinstance(p.get("page"), int) else None
+        name = str(p.get("_written") or p.get("name") or "").strip()[:120]
+        metric = str(value.get("metric") or "").upper() or OTHER
+        if not quote or _FORM.search(quote):
+            dropped += 1
+            continue
+        threshold = value.get("threshold")
+        if metric in FINANCIAL and isinstance(threshold, (int, float)):
+            threshold = float(threshold)
+            unit = _unit(value.get("unit"))
+            if metric == "LOAN_TO_VALUE":
+                unit = "%"
+            elif metric in _COVERAGE and threshold > MAX_RATIO and "%" in quote:
+                threshold = round(threshold / 100, 6)
+            elif metric not in AMOUNT_METRICS and threshold > MAX_RATIO:
+                metric = None
+            elif metric in AMOUNT_METRICS and unit is None and threshold < 1000:
+                metric = None
+            if metric is not None and threshold_in(quote, float(value.get("threshold"))):
+                op = value.get("operator") if value.get("operator") in (">=", ">", "<=", "<") else (
+                    ">=" if metric in _COVERAGE else "<=")
+                if not any(a.metric == metric and a.operator == op and a.threshold == threshold for a in out):
+                    out.append(Term(metric, "FINANCIAL", op, threshold, unit, None, page, quote, None, 0.6,
+                                    method="AI", issues=["AI_ONLY: found by the AI reader, not by the rules"],
+                                    name=name or None))
+                continue
+        metric = metric or OTHER  # failed a sense check: a possible covenant for a person
+        if page is not None and quote_on_page(texts, page, quote) is None:
+            dropped += 1
+            continue
+        if metric not in FINANCIAL and metric != OTHER:  # a library non-financial covenant
+            out.append(Term(metric, "NON_FINANCIAL", None, None, None, None, page, quote, None, 0.6, method="AI",
+                            issues=["AI_ONLY: found by the AI reader, not by the rules"], name=name or None))
+            continue
+        out.append(Term("POSSIBLE_COVENANT", "CANDIDATE", None, None, None, None, page, quote, None, 0.6, method="AI",
+                        issues=["AI_ONLY: found by the AI reader, not by the rules"],
+                        name=name or "Covenant found by the AI reader"))
+    return out, dropped
+
+
+def vote_non_financial(terms: list[Term], ai: list[Term]) -> tuple[list[Term], list[Term]]:
+    """A non-financial covenant both read confirms the rules' term; the rest of the AI's stay as proposals."""
+    rest = []
+    for a in ai:
+        if a.category != "NON_FINANCIAL":
+            rest.append(a)
+            continue
+        same = next((t for t in terms if t.category == "NON_FINANCIAL" and t.metric == a.metric), None)
+        if same is not None:
+            same.confidence = max(same.confidence, 0.9)
+            same.method = "REGEX+AI"
+        else:
+            rest.append(a)
+    return terms, rest
+
+
+def read_with_skill(pages: list[Page], terms: list[Term], gateway, spring=None, correlation_id: str | None = None,
+                    notes: list | None = None) -> list[Term]:
+    """The rules' terms after a vote with the Document Agent running the covenants skill: the covenant page finder,
+    tools over the whole document, grounding with salvage and library names (skills/). The rules' terms unchanged
+    when the model is not available."""
+    from dps.skills import load
+    from dps.skills.common import MAX_PROMPT_CHARS, agent_proposals
+    from dps.skills.covenants import names
+    from dps.skills.covenants.pages import covenant_pages as skill_pages
+
+    pack = load("covenants")
+    page_dicts = [{"no": p.no, "text": p.text or "", "quality": p.quality} for p in pages]
+    if detect_language(" ".join(p.text or "" for p in pages)) != "en":
+        chosen = {p.no for p in covenant_pages(pages, terms)}  # no English headings: the numeric pages
+        selected = [d for d in page_dicts if d["no"] in chosen] or page_dicts[:MAX_PAGES]
+    else:
+        selected, _ = skill_pages(page_dicts, [{"source": {"page": t.page}} for t in terms],
+                                  pack.page_selection.get("max_pages", 25), MAX_PROMPT_CHARS)
+    try:
+        proposals = agent_proposals(pack, gateway, selected, spring=spring, correlation_id=correlation_id,
+                                    notes=notes, all_pages=page_dicts)
+    except Exception as ex:  # noqa: BLE001 - a model outage must not stop agreements from being read
+        log.warning("Covenants skill unavailable: %s", type(ex).__name__)
+        return terms
+    if proposals is None:
+        return terms
+    ai, dropped = skill_terms(pages, names.clean(proposals) or [])
+    if dropped:
+        log.info("Covenants skill: %d answers not usable, dropped", dropped)
+    terms, rest = vote_non_financial(terms, ai)
+    return flag_unconfirmed(vote(terms, rest))
