@@ -1,0 +1,33 @@
+# DPS event catalogue (contract-v1). Events are read from GET /dps/v1/events?after=<cursor>.
+# Ordering: by seq (outbox sequence). Delivery: at least once; de-duplicate on eventId.
+# Every event uses the envelope in schemas/event.json; payloads never hold document content.
+version: 1.0.0
+events:
+  - type: dps.job.accepted
+    when: A job was created (POST /jobs or a batch item).
+    payload: { jobType: string, priority: string, batchId: "string|null" }
+  - type: dps.analysis.completed
+    when: An ANALYZE job finished (phase 3).
+    payload: { type: string, confidence: number, mismatch: boolean, identifiers: array, legibility: number }
+  - type: dps.extraction.completed
+    when: An extraction finished with every field accepted, or after its review was submitted.
+    payload: { runId: string, resultUrl: string, fieldCount: integer }
+  - type: dps.extraction.needs_review
+    when: An extraction finished with at least one field for a person.
+    payload: { runId: string, resultUrl: string, fieldsToReview: integer, reasons: array }
+  - type: dps.extraction.shadow
+    when: A job run in SHADOW rollout (phase 7 pilot) finished; the result is stored for comparison, not shown.
+    payload: { resultUrl: string }
+  - type: dps.job.failed
+    when: A job ended with a deterministic failure (no retry).
+    payload: { errorCode: string, message: string, quarantine: boolean }
+    notes: quarantine is true when inspection found an unsafe or spoofed file; the DMS quarantines that version.
+  - type: dps.job.dead
+    when: A job used up its retries, crashed the worker twice, or hit INTERNAL_ERROR twice. Ops are alerted.
+    payload: { errorCode: string, message: string, attempts: integer }
+  - type: dps.job.cancelled
+    when: A job was cancelled before it finished.
+    payload: { cancelledBy: string }
+  - type: dps.batch.completed
+    when: Every item of a batch has ended.
+    payload: { batchId: string, counts: object, errorsUrl: "string|null" }

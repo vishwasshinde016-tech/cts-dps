@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cts.local/dps/schemas/job-status.json",
+  "title": "dps.job-status/1.0",
+  "description": "GET /dps/v1/jobs/{jobId}. A superset of the older Job view: the older fields stay for the Covenexa screens.",
+  "type": "object",
+  "required": ["id", "jobType", "status", "priority", "attempts", "createdAt"],
+  "properties": {
+    "id": { "type": "string" },
+    "jobType": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["QUEUED", "RUNNING", "RETRY_WAIT", "NEEDS_REVIEW", "DONE", "FAILED", "DEAD", "CANCELLED"]
+    },
+    "priority": { "type": "string", "enum": ["INTERACTIVE", "AMENDMENT", "ASSESSMENT", "BULK", "REPROCESS"] },
+    "tenantId": { "type": "string" },
+    "documentId": { "type": ["string", "null"] },
+    "documentVersionId": { "type": ["string", "null"] },
+    "batchId": { "type": ["string", "null"] },
+    "correlationId": { "type": ["string", "null"] },
+    "pool": { "type": "string" },
+    "attempts": { "type": "integer", "minimum": 0 },
+    "stage": { "type": ["string", "null"], "description": "The stage running now or last run." },
+    "cancelRequested": { "type": "boolean" },
+    "error": { "type": ["string", "null"], "description": "What went wrong, for support" },
+    "errorCode": { "type": ["string", "null"], "description": "A code from catalogues/errors.yaml" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "startedAt": { "type": ["string", "null"], "format": "date-time" },
+    "finishedAt": { "type": ["string", "null"], "format": "date-time" },
+    "dueAt": { "type": ["string", "null"], "format": "date-time" },
+    "resultUrl": { "type": ["string", "null"] }
+  }
+}

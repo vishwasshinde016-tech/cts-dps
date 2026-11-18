@@ -1,0 +1,8 @@
+{"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {
+  "type": "object", "required": ["name", "value", "page", "quote"],
+  "properties": {"name": {"enum": ["SANCTIONED_AMOUNT", "FACILITY_TYPE", "TENOR_MONTHS", "INTEREST_RATE", "SECURITY",
+                                   "CONDITIONS_PRECEDENT", "VALIDITY"]},
+    "page": {"type": ["integer", "null"]}, "quote": {"type": ["string", "null"]},
+    "value": {"type": "object", "required": ["key"], "properties": {"key": {"type": "string"},
+      "text": {"type": ["string", "null"]}, "amount": {"type": ["number", "null"]},
+      "currency": {"type": ["string", "null"]}, "date": {"type": ["string", "null"]}}}}}}}}

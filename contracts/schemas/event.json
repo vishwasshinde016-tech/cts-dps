@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cts.local/dps/schemas/event.json",
+  "title": "dps.event/1.0",
+  "description": "One event in GET /dps/v1/events. Delivery is at least once: consumers de-duplicate on eventId. Never holds document content.",
+  "type": "object",
+  "required": ["eventId", "seq", "type", "occurredAt", "tenantId", "schema", "payload"],
+  "properties": {
+    "eventId": { "type": "string" },
+    "seq": { "type": "integer", "minimum": 1, "description": "Feed position; the next cursor." },
+    "type": {
+      "type": "string",
+      "enum": ["dps.job.accepted", "dps.analysis.completed", "dps.extraction.completed", "dps.extraction.needs_review", "dps.extraction.shadow",
+               "dps.job.failed", "dps.job.dead", "dps.job.cancelled", "dps.batch.completed"]
+    },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "tenantId": { "type": "string" },
+    "correlationId": { "type": ["string", "null"] },
+    "jobId": { "type": ["string", "null"] },
+    "documentVersionId": { "type": ["string", "null"] },
+    "schema": { "type": "string", "const": "dps.event/1.0" },
+    "payload": { "type": "object" }
+  }
+}

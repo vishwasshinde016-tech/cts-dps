@@ -1,0 +1,18 @@
+{
+ "documentId": "FS-008",
+ "type": "FINANCIAL_STATEMENT",
+ "sourceFile": "FS-008.xlsx",
+ "sha256": "36200263e4a6cf8f4784d1e2354dde930a20cd76466f7e2d0e301a40df987da6",
+ "unit": "INR crore",
+ "status": "SYNTHETIC",
+ "labelledBy": "generator: make_synthetic.py (truth by construction)",
+ "reviewedBy": null,
+ "values": {
+  "REVENUE": 22.6,
+  "EBITDA": 2.9,
+  "INTEREST_PAID": 0.8,
+  "LT_DEBT": 9.4,
+  "NET_WORTH": 12.1,
+  "TOTAL_DEBT": 9.4
+ }
+}

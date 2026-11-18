@@ -1,0 +1,67 @@
+# CTS DPS alert rules (Phase 6), Prometheus rule format (Grafana Mimir / Prometheus). Metric names are the
+# OpenTelemetry instruments DPS emits (dots become underscores). Each alert's first action is in
+# docs/cts-dps/runbook.md under the same name. Emitted by the leader worker every minute: dps_queue_oldest_seconds,
+# dps_queue_depth_per_worker, dps_jobs_dead, dps_review_error_rate, dps_audit_seal_last_day_timestamp,
+# dps_review_backlog, dps_review_mapping_backlog, dps_review_oldest_wait_seconds. Per model call (Document Agent):
+# dps_ai_calls_total{status}, dps_ai_unavailable_total, dps_ai_tokens_total. From other sources:
+# dps_calibration_error (the weekly offline calibration job), dps_db_deadlocks_total (SQL Server exporter).
+groups:
+  - name: cts-dps
+    rules:
+      - alert: DpsInteractiveQueueSlow
+        expr: max by (pool) (dps_queue_oldest_seconds) > 300
+        for: 2m
+        labels: { severity: page }
+        annotations: { summary: "Oldest queued job in {{ $labels.pool }} waited over 5 minutes", runbook: "QueueSlow" }
+      - alert: DpsScaleOut
+        expr: max by (pool) (dps_queue_oldest_seconds) > 60 or max by (pool) (dps_queue_depth_per_worker) > 5
+        for: 2m
+        labels: { severity: info }
+        annotations: { summary: "Add a {{ $labels.pool }} replica (autoscaling rule)", runbook: "ScaleOut" }
+      - alert: DpsDeadJobs
+        expr: max(dps_jobs_dead) > 0
+        for: 1m
+        labels: { severity: ticket }
+        annotations: { summary: "A job is DEAD: open the DLQ screen", runbook: "DeadJob" }
+      - alert: DpsOverrideRateRising
+        expr: max by (job_type) (dps_review_error_rate) > 0.05
+        for: 1d
+        labels: { severity: ticket }
+        annotations: { summary: "Sampled error rate over 5% for {{ $labels.job_type }}", runbook: "OverrideRate" }
+      - alert: DpsCalibrationError
+        expr: max by (job_type) (dps_calibration_error) > 0.05
+        labels: { severity: ticket }
+        annotations: { summary: "Calibration error above 0.05 for {{ $labels.job_type }}", runbook: "Calibration" }
+      - alert: DpsDeadlocksRising
+        expr: sum(rate(dps_db_deadlocks_total[15m])) > 0.1
+        for: 15m
+        labels: { severity: ticket }
+        annotations: { summary: "Database deadlocks rising", runbook: "Deadlocks" }
+      - alert: DpsDerivedDiskFull
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/srv/dms/derived"} / node_filesystem_size_bytes{mountpoint="/srv/dms/derived"}) > 0.8
+        for: 30m
+        labels: { severity: ticket }
+        annotations: { summary: "derived/ disk over 80%", runbook: "DiskFull" }
+      - alert: DpsAuditSealLate
+        expr: time() - max(dps_audit_seal_last_day_timestamp) > 2 * 86400
+        labels: { severity: ticket }
+        annotations: { summary: "No audit seal for 2 days (leader down?)", runbook: "SealLate" }
+      - alert: DpsReviewBacklogHigh
+        expr: max(dps_review_backlog) > 200
+        for: 30m
+        labels: { severity: ticket }
+        annotations: { summary: "Over 200 jobs wait for a person (see dps_review_mapping_backlog for mapping review)", runbook: "ReviewBacklog" }
+      - alert: DpsReviewWaitLong
+        expr: max(dps_review_oldest_wait_seconds) > 86400
+        for: 15m
+        labels: { severity: ticket }
+        annotations: { summary: "A job has waited over 24 hours for review", runbook: "ReviewBacklog" }
+      - alert: DpsAiUnavailable
+        expr: sum(rate(dps_ai_unavailable_total[10m])) > 0 or (sum(rate(dps_ai_calls_total{status!="OK"}[10m])) / clamp_min(sum(rate(dps_ai_calls_total[10m])), 1)) > 0.2
+        for: 10m
+        labels: { severity: page }
+        annotations: { summary: "The Document Agent's model is failing: documents are read by rules only and sent to review", runbook: "AiUnavailable" }
+      - alert: DpsAiTokensHigh
+        expr: sum(increase(dps_ai_tokens_total[1d])) > 15000000
+        labels: { severity: ticket }
+        annotations: { summary: "Model tokens today over 15 million (check the budget and the cost)", runbook: "AiBudget" }

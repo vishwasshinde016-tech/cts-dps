@@ -1,0 +1,338 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cts.local/dps/schemas/page-model.json",
+  "title": "dps.page-model/1.0",
+  "description": "What the parsers saw, one per document version and pipeline version, stored write-once in derived/<tenant>/<version>/page-model/<pipeline>/page-model.json.gz (phase 2).",
+  "type": "object",
+  "required": [
+    "schema",
+    "sha256",
+    "format",
+    "pageCount",
+    "pages"
+  ],
+  "$defs": {
+    "bbox": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "table": {
+      "type": "object",
+      "required": [
+        "id",
+        "rows",
+        "cols",
+        "cells"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "bbox": {
+          "$ref": "#/$defs/bbox"
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cols": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "r",
+              "c",
+              "text"
+            ],
+            "properties": {
+              "r": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "c": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "rowSpan": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "colSpan": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "text": {
+                "type": "string"
+              },
+              "bbox": {
+                "$ref": "#/$defs/bbox"
+              }
+            }
+          }
+        }
+      }
+    },
+    "sheet": {
+      "type": "object",
+      "required": [
+        "name",
+        "hidden",
+        "cells"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "merged": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "A1:C1 ranges"
+          }
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "ref",
+              "value"
+            ],
+            "properties": {
+              "ref": {
+                "type": "string",
+                "description": "A1 reference"
+              },
+              "value": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              },
+              "formula": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "numberFormat": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "PARAGRAPH",
+            "HEADING",
+            "TABLE",
+            "CELL",
+            "IMAGE"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "bbox": {
+          "$ref": "#/$defs/bbox"
+        },
+        "ocrConfidence": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "dps.page-model/1.0"
+    },
+    "documentVersionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "PDF",
+        "XLSX",
+        "XLS",
+        "CSV",
+        "DOCX"
+      ]
+    },
+    "pageCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "language": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "no",
+          "method",
+          "quality",
+          "blocks"
+        ],
+        "properties": {
+          "no": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "width": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "NATIVE",
+              "OCR",
+              "LAYOUT",
+              "VISION"
+            ]
+          },
+          "quality": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/block"
+            }
+          },
+          "tables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/table"
+            }
+          },
+          "text": {
+            "type": "string",
+            "description": "The page's text in reading order, as the parser produced it"
+          },
+          "sourceMethod": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "TEXT",
+              "OCR",
+              "DOCLING",
+              "NONE",
+              "BLANK",
+              null
+            ]
+          },
+          "sheet": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "For spreadsheets: the sheet this page shows"
+          }
+        }
+      }
+    },
+    "sheets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sheet"
+      }
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "fromPage",
+          "toPage"
+        ],
+        "properties": {
+          "fromPage": {
+            "type": "integer"
+          },
+          "toPage": {
+            "type": "integer"
+          },
+          "type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "uncertain": {
+            "type": "boolean",
+            "description": "A weak split, left for the phase 3 agent skill to confirm"
+          }
+        }
+      }
+    },
+    "flags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "REPAIRED",
+          "OWNER_RESTRICTED",
+          "HIDDEN_SHEETS",
+          "TRACKED_CHANGES",
+          "FORMULA_TEXT",
+          "IMAGES",
+          "POOR_TEXT"
+        ]
+      },
+      "description": "What inspection and parsing noticed but did not refuse"
+    }
+  }
+}

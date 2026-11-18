@@ -1,0 +1,76 @@
+# DPS error catalogue (contract-v1). Every error DPS returns or records uses one of these codes.
+# class decides handling: REQUEST and SECURITY never retry; TRANSIENT retries with back-off; CONTENT and QUALITY
+# go to a person; DEGRADED continues without AI; INTERNAL retries once, then DEAD.
+# http: the status when the error is an API response; null when it is only recorded on a job or a field.
+# message: the user-facing sentence (English). Support sees the detail in the job and the logs.
+version: 1.0.0
+errors:
+  # --- request (returned at the API, no job created) ---
+  - { code: VALIDATION_FAILED, class: REQUEST, http: 400, retry: false, message: "The request is not valid. See details for the fields to fix." }
+  - { code: INVALID_INPUT, class: REQUEST, http: 400, retry: false, message: "The request breaks a rule. See details." }
+  - { code: IDEMPOTENCY_KEY_REQUIRED, class: REQUEST, http: 400, retry: false, message: "Send an Idempotency-Key header." }
+  - { code: IDEMPOTENCY_KEY_REUSED, class: REQUEST, http: 409, retry: false, message: "This Idempotency-Key was used for a different request." }
+  - { code: UNSUPPORTED_JOB_TYPE, class: REQUEST, http: 422, retry: false, message: "This job type is not available yet." }
+  - { code: UNSUPPORTED_FORMAT, class: REQUEST, http: 400, retry: false, message: "This file type cannot be processed." }
+  - { code: TOO_MANY_PAGES, class: REQUEST, http: 400, retry: false, message: "The file has too many pages. Split it and send the parts." }
+  - { code: TENANT_MISMATCH, class: REQUEST, http: 403, retry: false, message: "The request is for another tenant." }
+  - { code: FORBIDDEN, class: REQUEST, http: 403, retry: false, message: "You are not allowed to do this." }
+  - { code: UNAUTHORIZED, class: REQUEST, http: 401, retry: false, message: "Sign-in is missing or has expired." }
+  - { code: NOT_FOUND, class: REQUEST, http: 404, retry: false, message: "Not found." }
+  - { code: RESULT_NOT_READY, class: REQUEST, http: 404, retry: true, message: "The job has not finished yet." }
+  - { code: JOB_CANCELLED, class: REQUEST, http: 410, retry: false, message: "The job was cancelled." }
+  - { code: JOB_FINISHED, class: REQUEST, http: 409, retry: false, message: "The job has already finished." }
+  - { code: JOB_NOT_RETRYABLE, class: REQUEST, http: 409, retry: false, message: "Only a FAILED or DEAD job can be retried." }
+  - { code: REVISION_CHANGED, class: REQUEST, http: 409, retry: false, message: "Someone else saved a review of this result. Reload and review again." }
+  - { code: QUEUE_FULL, class: REQUEST, http: 429, retry: true, message: "Too many jobs are waiting. Try again later." }
+  - { code: BATCH_TOO_LARGE, class: REQUEST, http: 400, retry: false, message: "The batch has too many items." }
+  - { code: BUSY_RETRY, class: TRANSIENT, http: 503, retry: true, message: "The service is busy. Try again in a moment." }
+  # --- security (no parsing; the DMS is asked to quarantine) ---
+  - { code: TYPE_SPOOFED, class: SECURITY, http: null, retry: false, message: "The file is not what its name says. Upload the real file." }
+  - { code: UNSAFE_CONTENT, class: SECURITY, http: null, retry: false, message: "The file was refused for safety. Upload a clean copy." }
+  - { code: ENCRYPTED, class: SECURITY, http: null, retry: false, message: "The file is password-protected. Upload a copy without a password." }
+  - { code: MACRO_PRESENT, class: SECURITY, http: null, retry: false, message: "The file contains macros. Save it without macros and upload again." }
+  - { code: INTEGRITY_MISMATCH, class: SECURITY, http: 400, retry: false, message: "The stored file does not match its checksum. Support has been alerted." }
+  # --- content (no retry; a person decides) ---
+  - { code: NO_TEXT, class: CONTENT, http: null, retry: false, message: "No text could be read, even with OCR. Upload a clearer scan." }
+  - { code: UNREADABLE_PAGES, class: QUALITY, http: null, retry: false, message: "Some pages could not be read; please read them and add the values." }
+  - { code: REQUIRED_MISSING, class: QUALITY, http: null, retry: false, message: "Some details this document type usually shows were not found; please check." }
+  - { code: CORRUPT, class: CONTENT, http: null, retry: false, message: "The file is damaged. Export or scan it again." }
+  - { code: TOO_LARGE, class: CONTENT, http: null, retry: false, message: "The file is too large to read. Split it and upload the parts." }
+  - { code: TYPE_MISMATCH, class: CONTENT, http: null, retry: false, message: "The file does not look like the type chosen. Check the type." }
+  - { code: UNCERTAIN_TYPE, class: CONTENT, http: null, retry: false, message: "The document type is unclear. Please confirm it." }
+  - { code: NOTHING_FOUND, class: CONTENT, http: null, retry: false, message: "Nothing was found in the document. Please check it." }
+  - { code: CONTENT_FAILED, class: CONTENT, http: null, retry: false, message: "The document could not be processed; the job shows the reason." }
+  - { code: LANGUAGE_NOT_READ, class: CONTENT, http: null, retry: false, message: "The document's language cannot be read automatically. Enter the values by hand." }
+  # --- quality (field-level; job goes to review) ---
+  - { code: LOW_CONFIDENCE, class: QUALITY, http: null, retry: false, message: "Confidence is low; please check this value." }
+  - { code: MODELS_DISAGREE, class: QUALITY, http: null, retry: false, message: "The readers disagree; please choose the right value." }
+  - { code: TYPE_DISPUTED, class: CONTENT, http: null, retry: false, message: "The rules and the Document Agent read different document types. Please confirm the type." }
+  - { code: PERIOD_MISMATCH, class: QUALITY, http: null, retry: false, message: "The document is for a different period than the cycle expects." }
+  - { code: BASIS_MISMATCH, class: QUALITY, http: null, retry: false, message: "The figures are consolidated where standalone is expected, or the other way round." }
+  - { code: ENTITY_MISMATCH, class: QUALITY, http: null, retry: false, message: "The document is for a different legal entity than the cycle expects." }
+  - { code: CURRENCY_MISMATCH, class: QUALITY, http: null, retry: false, message: "The document is in a different currency than the cycle expects." }
+  - { code: UNITS_MISMATCH, class: QUALITY, http: null, retry: false, message: "The amounts are in different units than the cycle expects." }
+  - { code: AI_ONLY, class: QUALITY, http: null, retry: false, message: "Only the Document Agent found this value; please confirm it." }
+  - { code: READ_FROM_IMAGE, class: QUALITY, http: null, retry: false, message: "This value was read from a page image; please confirm it." }
+  - { code: NOT_GROUNDED, class: QUALITY, http: null, retry: false, message: "The value was not found on its page." }
+  - { code: TOTALS_DO_NOT_ADD, class: QUALITY, http: null, retry: false, message: "The totals do not add up; please check the figures." }
+  - { code: MAPPING_CONFLICT, class: QUALITY, http: null, retry: false, message: "The document names a different borrower or facility." }
+  - { code: ENTITY_DIFFERS, class: QUALITY, http: null, retry: false, message: "The covenant is tested on a different basis than the statements." }
+  # --- transient (retry with back-off, max 5 attempts) ---
+  - { code: MODEL_TIMEOUT, class: TRANSIENT, http: null, retry: true, message: "Still processing." }
+  - { code: MODEL_RATE_LIMITED, class: TRANSIENT, http: null, retry: true, message: "Still processing." }
+  - { code: STORAGE_UNAVAILABLE, class: TRANSIENT, http: null, retry: true, message: "Still processing." }
+  - { code: DB_DEADLOCK, class: TRANSIENT, http: null, retry: true, message: "Still processing." }
+  - { code: SPRING_UNAVAILABLE, class: TRANSIENT, http: null, retry: true, message: "Still processing." }
+  # --- degraded (continue without AI, every field to review) ---
+  - { code: AI_UNAVAILABLE, class: DEGRADED, http: null, retry: false, message: "Read without the AI checker; please review." }
+  - { code: AI_BUDGET_EXCEEDED, class: DEGRADED, http: null, retry: false, message: "Read without the AI checker; please review." }
+  - { code: AI_UNGROUNDED, class: DEGRADED, http: null, retry: false, message: "The AI answer quoted text that is not on the page and was dropped; please review." }
+  - { code: MODEL_OUTPUT_INVALID, class: DEGRADED, http: null, retry: false, message: "The AI answer was not usable; read by the rules only. Please review." }
+  # --- resource ---
+  - { code: PARSE_TIMEOUT, class: RESOURCE, http: null, retry: false, message: "The file is too large or complex. Split it and upload the parts." }
+  - { code: OUT_OF_MEMORY, class: RESOURCE, http: null, retry: false, message: "The file is too large or complex. Split it and upload the parts." }
+  - { code: PARSER_CRASH, class: RESOURCE, http: null, retry: false, message: "The file could not be read. Support has been informed." }
+  # --- internal ---
+  - { code: INTERNAL_ERROR, class: INTERNAL, http: 500, retry: true, message: "Processing failed; support has been informed." }

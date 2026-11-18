@@ -1,0 +1,10 @@
+name: commentary
+version: 1.0.0
+job_types: [DRAFT_COMMENTARY]
+routes: {extract: strong}
+page_selection: {max_pages: 0}
+limits: {max_model_turns: 2, token_budget: 30000}
+prompt: prompt.md
+schema: schema.json
+field_risk: {"*": LOW}
+thresholds: {MEDIUM: 0.95, LOW: 0.90}

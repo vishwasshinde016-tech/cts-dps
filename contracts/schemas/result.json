@@ -1,0 +1,1112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cts.local/dps/schemas/result.json",
+  "title": "dps.result/1.0",
+  "description": "GET /dps/v1/jobs/{jobId}/result: one run's result. Every field cites its source; unknown values are null with an issue, never invented. Fields marked 'phase 3+' are optional until those phases.",
+  "type": "object",
+  "required": [
+    "schema",
+    "runId",
+    "jobId",
+    "jobType",
+    "status",
+    "fields",
+    "document",
+    "pipeline"
+  ],
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": [
+        "page",
+        "quote"
+      ],
+      "properties": {
+        "page": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "quote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bbox": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "[x0, y0, x1, y1] in PDF points, origin top-left (phase 2+)"
+        },
+        "blockId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cellRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Sheet!A1 reference for spreadsheets"
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "required": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "id",
+        "group",
+        "name",
+        "value",
+        "source",
+        "method",
+        "confidence",
+        "issues",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string",
+          "enum": [
+            "FINANCIAL_COVENANT",
+            "NON_FINANCIAL_COVENANT",
+            "INFO_COVENANT",
+            "POSSIBLE_COVENANT",
+            "AGREEMENT_TERM",
+            "SCHEDULE_TERM",
+            "STATEMENT_LINE",
+            "CERTIFIED_FIGURE",
+            "IDENTIFIER"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "description": "Typed by group; see the if/then rules below and $defs/*Value."
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "test": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "frequency": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "basis": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "STANDALONE",
+                "CONSOLIDATED",
+                null
+              ]
+            },
+            "firstTestDate": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date"
+            }
+          }
+        },
+        "libraryMatch": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "covenantMasterId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "expression": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Condition in the bank app's formula DSL"
+            }
+          }
+        },
+        "method": {
+          "type": "string",
+          "examples": [
+            "RULES",
+            "AI",
+            "RULES+AI_CONFIRMED",
+            "MANUAL",
+            "AI_VISION"
+          ]
+        },
+        "confidence": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "null until the phase 5 scorer when the pipeline has no score"
+        },
+        "signals": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "phase 5: inputs to the calibrated score"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "AUTO_ACCEPTED",
+            "NEEDS_REVIEW",
+            "REJECTED",
+            "CONFIRMED",
+            "CORRECTED"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "group": {
+                "enum": [
+                  "FINANCIAL_COVENANT",
+                  "NON_FINANCIAL_COVENANT",
+                  "INFO_COVENANT",
+                  "POSSIBLE_COVENANT"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/covenantValue"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "group": {
+                "const": "STATEMENT_LINE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/statementLineValue"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "group": {
+                "const": "SCHEDULE_TERM"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/scheduleTermValue"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "group": {
+                "const": "CERTIFIED_FIGURE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/certifiedFigureValue"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "group": {
+                "const": "AGREEMENT_TERM"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/agreementTermValue"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "group": {
+                "const": "IDENTIFIER"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/identifierValue"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "covenantValue": {
+      "type": "object",
+      "required": [
+        "metric",
+        "operator",
+        "threshold",
+        "unit",
+        "expression"
+      ],
+      "properties": {
+        "metric": {
+          "type": "string",
+          "description": "Metric key as read (DSCR, ICR, DEBT_TO_EBITDA ...)"
+        },
+        "operator": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            ">=",
+            ">",
+            "<=",
+            "<",
+            "=",
+            null
+          ]
+        },
+        "threshold": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "examples": [
+            "RATIO",
+            "PERCENT",
+            "INR_CR",
+            "TIMES"
+          ]
+        },
+        "expression": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Condition in the bank app's formula DSL"
+        },
+        "schedule": {
+          "type": [
+            "array",
+            "object",
+            "null"
+          ],
+          "description": "Step-downs: the threshold by period (phase 4 adds [{from, to, threshold}]); null when flat"
+        },
+        "change": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "EXTRACT_AMENDMENT: what the amendment does to this covenant",
+          "properties": {
+            "type": {
+              "enum": [
+                "ADD",
+                "CHANGE",
+                "DELETE"
+              ]
+            },
+            "clause": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "effectiveDate": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "from": {
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "appliedCovenantId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The approved CTS covenant this change touches (G2)"
+            },
+            "explanation": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The Document Agent's one-line explanation of the change (text only; never a value)"
+            },
+            "explanationBy": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "AI",
+                null
+              ]
+            }
+          }
+        },
+        "cure": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Cure right: days and whether an equity cure is allowed"
+        },
+        "appliedCovenantId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "statementLineValue": {
+      "type": "object",
+      "required": [
+        "amount",
+        "unit",
+        "asOfDate"
+      ],
+      "properties": {
+        "amount": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "description": "As normalised, e.g. INR_CR"
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z]{3}$"
+        },
+        "scale": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "As printed: THOUSAND, LAKH, CRORE, MILLION (phase 4)"
+        },
+        "asOfDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "periodMonths": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "derived": {
+          "type": "boolean",
+          "description": "Computed from other lines, not printed"
+        }
+      }
+    },
+    "scheduleTermValue": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "TESTING_CALENDAR",
+            "REPORTING_DEADLINE",
+            "REPAYMENT",
+            "INTEREST_RESET",
+            "CURE_WINDOW"
+          ]
+        },
+        "rule": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The rule in words, as the clause says"
+        },
+        "frequency": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "MONTHLY",
+            "QUARTERLY",
+            "HALF_YEARLY",
+            "YEARLY",
+            null
+          ]
+        },
+        "daysAfterPeriodEnd": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "dates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "amount": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "certifiedFigureValue": {
+      "type": "object",
+      "required": [
+        "covenant",
+        "figure"
+      ],
+      "properties": {
+        "covenant": {
+          "type": "string"
+        },
+        "figure": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "declaredCompliant": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "signatory": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "designation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signedOn": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "udin": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9A-Z]{18}$"
+        }
+      }
+    },
+    "agreementTermValue": {
+      "type": "object",
+      "required": [
+        "key"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "examples": [
+            "SANCTIONED_AMOUNT",
+            "TENOR_MONTHS",
+            "INTEREST_RATE",
+            "FACILITY_TYPE",
+            "EFFECTIVE_DATE"
+          ]
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "amount": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        }
+      }
+    },
+    "identifierValue": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/identifierKind"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "identifierKind": {
+      "type": "string",
+      "enum": [
+        "FACILITY_ID",
+        "LOAN_ACCOUNT",
+        "CIN",
+        "PAN",
+        "GSTIN",
+        "LEI",
+        "UDIN",
+        "BORROWER_NAME",
+        "PERIOD_END",
+        "CURRENCY",
+        "UNIT",
+        "SIGNATURE",
+        "ISSUER"
+      ]
+    },
+    "identifier": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value",
+        "source",
+        "match"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/identifierKind"
+        },
+        "value": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "match": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "EXACT",
+                "STRONG",
+                "FUZZY",
+                "CONFLICT",
+                "NONE"
+              ]
+            },
+            "candidateIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "role": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "LENDER",
+            "BANK",
+            "AUDITOR",
+            null
+          ],
+          "description": "For ISSUER: who issued the document (G3)"
+        }
+      }
+    }
+  },
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "dps.result/1.0"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "jobId": {
+      "type": "string"
+    },
+    "jobType": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DONE",
+        "NEEDS_REVIEW",
+        "FAILED"
+      ]
+    },
+    "documentId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "documentVersionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sha256": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pipeline": {
+      "type": "object",
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "skillPack": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "models": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "classification": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "phase 3+",
+      "required": [
+        "type",
+        "confidence"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "SANCTION_LETTER",
+            "LOAN_AGREEMENT",
+            "AMENDMENT",
+            "FINANCIAL_STATEMENT",
+            "COMPLIANCE_CERTIFICATE",
+            "SECURITY_DOCUMENT",
+            "OTHER_EVIDENCE",
+            "UNKNOWN"
+          ]
+        },
+        "expected": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mismatch": {
+          "type": "boolean"
+        },
+        "basis": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "STANDALONE",
+            "CONSOLIDATED",
+            null
+          ]
+        },
+        "periodType": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "ANNUAL",
+            "HALF_YEARLY",
+            "QUARTERLY",
+            "MONTHLY",
+            null
+          ]
+        },
+        "method": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "RULES",
+            "RULES+AI_CONFIRMED",
+            "MODEL",
+            "VISION",
+            null
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source"
+          }
+        },
+        "evidenceKind": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "STOCK_STATEMENT",
+            "INSURANCE",
+            "VALUATION",
+            "RATING",
+            null
+          ]
+        },
+        "aiSecondOpinion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The Document Agent's different type (the rules decided; the job goes to a person)"
+        }
+      }
+    },
+    "identifiers": {
+      "type": "array",
+      "description": "phase 3+",
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/field"
+      }
+    },
+    "document": {
+      "type": "object",
+      "required": [
+        "route"
+      ],
+      "properties": {
+        "confidence": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "route": {
+          "type": "string",
+          "enum": [
+            "AUTO_ACCEPTED",
+            "NEEDS_REVIEW",
+            "MAPPING_REVIEW",
+            "REJECTED",
+            "FAILED"
+          ],
+          "description": "MAPPING_REVIEW: a mapping problem (wrong entity, wrong type, identifiers of another borrower); the job status is still NEEDS_REVIEW"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    },
+    "timingMs": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "usage": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "legibility": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "ANALYZE: mean page quality (phase 3)"
+    },
+    "keyPages": {
+      "type": "array",
+      "description": "ANALYZE and ONBOARD: the pages that matter, found by rules (spec: key pages)",
+      "items": {
+        "type": "object",
+        "required": [
+          "role",
+          "page"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "PARTIES",
+              "DEFINITIONS",
+              "FINANCIAL_COVENANTS",
+              "COVENANT_CLAUSE",
+              "SCHEDULE",
+              "AMENDMENT_CLAUSE",
+              "BALANCE_SHEET",
+              "PROFIT_LOSS",
+              "AUDITOR_REPORT",
+              "CERTIFICATE_BODY",
+              "SIGNATURE"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "quote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "segments": {
+      "type": "array",
+      "description": "ANALYZE: page ranges of a bundled PDF (phase 2 rules)",
+      "items": {
+        "type": "object"
+      }
+    },
+    "flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Page-model flags (REPAIRED, TRACKED_CHANGES ...)"
+    },
+    "commentary": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "DRAFT_COMMENTARY: draft paragraphs written from the outcome manifest only (phase 4)",
+      "properties": {
+        "paragraphs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "method": {
+          "type": "string"
+        },
+        "draft": {
+          "type": "boolean"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          }
+        }
+      }
+    },
+    "amendedSet": {
+      "type": "array",
+      "description": "EXTRACT_AMENDMENT: the covenants as amended (base version with the changes applied)",
+      "items": {
+        "$ref": "#/$defs/field"
+      }
+    },
+    "effectiveDate": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date",
+      "description": "EXTRACT_AMENDMENT: when the changes take effect"
+    },
+    "rollout": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "SHADOW",
+        "ASSISTED",
+        "NORMAL",
+        null
+      ],
+      "description": "Phase 7 pilot mode the job ran under"
+    }
+  }
+}

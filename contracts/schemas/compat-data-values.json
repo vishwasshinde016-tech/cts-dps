@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cts.local/dps/schemas/compat-data-values.json",
+  "title": "compat.data-values/1.0",
+  "description": "POST /api/data/values (phase 4): the bank app's data-source contract, unchanged (DataApiClient, DataSeriesResponse/DataPoint records). DPS answers from approved statement figures only.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["cpId", "to", "keys"],
+      "properties": {
+        "cpId": { "type": "string", "description": "The lookup key: CP id, or obligor id for an OBLIGOR_ID table" },
+        "from": { "type": ["string", "null"], "format": "date", "description": "Omitted or null: only the latest point <= to" },
+        "to": { "type": "string", "format": "date" },
+        "keys": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["cpId", "points", "missingKeys"],
+      "properties": {
+        "cpId": { "type": "string" },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["asOfDate", "values"],
+            "properties": {
+              "asOfDate": { "type": "string", "format": "date" },
+              "values": { "type": "object", "additionalProperties": { "type": ["number", "string", "boolean", "null"] } }
+            }
+          }
+        },
+        "missingKeys": { "type": "array", "items": { "type": "string" } },
+        "sourceChangedAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    }
+  }
+}

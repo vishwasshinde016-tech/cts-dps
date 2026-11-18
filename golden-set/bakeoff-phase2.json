@@ -1,0 +1,1079 @@
+{
+  "summary": {
+    "documents": 44,
+    "inspectionFailures": [],
+    "parity": 44,
+    "parityOf": 44,
+    "medianPageModelSecondsPerPage": 0.08675,
+    "boxCoverage": 0.981,
+    "medianSecondsPerPage": {
+      "pypdf": 0.02055,
+      "pdfplumber": 0.07395,
+      "pypdfium2": 0.00345
+    }
+  },
+  "documents": [
+    {
+      "file": "AGR-001.pdf",
+      "pages": 6,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.4819,
+      "blocksWithBox": 194,
+      "blocks": 194,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.1253,
+          "chars": 9768
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.2666,
+          "chars": 8772
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0121,
+          "chars": 9064
+        }
+      }
+    },
+    {
+      "file": "AGR-002.pdf",
+      "pages": 6,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.4599,
+      "blocksWithBox": 193,
+      "blocks": 193,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0684,
+          "chars": 9718
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1556,
+          "chars": 8736
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0037,
+          "chars": 9026
+        }
+      }
+    },
+    {
+      "file": "AGR-003.pdf",
+      "pages": 6,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.2424,
+      "blocksWithBox": 177,
+      "blocks": 194,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0622,
+          "chars": 9402
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1836,
+          "chars": 8741
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0068,
+          "chars": 9033
+        }
+      }
+    },
+    {
+      "file": "AGR-004.pdf",
+      "pages": 6,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.2398,
+      "blocksWithBox": 193,
+      "blocks": 193,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0719,
+          "chars": 9722
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1987,
+          "chars": 8736
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0079,
+          "chars": 9026
+        }
+      }
+    },
+    {
+      "file": "AGR-005.pdf",
+      "pages": 6,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.4354,
+      "blocksWithBox": 193,
+      "blocks": 193,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.1352,
+          "chars": 9720
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.3341,
+          "chars": 8734
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0061,
+          "chars": 9024
+        }
+      }
+    },
+    {
+      "file": "AGR-006.pdf",
+      "pages": 2,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.2187,
+      "blocksWithBox": 39,
+      "blocks": 39,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0571,
+          "chars": 1689
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1869,
+          "chars": 1489
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0075,
+          "chars": 1546
+        }
+      }
+    },
+    {
+      "file": "AGR-007.pdf",
+      "pages": 85,
+      "flags": [],
+      "segments": 4,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.4911,
+      "blocksWithBox": 2458,
+      "blocks": 2487,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.2249,
+          "chars": 151252
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.4326,
+          "chars": 148756
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0265,
+          "chars": 152090
+        }
+      }
+    },
+    {
+      "file": "AGR-008.pdf",
+      "pages": 85,
+      "flags": [],
+      "segments": 3,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.4854,
+      "blocksWithBox": 2451,
+      "blocks": 2480,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0769,
+          "chars": 150867
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1962,
+          "chars": 148378
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0088,
+          "chars": 151705
+        }
+      }
+    },
+    {
+      "file": "AGR-009.pdf",
+      "pages": 8,
+      "flags": [],
+      "segments": 2,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.3344,
+      "blocksWithBox": 185,
+      "blocks": 185,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0745,
+          "chars": 10151
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1859,
+          "chars": 9789
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0077,
+          "chars": 10127
+        }
+      }
+    },
+    {
+      "file": "AGR-010.pdf",
+      "pages": 8,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.1974,
+      "blocksWithBox": 200,
+      "blocks": 200,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0474,
+          "chars": 10997
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1137,
+          "chars": 10611
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0035,
+          "chars": 10979
+        }
+      }
+    },
+    {
+      "file": "AGR-011.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0797,
+      "blocksWithBox": 28,
+      "blocks": 28,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0089,
+          "chars": 1783
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0755,
+          "chars": 1782
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0249,
+          "chars": 1809
+        }
+      }
+    },
+    {
+      "file": "AGR-012.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.053,
+      "blocksWithBox": 22,
+      "blocks": 22,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0051,
+          "chars": 1391
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0724,
+          "chars": 1390
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0034,
+          "chars": 1411
+        }
+      }
+    },
+    {
+      "file": "AGR-013.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0628,
+      "blocksWithBox": 23,
+      "blocks": 23,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0051,
+          "chars": 1474
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0593,
+          "chars": 1473
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0032,
+          "chars": 1495
+        }
+      }
+    },
+    {
+      "file": "AGR-014.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.1253,
+      "blocksWithBox": 23,
+      "blocks": 23,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0041,
+          "chars": 1408
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0468,
+          "chars": 1407
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0024,
+          "chars": 1429
+        }
+      }
+    },
+    {
+      "file": "AGR-015.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0498,
+      "blocksWithBox": 20,
+      "blocks": 20,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.006,
+          "chars": 1286
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0425,
+          "chars": 1285
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0022,
+          "chars": 1304
+        }
+      }
+    },
+    {
+      "file": "AGR-016.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0696,
+      "blocksWithBox": 27,
+      "blocks": 27,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.005,
+          "chars": 1673
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0976,
+          "chars": 1672
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0038,
+          "chars": 1698
+        }
+      }
+    },
+    {
+      "file": "AGR-017.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0629,
+      "blocksWithBox": 20,
+      "blocks": 20,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0043,
+          "chars": 1257
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0886,
+          "chars": 1256
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0023,
+          "chars": 1275
+        }
+      }
+    },
+    {
+      "file": "AGR-018.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0561,
+      "blocksWithBox": 23,
+      "blocks": 23,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0058,
+          "chars": 1416
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.05,
+          "chars": 1415
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0024,
+          "chars": 1437
+        }
+      }
+    },
+    {
+      "file": "AGR-019.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0755,
+      "blocksWithBox": 25,
+      "blocks": 25,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0046,
+          "chars": 1559
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0537,
+          "chars": 1558
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0026,
+          "chars": 1582
+        }
+      }
+    },
+    {
+      "file": "AGR-020.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0612,
+      "blocksWithBox": 23,
+      "blocks": 23,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0042,
+          "chars": 1435
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.048,
+          "chars": 1434
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0023,
+          "chars": 1456
+        }
+      }
+    },
+    {
+      "file": "FS-011.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.7548,
+      "blocksWithBox": 13,
+      "blocks": 13,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0945,
+          "chars": 307
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.6329,
+          "chars": 307
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0118,
+          "chars": 371
+        }
+      }
+    },
+    {
+      "file": "FS-012.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0864,
+      "blocksWithBox": 22,
+      "blocks": 22,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0165,
+          "chars": 717
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0561,
+          "chars": 717
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0028,
+          "chars": 738
+        }
+      }
+    },
+    {
+      "file": "FS-013.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0484,
+      "blocksWithBox": 15,
+      "blocks": 15,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0119,
+          "chars": 657
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0355,
+          "chars": 657
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0028,
+          "chars": 671
+        }
+      }
+    },
+    {
+      "file": "FS-014.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0389,
+      "blocksWithBox": 8,
+      "blocks": 18,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0075,
+          "chars": 424
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0264,
+          "chars": 424
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0016,
+          "chars": 441
+        }
+      }
+    },
+    {
+      "file": "FS-015.pdf",
+      "pages": 3,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0389,
+      "blocksWithBox": 44,
+      "blocks": 44,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0317,
+          "chars": 1655
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0355,
+          "chars": 1655
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0016,
+          "chars": 1696
+        }
+      }
+    },
+    {
+      "file": "FS-016.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0682,
+      "blocksWithBox": 25,
+      "blocks": 25,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0149,
+          "chars": 844
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0647,
+          "chars": 844
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0027,
+          "chars": 868
+        }
+      }
+    },
+    {
+      "file": "FS-017.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0773,
+      "blocksWithBox": 14,
+      "blocks": 32,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.019,
+          "chars": 1036
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0494,
+          "chars": 1036
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0024,
+          "chars": 1067
+        }
+      }
+    },
+    {
+      "file": "FS-018.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.063,
+      "blocksWithBox": 17,
+      "blocks": 27,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.015,
+          "chars": 817
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0428,
+          "chars": 817
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0022,
+          "chars": 843
+        }
+      }
+    },
+    {
+      "file": "FS-019.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0394,
+      "blocksWithBox": 16,
+      "blocks": 16,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0111,
+          "chars": 505
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0273,
+          "chars": 505
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.002,
+          "chars": 520
+        }
+      }
+    },
+    {
+      "file": "FS-020.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.4735,
+      "blocksWithBox": 9,
+      "blocks": 9,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.099,
+          "chars": 249
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.4783,
+          "chars": 249
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0085,
+          "chars": 290
+        }
+      }
+    },
+    {
+      "file": "FS-021.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0576,
+      "blocksWithBox": 15,
+      "blocks": 15,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0199,
+          "chars": 441
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0486,
+          "chars": 441
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0024,
+          "chars": 486
+        }
+      }
+    },
+    {
+      "file": "FS-022.pdf",
+      "pages": 2,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0871,
+      "blocksWithBox": 32,
+      "blocks": 32,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0205,
+          "chars": 1062
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0532,
+          "chars": 1062
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0033,
+          "chars": 1092
+        }
+      }
+    },
+    {
+      "file": "FS-023.pdf",
+      "pages": 1,
+      "flags": [
+        "POOR_TEXT"
+      ],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0059,
+      "blocksWithBox": 0,
+      "blocks": 0,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0019,
+          "chars": 0
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0025,
+          "chars": 0
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0004,
+          "chars": 0
+        }
+      }
+    },
+    {
+      "file": "FS-024.pdf",
+      "pages": 1,
+      "flags": [
+        "POOR_TEXT"
+      ],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0058,
+      "blocksWithBox": 0,
+      "blocks": 0,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0016,
+          "chars": 0
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0026,
+          "chars": 0
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0005,
+          "chars": 0
+        }
+      }
+    },
+    {
+      "file": "FS-025.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.1371,
+      "blocksWithBox": 20,
+      "blocks": 28,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0401,
+          "chars": 858
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1005,
+          "chars": 858
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0045,
+          "chars": 931
+        }
+      }
+    },
+    {
+      "file": "FS-026.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0728,
+      "blocksWithBox": 10,
+      "blocks": 10,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0206,
+          "chars": 389
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0555,
+          "chars": 389
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0033,
+          "chars": 398
+        }
+      }
+    },
+    {
+      "file": "FS-027.pdf",
+      "pages": 3,
+      "flags": [],
+      "segments": 2,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.1184,
+      "blocksWithBox": 48,
+      "blocks": 48,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0268,
+          "chars": 2103
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.084,
+          "chars": 2103
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0036,
+          "chars": 2148
+        }
+      }
+    },
+    {
+      "file": "FS-028.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.2279,
+      "blocksWithBox": 23,
+      "blocks": 23,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.056,
+          "chars": 732
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1493,
+          "chars": 732
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0074,
+          "chars": 754
+        }
+      }
+    },
+    {
+      "file": "FS-029.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.134,
+      "blocksWithBox": 15,
+      "blocks": 15,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0311,
+          "chars": 557
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1012,
+          "chars": 557
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0048,
+          "chars": 571
+        }
+      }
+    },
+    {
+      "file": "FS-030.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.1431,
+      "blocksWithBox": 21,
+      "blocks": 21,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0333,
+          "chars": 694
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.1668,
+          "chars": 694
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0052,
+          "chars": 714
+        }
+      }
+    },
+    {
+      "file": "FS-031.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.1147,
+      "blocksWithBox": 14,
+      "blocks": 14,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0255,
+          "chars": 513
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0666,
+          "chars": 513
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0052,
+          "chars": 560
+        }
+      }
+    },
+    {
+      "file": "FS-032.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.1124,
+      "blocksWithBox": 14,
+      "blocks": 24,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0301,
+          "chars": 881
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0868,
+          "chars": 881
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0043,
+          "chars": 926
+        }
+      }
+    },
+    {
+      "file": "FS-033.pdf",
+      "pages": 1,
+      "flags": [],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.3356,
+      "blocksWithBox": 35,
+      "blocks": 37,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.1458,
+          "chars": 1084
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.2591,
+          "chars": 1084
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0115,
+          "chars": 2666
+        }
+      }
+    },
+    {
+      "file": "FS-034.pdf",
+      "pages": 1,
+      "flags": [
+        "POOR_TEXT"
+      ],
+      "segments": 1,
+      "parity": true,
+      "pageModelSecondsPerPage": 0.0072,
+      "blocksWithBox": 0,
+      "blocks": 0,
+      "libraries": {
+        "pypdf": {
+          "secondsPerPage": 0.0026,
+          "chars": 0
+        },
+        "pdfplumber": {
+          "secondsPerPage": 0.0087,
+          "chars": 0
+        },
+        "pypdfium2": {
+          "secondsPerPage": 0.0005,
+          "chars": 0
+        }
+      }
+    }
+  ]
+}

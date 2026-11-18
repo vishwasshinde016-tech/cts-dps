@@ -1,0 +1,13 @@
+name: schedule_terms
+version: 1.0.0
+# Runs inside EXTRACT_AGREEMENT and EXTRACT_SANCTION results (no job type of its own).
+job_types: []
+routes: {extract: strong}
+tools: [page_text, search_text, find_definition]
+page_selection: {max_pages: 20}
+limits: {max_tool_calls: 4, max_model_turns: 2, max_seconds: 120, token_budget: 60000}
+prompt: prompt.md
+schema: schema.json
+field_risk: {REPORTING_DEADLINE: HIGH, TESTING_CALENDAR: HIGH, REPAYMENT: MEDIUM, INTEREST_RESET: MEDIUM,
+             CURE_WINDOW: MEDIUM, "*": MEDIUM}
+thresholds: {MEDIUM: 0.95, LOW: 0.90}

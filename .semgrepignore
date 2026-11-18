@@ -1,0 +1,3 @@
+# semgrep scans the service code, deployment files and CI workflows; test data and test code are left out.
+golden-set/
+**/tests/

@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cts.local/dps/schemas/job-request.json",
+  "title": "dps.job-request/1.0",
+  "description": "What the Spring app (or its DMS) sends to POST /dps/v1/jobs. The Idempotency-Key header is required.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobType",
+    "document",
+    "context"
+  ],
+  "properties": {
+    "jobType": {
+      "type": "string",
+      "enum": [
+        "ANALYZE",
+        "ONBOARD",
+        "EXTRACT_AGREEMENT",
+        "EXTRACT_AMENDMENT",
+        "EXTRACT_SANCTION",
+        "EXTRACT_STATEMENT",
+        "EXTRACT_CERTIFICATE",
+        "DRAFT_COMMENTARY",
+        "REPROCESS"
+      ],
+      "description": "ONBOARD (Miro onboarding flow): one job classifies the document and extracts covenants and schedule terms with the right pack"
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "fileName",
+        "mediaType",
+        "sizeBytes"
+      ],
+      "properties": {
+        "versionId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64,
+          "description": "DMS document_version_id. Null only for ANALYZE (a staged file has no version yet)."
+        },
+        "objectKey": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500,
+          "description": "Key of an accepted version in the DMS store."
+        },
+        "stagingRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500,
+          "description": "Key of a staged file, for ANALYZE."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "fileName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Label only; never trusted."
+        },
+        "mediaType": {
+          "type": "string",
+          "enum": [
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+            "text/csv",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/json"
+          ],
+          "description": "application/json only for DRAFT_COMMENTARY (the cycle's outcome manifest)"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestedBy"
+      ],
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "maxLength": 64,
+          "default": "default"
+        },
+        "cpIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "maxItems": 50
+        },
+        "obligorId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        },
+        "borrowerId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        },
+        "facilityIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "maxItems": 50
+        },
+        "expectedType": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "SANCTION_LETTER",
+            "LOAN_AGREEMENT",
+            "AMENDMENT",
+            "FINANCIAL_STATEMENT",
+            "COMPLIANCE_CERTIFICATE",
+            "SECURITY_DOCUMENT",
+            "OTHER_EVIDENCE",
+            null
+          ]
+        },
+        "asOfDate": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date",
+          "description": "Period end, required for statements."
+        },
+        "basis": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "STANDALONE",
+            "CONSOLIDATED",
+            null
+          ]
+        },
+        "legalEntity": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200,
+          "description": "Flow 3: the legal entity the cycle is for (name or CIN)"
+        },
+        "evidenceType": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 40,
+          "description": "Flow 3: the evidence type the cycle expects (e.g. FINANCIAL_STATEMENT)"
+        },
+        "expectedCurrency": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z]{3}$"
+        },
+        "expectedUnits": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "UNITS",
+            "THOUSAND",
+            "LAKH",
+            "CRORE",
+            "MILLION",
+            "BILLION",
+            null
+          ]
+        },
+        "amendsVersionId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        },
+        "cycleId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        },
+        "reprocessReason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500
+        },
+        "requestedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "baseCovenants": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "maxItems": 500,
+          "description": "EXTRACT_AMENDMENT (G2): the approved covenants in the CTS DB the amendment is compared with; each change names the appliedCovenantId it touches",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "appliedCovenantId",
+              "name"
+            ],
+            "properties": {
+              "appliedCovenantId": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 255
+              },
+              "metric": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "operator": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  ">=",
+                  ">",
+                  "<=",
+                  "<",
+                  "=",
+                  null
+                ]
+              },
+              "threshold": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "unit": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "expression": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 2000
+              },
+              "clause": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "FINANCIAL",
+                  "NON_FINANCIAL"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "INTERACTIVE",
+        "AMENDMENT",
+        "ASSESSMENT",
+        "BULK",
+        "REPROCESS"
+      ],
+      "default": "INTERACTIVE"
+    }
+  }
+}

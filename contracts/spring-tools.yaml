@@ -1,0 +1,203 @@
+openapi: 3.1.0
+info:
+  title: Spring tools for the DPS (Java business rules called by the DPS agent)
+  version: 1.0.0-draft
+  description: |
+    Decision (17 Nov 2026, scaling review): business rules stay in Java in the bank's Spring app, where they already
+    live, and the DPS agent calls them as **batched tool calls**. Parsing, OCR and the AI agent stay in Python.
+
+    Rules for every tool:
+    - **Batched:** one call per document (up to 200 items), never one call per field.
+    - **Bounded:** DPS waits at most 5 s per call, retries twice on timeout / 5xx with back-off, and opens a circuit
+      breaker after 5 failures in 60 s (30 s cool-down).
+    - **Degrades, never fails the job:** when a tool is unavailable, the affected fields go to review with the code
+      `SPRING_UNAVAILABLE` (catalogues/errors.yaml) and the job continues.
+    - **One source of truth:** the rule is implemented only here, in Java; DPS never copies it.
+    - **Read-only and tenant-scoped:** no tool changes data; the acting user and scope travel in headers.
+
+    These are thin wrappers the Spring team adds over existing services (FormulaEngine, covenant master library,
+    credit-proposal / master data). Until they exist, DPS calls the existing single-item
+    `POST /api/v1/formulas/validate` with at most 4 calls in parallel.
+servers:
+  - url: http://localhost:9310
+    description: bank app (Spring) local dev
+security:
+  - service: []
+paths:
+  /api/v1/dps-tools/formulas/validate:
+    post:
+      operationId: validateFormulas
+      summary: Validate many conditions in the bank app's formula DSL at once
+      parameters: [ { $ref: "#/components/parameters/CorrelationId" } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [id, expression]
+                    properties:
+                      id: { type: string, description: "DPS field id, echoed back" }
+                      expression: { type: string, maxLength: 2000 }
+                      requireBoolean: { type: boolean, default: true }
+      responses:
+        "200":
+          description: One answer per item, same order and ids
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, valid, errors]
+                      properties:
+                        id: { type: string }
+                        valid: { type: boolean }
+                        errors:
+                          type: array
+                          items:
+                            type: object
+                            required: [code, message]
+                            properties:
+                              code: { type: string }
+                              message: { type: string }
+                              startOffset: { type: integer }
+                              endOffset: { type: integer }
+
+  /api/v1/dps-tools/lookups:
+    post:
+      operationId: lookupIdentifiers
+      summary: Match identifiers found in a document against the bank's master data
+      parameters: [ { $ref: "#/components/parameters/CorrelationId" } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                context:
+                  type: object
+                  description: The screen context of the upload, to flag CONFLICT
+                  properties:
+                    cpIds: { type: array, items: { type: string } }
+                    obligorId: { type: [string, "null"] }
+                    facilityIds: { type: array, items: { type: string } }
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [id, kind, value]
+                    properties:
+                      id: { type: string }
+                      kind: { type: string, enum: [FACILITY_ID, LOAN_ACCOUNT, CIN, PAN, GSTIN, LEI, BORROWER_NAME] }
+                      value: { type: string, maxLength: 300 }
+      responses:
+        "200":
+          description: One match per item
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, status, candidates]
+                      properties:
+                        id: { type: string }
+                        status: { type: string, enum: [EXACT, STRONG, FUZZY, CONFLICT, NONE] }
+                        candidates:
+                          type: array
+                          items:
+                            type: object
+                            required: [entityType, entityId]
+                            properties:
+                              entityType: { type: string, enum: [CP, FACILITY, OBLIGOR, BORROWER] }
+                              entityId: { type: string }
+                              name: { type: [string, "null"] }
+                              score: { type: [number, "null"], minimum: 0, maximum: 1 }
+
+  /api/v1/dps-tools/covenant-library:
+    get:
+      operationId: covenantLibrary
+      summary: Active covenant master entries; DPS caches them and asks again with If-None-Match
+      parameters:
+        - { name: If-None-Match, in: header, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: The library
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, items]
+                properties:
+                  version: { type: string }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, active]
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        aliases: { type: array, items: { type: string } }
+                        expression: { type: [string, "null"] }
+                        metricKeys: { type: array, items: { type: string } }
+                        assessmentType: { type: [string, "null"], enum: [AUTO, MANUAL, null] }
+                        active: { type: boolean }
+        "304": { description: Not changed since the given ETag }
+
+  /api/v1/dps-tools/events:
+    post:
+      operationId: receiveDpsEvents
+      summary: "Optional (G6, Miro: the flow calls the API to update the covenants): DPS pushes its events in order"
+      description: |
+        Used only when DPS_EVENTS_PUSH_PATH is set. Delivery is at least once: DPS resends a batch until Spring answers
+        2xx, so Spring must de-duplicate by eventId. Same event format as GET /dps/v1/events (schemas/event.json).
+        On dps.extraction.completed / needs_review Spring fetches the result URL and stages the covenants for review.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                events: { type: array, maxItems: 500, items: { $ref: "schemas/event.json" } }
+      responses:
+        "200": { description: Accepted (duplicates ignored) }
+        "202": { description: Accepted (duplicates ignored) }
+
+components:
+  securitySchemes:
+    service:
+      type: http
+      scheme: bearer
+      description: DPS's service credential (bank identity provider or shared service token on the VM)
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }

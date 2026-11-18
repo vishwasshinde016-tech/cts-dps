@@ -1,0 +1,11 @@
+name: certificate
+version: 1.0.0
+job_types: [EXTRACT_CERTIFICATE]
+routes: {extract: strong, verify: challenger, images: vision}
+tools: [page_text, search_text, lookup_identifier]
+page_selection: {max_pages: 10}
+limits: {max_tool_calls: 4, max_model_turns: 2, max_seconds: 120, token_budget: 60000}
+prompt: prompt.md
+schema: schema.json
+field_risk: {"*": HIGH}
+thresholds: {MEDIUM: 0.95, LOW: 0.90}

@@ -1,0 +1,817 @@
+openapi: 3.1.0
+info:
+  title: CTS Document Processing Service (DPS) - job API
+  version: 1.0.0-draft
+  description: |
+    The contract between the CTS Spring app (and its DMS) and the DPS (design doc "CTS Document Processing
+    Service (DPS) - End-to-End Design", Phase 1 tab). Field names are camelCase, like the bank app.
+
+    - Jobs are submitted with `POST /dps/v1/jobs`; results come back through the event feed `GET /dps/v1/events`.
+    - Every error uses the bank app's envelope `{code, message, details, timestamp}`; codes are listed in
+      `catalogues/errors.yaml`, events in `catalogues/events.yaml`.
+    - Request and result bodies are the JSON schemas in `schemas/`.
+    - `x-phase` on an operation says in which build phase it is implemented; until then it answers
+      `422 UNSUPPORTED_JOB_TYPE` (job types) or is absent.
+    - The older Covenexa endpoints stay in `dps-api.yaml`; this file only adds.
+servers:
+  - url: http://localhost:9400
+    description: local dev
+security:
+  - bearer: []
+tags:
+  - name: jobs
+  - name: batches
+  - name: review
+  - name: evidence
+  - name: events
+  - name: catalogue
+  - name: ops
+  - name: compatibility
+    description: Endpoints the bank app already calls on external services, served by DPS unchanged.
+paths:
+  /dps/v1/jobs:
+    post:
+      tags: [jobs]
+      operationId: submitJob
+      x-phase: 1
+      summary: Submit one job (idempotent)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/ActingUser"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/job-request.json" }
+      responses:
+        "202":
+          description: New job queued
+          headers:
+            Location: { schema: { type: string }, description: URL of the job }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "200":
+          description: Same Idempotency-Key and same body seen before; the existing job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RetryLater" }
+    get:
+      tags: [jobs]
+      operationId: listJobs
+      x-phase: 1
+      summary: List jobs for support screens (newest first)
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: jobType, in: query, schema: { type: string } }
+        - { name: batchId, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "schemas/job-status.json" } }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/jobs/{jobId}:
+    get:
+      tags: [jobs]
+      operationId: getJob
+      x-phase: 1
+      summary: Job status (a superset of the older Job view)
+      parameters: [ { $ref: "#/components/parameters/JobId" } ]
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema: { $ref: "schemas/job-status.json" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/jobs/{jobId}/result:
+    get:
+      tags: [jobs]
+      operationId: getJobResult
+      x-phase: 1
+      summary: The result of a finished job
+      parameters: [ { $ref: "#/components/parameters/JobId" } ]
+      responses:
+        "200":
+          description: Result
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "schemas/result.json" }
+        "404": { $ref: "#/components/responses/Error" }
+        "410": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/jobs/{jobId}/cancel:
+    post:
+      tags: [jobs]
+      operationId: cancelJob
+      x-phase: 1
+      summary: Cancel a queued or running job (a running job stops at its next stage)
+      parameters: [ { $ref: "#/components/parameters/JobId" }, { $ref: "#/components/parameters/ActingUser" } ]
+      responses:
+        "202":
+          description: Cancelled or cancel requested
+          content:
+            application/json:
+              schema: { $ref: "schemas/job-status.json" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/jobs/{jobId}/retry:
+    post:
+      tags: [jobs]
+      operationId: retryJob
+      x-phase: 1
+      summary: Put a FAILED or DEAD job back in the queue (ops role)
+      parameters: [ { $ref: "#/components/parameters/JobId" } ]
+      responses:
+        "202":
+          description: Re-queued
+          content:
+            application/json:
+              schema: { $ref: "schemas/job-status.json" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/batches:
+    post:
+      tags: [batches]
+      operationId: submitBatch
+      x-phase: 1
+      summary: Submit many jobs at once (bulk upload, flow 4)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/ActingUser"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BatchRequest" }
+      responses:
+        "202":
+          description: Batch accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BatchAccepted" }
+        "200":
+          description: Same Idempotency-Key and body seen before; the existing batch
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BatchAccepted" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RetryLater" }
+
+  /dps/v1/batches/{batchId}:
+    get:
+      tags: [batches]
+      operationId: getBatch
+      x-phase: 1
+      summary: Counts by outcome and per-item results
+      parameters: [ { $ref: "#/components/parameters/BatchId" } ]
+      responses:
+        "200":
+          description: Batch
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Batch" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/batches/{batchId}/errors.csv:
+    get:
+      tags: [batches]
+      operationId: getBatchErrors
+      x-phase: 1
+      summary: Restricted error list (codes and references only, no document content)
+      parameters: [ { $ref: "#/components/parameters/BatchId" } ]
+      responses:
+        "200":
+          description: CSV with clientFileReference, jobId, outcome, errorCode
+          content:
+            text/csv:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/batches/{batchId}/rerun:
+    post:
+      tags: [batches]
+      operationId: rerunBatch
+      x-phase: 1
+      summary: Re-queue only the failed or dead items
+      parameters: [ { $ref: "#/components/parameters/BatchId" } ]
+      responses:
+        "202":
+          description: Items re-queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Batch" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/jobs/{jobId}/review:
+    get:
+      tags: [review]
+      operationId: getReview
+      x-phase: 5
+      summary: Fields that need a person, with evidence
+      parameters: [ { $ref: "#/components/parameters/JobId" } ]
+      responses:
+        "200":
+          description: Fields to review
+          content:
+            application/json:
+              schema: { $ref: "schemas/review.json" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [review]
+      operationId: submitReview
+      x-phase: 5
+      summary: Confirm, correct, reject or add fields; resumes the job
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/ActingUser"
+        - { name: If-Match, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/review-decisions.json" }
+      responses:
+        "202":
+          description: Decisions recorded; the job resumes
+          content:
+            application/json:
+              schema: { $ref: "schemas/job-status.json" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/jobs/{jobId}/reclassify:
+    post:
+      tags: [review]
+      operationId: reclassify
+      x-phase: 5
+      summary: A reviewer sets the right document type; a new run starts
+      parameters: [ { $ref: "#/components/parameters/JobId" }, { $ref: "#/components/parameters/ActingUser" } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, reason]
+              properties:
+                type: { type: string, enum: [SANCTION_LETTER, LOAN_AGREEMENT, AMENDMENT, FINANCIAL_STATEMENT, COMPLIANCE_CERTIFICATE, SECURITY_DOCUMENT, OTHER_EVIDENCE] }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "202":
+          description: New run started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/versions/{versionId}/pages/{page}/image:
+    get:
+      tags: [evidence]
+      operationId: getPageImage
+      x-phase: 2
+      summary: Page image for highlighting (DPS never returns the original file)
+      parameters:
+        - { name: versionId, in: path, required: true, schema: { type: string } }
+        - { name: page, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: PNG
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/versions/{versionId}/runs:
+    get:
+      tags: [evidence]
+      operationId: listRuns
+      x-phase: 4
+      summary: Every run on a version, for audit and restatement compare
+      parameters: [ { name: versionId, in: path, required: true, schema: { type: string } } ]
+      responses:
+        "200":
+          description: Runs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunList" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/versions/{versionId}/ask:
+    post:
+      tags: [evidence]
+      operationId: askVersion
+      x-phase: 4
+      summary: A question about an agreement, answered with page citations
+      parameters: [ { name: versionId, in: path, required: true, schema: { type: string } } ]
+      responses:
+        "200":
+          description: Answer with citations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Answer" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/events:
+    get:
+      tags: [events]
+      operationId: readEvents
+      x-phase: 1
+      summary: Event feed (pull); at least once, ordered by seq
+      parameters:
+        - { name: after, in: query, schema: { type: integer, minimum: 0, default: 0 }, description: Last seq the reader has }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200":
+          description: Events after the cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventPage" }
+
+  /dps/v1/schemas:
+    get:
+      tags: [catalogue]
+      operationId: listSchemas
+      x-phase: 1
+      summary: Names and versions of the published schemas
+      responses:
+        "200":
+          description: Schema list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [name, version, url]
+                  properties: { name: { type: string }, version: { type: string }, url: { type: string } }
+
+  /dps/v1/schemas/{name}:
+    get:
+      tags: [catalogue]
+      operationId: getSchema
+      x-phase: 1
+      summary: One JSON schema (job-request, job-status, result, page-model, event)
+      parameters: [ { name: name, in: path, required: true, schema: { type: string } } ]
+      responses:
+        "200": { description: The JSON schema, content: { application/schema+json: { schema: { type: object } } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/capabilities:
+    get:
+      tags: [catalogue]
+      operationId: getCapabilities
+      x-phase: 1
+      summary: Job types available now, formats, limits, pipeline version
+      responses:
+        "200":
+          description: Capabilities
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Capabilities" }
+
+  /health/live:
+    get:
+      tags: [ops]
+      operationId: live
+      x-phase: 1
+      security: []
+      summary: The process is up
+      responses:
+        "200": { description: UP }
+
+  /health/ready:
+    get:
+      tags: [ops]
+      operationId: ready
+      x-phase: 1
+      security: []
+      summary: Database and storage reachable
+      responses:
+        "200": { description: Ready }
+        "503": { description: Not ready }
+
+  /dps/v1/ops/queues:
+    get:
+      tags: [ops]
+      operationId: queues
+      x-phase: 1
+      summary: Depth and oldest age per pool, status and priority (ops role)
+      responses:
+        "200":
+          description: Queue figures
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueReport" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/ops/usage:
+    get:
+      tags: [ops]
+      operationId: usage
+      x-phase: 3
+      summary: Model calls, tokens and cost by tenant, job type and day (ops role)
+      responses:
+        "200":
+          description: Usage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageReport" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/ops/scaling:
+    get:
+      tags: [ops]
+      operationId: scaling
+      x-phase: 6
+      summary: Autoscaling signals per pool (oldest queued age, depth per worker) with scale-out / scale-in advice
+      responses:
+        "200":
+          description: Signals
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [generatedAt, pools]
+                properties:
+                  generatedAt: { type: string, format: date-time }
+                  pools:
+                    type: array
+                    items:
+                      type: object
+                      required: [pool, queued, running, oldestQueuedSeconds, advice]
+                      properties:
+                        pool: { type: string, enum: [STANDARD, HEAVY] }
+                        queued: { type: integer }
+                        running: { type: integer }
+                        oldestQueuedSeconds: { type: number }
+                        depthPerWorker: { type: number }
+                        advice: { type: string, enum: [SCALE_OUT, SCALE_IN, HOLD] }
+                        minReplicas: { type: integer }
+                        maxReplicas: { type: integer }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/ops/audit-seals:
+    get:
+      tags: [ops]
+      operationId: auditSeals
+      x-phase: 6
+      summary: Daily audit seals (hash chain over audit events and review decisions) and whether they still match
+      responses:
+        "200":
+          description: Seals, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [intact, seals]
+                properties:
+                  intact: { type: boolean }
+                  problems: { type: array, items: { type: object } }
+                  seals: { type: array, items: { type: object } }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/ops/quality:
+    get:
+      tags: [ops]
+      operationId: quality
+      x-phase: 5
+      summary: Measured error rate of the 3% QA sample per job type, and the golden-set candidate queue (ops role)
+      responses:
+        "200":
+          description: Quality
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sampleRate, byJobType, goldenCandidatesPending]
+                properties:
+                  sampleRate: { type: number }
+                  goldenCandidatesPending: { type: integer }
+                  byJobType:
+                    type: array
+                    items:
+                      type: object
+                      required: [jobType, sampled, wrong]
+                      properties:
+                        jobType: { type: string }
+                        sampled: { type: integer }
+                        wrong: { type: integer }
+                        errorRate: { type: [number, "null"] }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/ops/go-live:
+    get:
+      tags: [ops]
+      operationId: goLive
+      x-phase: 7
+      summary: Go-live readiness per job type (grounding, sampled error rate, p95 time, offline accuracy) and rollout mode
+      parameters: [ { name: days, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 366 } } ]
+      responses:
+        "200":
+          description: Readiness
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [days, targets, types]
+                properties:
+                  days: { type: integer }
+                  targets: { type: object }
+                  types:
+                    type: array
+                    items:
+                      type: object
+                      required: [jobType, measured, checks, readyToGoLive]
+                      properties:
+                        jobType: { type: string }
+                        rollout: { type: string, enum: [SHADOW, ASSISTED, NORMAL] }
+                        measured: { type: object }
+                        checks: { type: object, additionalProperties: { type: string, enum: [PASS, FAIL, NO_DATA, "N/A"] } }
+                        readyToGoLive: { type: boolean }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/ops/golden-candidates:
+    get:
+      tags: [ops]
+      operationId: listGoldenCandidates
+      x-phase: 5
+      summary: Corrections queued as possible golden-set cases (ops role)
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [PENDING, ACCEPTED, REJECTED] } }
+      responses:
+        "200":
+          description: Candidates, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { type: object } }
+
+  /dps/v1/ops/golden-candidates/{candidateId}/{decision}:
+    post:
+      tags: [ops]
+      operationId: decideGoldenCandidate
+      x-phase: 5
+      summary: An analyst accepts or rejects a candidate
+      parameters:
+        - { name: candidateId, in: path, required: true, schema: { type: string } }
+        - { name: decision, in: path, required: true, schema: { type: string, enum: [accept, reject] } }
+      responses:
+        "200": { description: Decided }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/data/values:
+    post:
+      tags: [compatibility]
+      operationId: compatDataValues
+      x-phase: 4
+      summary: The bank app's data-source contract, served from approved statement figures
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/compat-data-values.json#/$defs/request" }
+      responses:
+        "200":
+          description: DataSeriesResponse (bank app shape)
+          content:
+            application/json:
+              schema: { $ref: "schemas/compat-data-values.json#/$defs/response" }
+
+  /api/v1/ai/covenant-status:
+    post:
+      tags: [compatibility]
+      operationId: compatCovenantStatus
+      x-phase: 5
+      summary: The bank app's AI status-suggestion contract, answered in at most 10 s from extracted results
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/compat-covenant-status.json#/$defs/request" }
+      responses:
+        "200":
+          description: Recommendations (bank app shape)
+          content:
+            application/json:
+              schema: { $ref: "schemas/compat-covenant-status.json#/$defs/response" }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: Service token of the calling app (sign-in adapter; bank identity provider or shared service token).
+  parameters:
+    JobId: { name: jobId, in: path, required: true, schema: { type: string } }
+    BatchId: { name: batchId, in: path, required: true, schema: { type: string } }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }
+    ActingUser:
+      name: X-User
+      in: header
+      required: false
+      description: The person the calling app acts for (recorded, never trusted for scope).
+      schema: { type: string, maxLength: 255 }
+  responses:
+    Error:
+      description: Error envelope (the bank app's shape)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RetryLater:
+      description: Too busy; retry after the given seconds
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code: { type: string, description: "A code from catalogues/errors.yaml" }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+        timestamp: { type: string, format: date-time }
+    JobAccepted:
+      type: object
+      required: [jobId, status, links]
+      properties:
+        jobId: { type: string }
+        status: { type: string }
+        duplicate: { type: boolean, description: "true when an earlier identical request is returned" }
+        links:
+          type: object
+          required: [self, result]
+          properties: { self: { type: string }, result: { type: string } }
+    BatchRequest:
+      type: object
+      additionalProperties: false
+      required: [batchRef, items]
+      properties:
+        batchRef: { type: string, maxLength: 128 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required: [clientFileReference, job]
+            properties:
+              clientFileReference: { type: string, maxLength: 128 }
+              job: { $ref: "schemas/job-request.json" }
+    BatchAccepted:
+      type: object
+      required: [batchId, itemCount, status]
+      properties:
+        batchId: { type: string }
+        itemCount: { type: integer }
+        status: { type: string }
+        duplicate: { type: boolean }
+    Batch:
+      type: object
+      required: [batchId, batchRef, status, counts, items]
+      properties:
+        batchId: { type: string }
+        batchRef: { type: string }
+        status: { type: string, enum: [RUNNING, COMPLETED] }
+        counts:
+          type: object
+          properties:
+            SUCCEEDED: { type: integer }
+            PENDING_MAPPING: { type: integer }
+            DUPLICATE: { type: integer }
+            REJECTED: { type: integer }
+            FAILED_RETRYABLE: { type: integer }
+            RUNNING: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            required: [clientFileReference, jobId, outcome]
+            properties:
+              clientFileReference: { type: string }
+              jobId: { type: string }
+              outcome: { type: string, enum: [SUCCEEDED, PENDING_MAPPING, DUPLICATE, REJECTED, FAILED_RETRYABLE, RUNNING] }
+              errorCode: { type: [string, "null"] }
+    EventPage:
+      type: object
+      required: [events, nextCursor]
+      properties:
+        events: { type: array, items: { $ref: "schemas/event.json" } }
+        nextCursor: { type: integer, description: "Pass as `after` next time; unchanged when there is nothing new" }
+    Capabilities:
+      type: object
+      required: [jobTypes, mediaTypes, limits, pipelineVersion, contractVersion]
+      properties:
+        jobTypes:
+          type: array
+          items:
+            type: object
+            required: [jobType, available]
+            properties: { jobType: { type: string }, available: { type: boolean }, phase: { type: integer } }
+        mediaTypes: { type: array, items: { type: string } }
+        limits: { type: object, additionalProperties: { type: integer } }
+        pipelineVersion: { type: string }
+        contractVersion: { type: string }
+        llmEnabled: { type: boolean, description: "false: bank policy, no document data is sent to any LLM" }
+    QueueReport:
+      type: object
+      required: [generatedAt, rows]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [pool, status, priority, count]
+            properties:
+              pool: { type: string }
+              status: { type: string }
+              priority: { type: integer }
+              count: { type: integer }
+              oldestSeconds: { type: [number, "null"] }
+    RunList:
+      type: object
+      required: [versionId, runs]
+      properties:
+        versionId: { type: string }
+        runs:
+          type: array
+          items:
+            type: object
+            required: [runId, jobId, jobType, status, pipelineVersion, startedAt]
+            properties:
+              runId: { type: string }
+              jobId: { type: string }
+              jobType: { type: string }
+              status: { type: string }
+              pipelineVersion: { type: string }
+              skillPack: { type: [string, "null"] }
+              startedAt: { type: string, format: date-time }
+              finishedAt: { type: [string, "null"], format: date-time }
+              supersededBy: { type: [string, "null"] }
+              resultSha256: { type: [string, "null"] }
+    Answer:
+      type: object
+      required: [answer, citations]
+      properties:
+        answer: { type: string }
+        citations:
+          type: array
+          items:
+            type: object
+            required: [page, quote]
+            properties: { page: { type: integer }, quote: { type: string } }
+        grounded: { type: boolean, description: "false when no quote could be found on its page" }
+    UsageReport:
+      type: object
+      required: [from, to, rows]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [day, tenantId, jobType, route, calls, tokensIn, tokensOut]
+            properties:
+              day: { type: string, format: date }
+              tenantId: { type: string }
+              jobType: { type: string }
+              route: { type: string, enum: [small, strong, vision, challenger] }
+              calls: { type: integer }
+              tokensIn: { type: integer }
+              tokensOut: { type: integer }
+              costUsd: { type: [number, "null"] }

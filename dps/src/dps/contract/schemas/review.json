@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cts.local/dps/schemas/review.json",
+  "title": "dps.review/1.0",
+  "description": "GET /dps/v1/jobs/{jobId}/review (phase 5): the fields a person must check, with each reader's value and the evidence to show.",
+  "type": "object",
+  "required": ["jobId", "runId", "revision", "fields"],
+  "properties": {
+    "jobId": { "type": "string" },
+    "runId": { "type": "string" },
+    "revision": { "type": "integer", "minimum": 1, "description": "Send back as If-Match with the decisions" },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fieldId", "group", "name", "proposed", "confidence", "reasons", "evidence"],
+        "properties": {
+          "fieldId": { "type": "string" },
+          "group": { "type": "string" },
+          "name": { "type": "string" },
+          "proposed": { "description": "The value DPS proposes, typed as in result.json for the group" },
+          "readers": {
+            "type": "object",
+            "description": "Each reader's value when they differ",
+            "properties": { "rules": {}, "ai": {}, "challenger": {} }
+          },
+          "confidence": { "type": ["number", "null"] },
+          "reasons": { "type": "array", "items": { "type": "string", "description": "Codes from catalogues/errors.yaml" } },
+          "evidence": {
+            "type": "object",
+            "required": ["page", "quote"],
+            "properties": {
+              "page": { "type": ["integer", "null"] },
+              "quote": { "type": ["string", "null"] },
+              "bbox": { "type": ["array", "null"], "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+              "cellRef": { "type": ["string", "null"] },
+              "pageImage": { "type": ["string", "null"], "description": "URL of the page image for highlighting" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cts.local/dps/schemas/compat-covenant-status.json",
+  "title": "compat.covenant-status/1.0",
+  "description": "POST /api/v1/ai/covenant-status (phase 5): the bank app's AiStatusRecommender contract, unchanged (AiStatusRequest / AiStatusRecommendation records). Answered in at most 10 s from results DPS already extracted; never parses a file inside the call; an empty list means 'AI unavailable'.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["cpId", "covenants"],
+      "properties": {
+        "cpId": { "type": "string" },
+        "certificateFileIds": { "type": "array", "items": { "type": "string" } },
+        "covenants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["appliedCovenantId"],
+            "properties": {
+              "appliedCovenantId": { "type": "string" },
+              "covenantName": { "type": ["string", "null"] },
+              "covenantDescription": { "type": ["string", "null"] },
+              "conditionExpression": { "type": ["string", "null"] },
+              "computedValue": { "type": ["string", "null"] },
+              "latestResult": { "type": ["string", "null"], "enum": ["COMPLIANT", "BREACHED", "NA", "ERROR", "PENDING_REVIEW", null] },
+              "attachmentFileIds": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["recommendations"],
+      "properties": {
+        "recommendations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["appliedCovenantId", "recommendedStatus"],
+            "properties": {
+              "appliedCovenantId": { "type": "string" },
+              "recommendedStatus": { "type": "string", "enum": ["COMPLIED", "BREACHED", "WAIVER", "EXTENSION"] },
+              "rationale": { "type": ["string", "null"], "description": "Cites the certificate or evidence page it relies on" },
+              "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

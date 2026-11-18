@@ -1,0 +1,10 @@
+# Shell scripts run inside Linux containers: keep LF even when Git converts line endings on Windows.
+*.sh text eol=lf
+# Documents and spreadsheets are binary: never touch their bytes.
+*.pdf binary
+*.xlsx binary
+*.xls binary
+*.docx binary
+*.png binary
+*.jpg binary
+*.webp binary
