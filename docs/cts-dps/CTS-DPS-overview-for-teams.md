@@ -110,9 +110,8 @@ One format for every document type: `dps.result/1.0` (`contracts/schemas/result.
 | --- | --- |
 | Grounded | The quote must be found on its page (rules and agent alike) |
 | Vote | Rules and agent agree → higher confidence; they disagree → a person sees both; agent-only high-risk values → a person |
-| Challenger | A second model re-reads high-risk and disputed fields without seeing the first answer |
 | Cross-checks | Accounting checks (assets = liabilities + equity, PBT − tax = PAT), formula valid in Java, step-down dates in order, operator matches the wording |
-| Score | Built from measured signals: grounded, OCR quality, rules found, agent found, challenger, cross-checks, wording seen before, risk level; calibrated on reviews |
+| Score | Built from measured signals: grounded, OCR quality, rules found, agent found, rules and agent agree, cross-checks, wording seen before, risk level; calibrated on reviews |
 | Routing | High-risk values always reviewed; others auto-accepted at ≥ 0.95 (medium risk) or ≥ 0.90 (low risk); 3% random check |
 | Not readable | Left empty with the reason, and sent to review. **Never guessed.** |
 | Learning | Reviewer corrections teach the rules new wordings (label and wording memory) |
@@ -137,7 +136,7 @@ One format for every document type: `dps.result/1.0` (`contracts/schemas/result.
 | 14 | Workflow | CrewAI Flows | Fixed steps per job; every job type runs as a Flow | Same path every time; the architect's choice | Final |
 | 15 | Agent | CrewAI Agent (the Document Agent) on Azure OpenAI GPT | One agent per job with the job's skill, tools and prompt; proposes values with page and quote | The architect's design (1 agent, many skills and tools) | Final (models per route provisional) |
 | 15a | Extraction | Skill packs: rules + the agent per document type | Covenants, statement lines, sanction terms, certificates, amendments, schedule terms | Rules are exact; the agent catches new wording | Final (rules grow with reviews) |
-| 15b | Model gateway | DPS gateway over CrewAI `LLM` (LiteLLM) | Routes small, strong, challenger, vision; retries, breaker, budgets, masking, call log | One place to control cost and safety | Final |
+| 15b | Model gateway | DPS gateway over CrewAI `LLM` (LiteLLM) | Routes small, strong, vision; retries, breaker, budgets, masking, call log | One place to control cost and safety | Final |
 | 16 | Business rules | Spring (Java) tools | Formula check, borrower lookup, covenant list | Rules already live in Java | Final (Spring team builds) |
 | 17 | Answer check | Grounding + cross-checks | Every value found on its page; accounting and formula checks | Nothing invented | Final |
 | 18 | Confidence | Our scorer (rule table, then logistic regression + isotonic calibration) | Score with reasons for every value | Explainable, measurable | Thresholds provisional |
@@ -165,7 +164,7 @@ licence is cleared.
 | Worker crash mid-job: finished exactly once | ✅ Passed |
 | 44 golden PDFs read the same as today | ✅ 44 / 44 |
 | Document type found by rules only | ✅ 41 / 41 text documents |
-| Agent with tools, grounding, vote, challenger, vision, budgets and outage fall-back (scripted model in CI) | ✅ Passed |
+| Agent with tools, grounding, vote, vision, budgets and outage fall-back (scripted model in CI) | ✅ Passed |
 | Model calls refused to any host not on the allowed list | ✅ Passed |
 | Live run on the bank's Azure deployment | To do (needs the deployment names and key) |
 | End to end on this laptop: 88 real jobs (44 upload checks + 44 extractions) through the API, 4 workers | ✅ 0 lost, 0 duplicated; type correct 41/41 readable files; 0 false mismatch alarms |
@@ -198,4 +197,4 @@ licence is cleared.
 | 7 | Production database: a separate `cts_dps`? |
 | 8 | Who may upload, approve and download? How long do we keep files? |
 | 9 | Which documents and analysts for the golden set? |
-| 10 | Which Azure deployments for the routes (strong, challenger from another family, small, vision)? Has the bank approved sending selected pages to them? |
+| 10 | Which Azure deployments for the routes (strong, small, vision)? Has the bank approved sending selected pages to them? |

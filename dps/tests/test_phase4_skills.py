@@ -1,5 +1,5 @@
 """Phase 4: skill packs and the generic flow (sanction, certificate, amendment, schedule terms, statement identities,
-commentary), Spring verification, voting, challenger, and the jobs end to end."""
+commentary), Spring verification, voting, and the jobs end to end."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from dps.skills import PACKS, for_job_type, load
 from dps.skills import runner as skills
 from dps.skills.amendment_diff.rules import amended_set
 from dps.skills.commentary.rules import check_text, draft, traceable
-from dps.skills.common import challenge, vote
+from dps.skills.common import vote
 from dps.spring_tools import FormulaCheck
 from dps.worker import Worker
 
@@ -231,7 +231,7 @@ class Gateway:
         return None
 
 
-def test_agent_votes_challenger_and_agent_only_fields():
+def test_agent_votes_and_agent_only_fields():
     quote = "Sanctioned limit: Rs. 25.50 crore"
     items = [{"name": "SANCTIONED_AMOUNT", "page": 1, "quote": quote,
               "value": {"key": "SANCTIONED_AMOUNT", "text": "Sanctioned limit: Rs. 25.50 crore", "amount": 255000000.0,
@@ -240,10 +240,10 @@ def test_agent_votes_challenger_and_agent_only_fields():
               "value": {"key": "TENOR_MONTHS", "amount": 60}}]
     gw = Gateway(items)
     result = skills.run(load("sanction"), fake_job("EXTRACT_SANCTION"), model_of(SANCTION), gw, None)
-    by = {f["name"]: f for f in result["fields"]}
+    by = {f["name"]: f for f in result["fields"] if f["group"] == "AGREEMENT_TERM"}
     assert by["TENOR_MONTHS"]["status"] == "NEEDS_REVIEW"
     assert by["TENOR_MONTHS"]["issues"][0]["code"] == "MODELS_DISAGREE"
-    assert "challenger" in gw.routes and gw.routes[0] == "strong"
+    assert gw.routes[0] == "strong" and "challenger" not in gw.routes
     down = skills.run(load("sanction"), fake_job("EXTRACT_SANCTION"), model_of(SANCTION),
                       Gateway(error=AiUnavailable("x")), None)
     assert down["warnings"][0]["code"] == "AI_UNAVAILABLE"
@@ -257,15 +257,13 @@ def test_agent_votes_challenger_and_agent_only_fields():
     assert any(f["method"] == "AI" for f in result["fields"])
 
 
-def test_vote_and_challenge_helpers():
+def test_vote_helper_and_no_pack_has_a_second_model_check():
     fields = [{"name": "A", "value": {"x": 1}, "confidence": 0.8, "issues": [], "status": "AUTO_ACCEPTED"}]
     assert vote(fields, None) == fields
     vote(fields, [{"name": "A", "value": {"x": 1.0}}])
     assert fields[0]["method"] == "RULES+AI_CONFIRMED" and fields[0]["confidence"] == 0.95
-    pack = load("certificate")
-    challenge(pack, None, [], fields)  # no gateway: nothing happens
-    challenge(pack, Gateway(error=AiUnavailable("x")), [], fields)
-    assert fields[0]["issues"][-1]["code"] == "AI_UNAVAILABLE"
+    for name in ("sanction", "certificate", "amendment_diff", "covenants", "statement_lines", "schedule_terms"):
+        assert "verify" not in load(name).routes  # the challenger was removed (18 Nov 2026)
 
 
 # ---------- jobs end to end ----------

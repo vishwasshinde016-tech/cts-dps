@@ -91,7 +91,7 @@ def test_agreement_job_reviewers_see_covenants_only_with_library_names():
          "value": {"metric": "RESTRICTION_ON_LIENS_AND_ENCUMBRANCES"}},
         {"name": "No change of business", "page": 1, "quote": "shall not change the general nature of its business",
          "value": {"metric": "RESTRICTION_ON_CHANGE_OF_BUSINESS"}}]}
-    script = Script({("strong", "covenants"): items, ("challenger", "covenants"): items,
+    script = Script({("strong", "covenants"): items,
                      ("strong", "schedule_terms"): {"items": []}})
     result = skills.run(load("covenants"), fake_job("ONBOARD"), model_of(page), gateway(script), Tools())
     covenants = [f for f in result["fields"] if f["group"] != "SCHEDULE_TERM"]

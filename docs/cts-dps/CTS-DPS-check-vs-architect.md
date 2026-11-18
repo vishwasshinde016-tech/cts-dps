@@ -85,7 +85,7 @@ and the Teams message (critical design decisions). DPS is reading only; Spring (
 | --- | --- | --- |
 | A1 | Document Agent: one CrewAI `Agent` per job with the job's skill (prompt, schema, tools, limits); page tools and Java tools; model calls through the gateway | ✅ Built, tested with a scripted model |
 | A2 | Miro AI functions: classify (second opinion, vision for scans), covenants, schedule terms, amendment explanation | ✅ Built, tested |
-| A3 | Quality: grounding, vote, challenger, Java formula check, scorer with agent signals; numbers never decided by the model | ✅ Built, tested |
+| A3 | Quality: grounding, vote, Java formula check, scorer with agent signals; numbers never decided by the model | ✅ Built, tested |
 | A4 | Safety: only selected pages; allowed hosts only; masking; no prompt text in logs; CrewAI telemetry off | ✅ Built, tested |
 | A5 | Runtime: per-job token budget across CrewAI's threads, breaker, rate limits, cost per job, `AI_UNGROUNDED` and other codes, AI alerts | ✅ Built, tested |
 | B1 | Key pages | ✅ Built, tested |
@@ -98,7 +98,7 @@ and the Teams message (critical design decisions). DPS is reading only; Spring (
 
 | # | Question |
 | --- | --- |
-| 1 | Which Azure deployments for strong, challenger (another family if possible), small and vision? Bank approval to send selected pages, with zero data retention? |
+| 1 | Which Azure deployments for strong, small and vision? Bank approval to send selected pages, with zero data retention? |
 | 2 | Job entry: may Spring create it through the DPS API instead of inserting into the table directly? |
 | 3 | When extraction is done: should DPS call Spring's API (push), or should Spring read the result (pull)? Which Spring endpoint? |
 | 4 | Onboarding: one job that classifies and extracts (Miro), and also the upload-time check before saving (spec)? We propose both. |

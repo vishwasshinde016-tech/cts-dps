@@ -17,13 +17,12 @@ from pathlib import Path
 MIN_LABELLED = 200
 SAMPLE_RATE = 0.03
 DEFAULT_THRESHOLDS = {"HIGH": None, "MEDIUM": 0.95, "LOW": 0.90}  # HIGH: always reviewed in the first release
-CHALLENGER = {"AGREE": 1.0, "NOT_RUN": 0.5, "DISAGREE": 0.0}
 RISK = {"LOW": 0.0, "MEDIUM": 0.5, "HIGH": 1.0}
-FEATURES = ("grounded", "parse_quality", "ocr_conf_min", "rules_found", "ai_found", "challenger", "crosscheck_pass",
+FEATURES = ("grounded", "parse_quality", "ocr_conf_min", "rules_found", "ai_found", "agree", "crosscheck_pass",
             "history_delta", "label_known", "schema_ok", "field_risk")
 REASON_TEXT = {
     "grounded": "NOT_GROUNDED", "parse_quality": "POOR_TEXT", "ocr_conf_min": "LOW_OCR_QUALITY",
-    "rules_found": "RULES_MISSED", "ai_found": "AI_MISSED", "challenger": "MODELS_DISAGREE",
+    "rules_found": "RULES_MISSED", "ai_found": "AI_MISSED", "agree": "MODELS_DISAGREE",
     "crosscheck_pass": "CROSS_CHECK_FAILED", "history_delta": "UNUSUAL_CHANGE", "label_known": "NEW_WORDING",
     "schema_ok": "SCHEMA_INVALID", "field_risk": "HIGH_RISK_FIELD",
 }
@@ -38,20 +37,18 @@ def signals(f: dict, page_quality: dict[int, tuple[float, str]] | None = None, r
     quality, method = (page_quality or {}).get(src.get("page") or 0, (1.0, "NATIVE"))
     method_used = str(f.get("method") or "")
     codes = {i.get("code") for i in f.get("issues", [])}
-    challenger = ((f.get("signals") or {}).get("challenger") or "NOT_RUN").upper()
     return {
         "grounded": 1.0 if src.get("page") and src.get("quote") else 0.0,
         "parse_quality": float(quality),
         "ocr_conf_min": float(quality) if method == "OCR" else 1.0,
         "rules_found": 0.0 if method_used in ("AI", "AI_VISION", "MANUAL") else 1.0,
         "ai_found": 1.0 if "AI" in method_used.upper() else 0.0,
-        "challenger": CHALLENGER.get(challenger, 0.5),
+        "agree": 0.0 if "MODELS_DISAGREE" in codes else 1.0,  # rules and the agent read the same value
         "crosscheck_pass": 0.0 if codes & FAILING_CHECKS else 1.0,
         "history_delta": min(abs(history_delta), 5.0) / 5.0 if history_delta is not None else 0.0,
         "label_known": 1.0 if label_known else 0.0,
         "schema_ok": 0.0 if "SCHEMA_INVALID" in codes else 1.0,
         "field_risk": RISK.get(risk, 0.5),
-        "_disagree": 1.0 if "MODELS_DISAGREE" in codes else 0.0,
     }
 
 
@@ -71,7 +68,7 @@ class RuleTableScorer:
 
     PENALTIES = (
         ("grounded", lambda s: s["grounded"] < 1, 0.45),
-        ("challenger", lambda s: s["challenger"] == 0 or s["_disagree"] > 0, 0.35),
+        ("agree", lambda s: s["agree"] == 0, 0.35),
         ("crosscheck_pass", lambda s: s["crosscheck_pass"] < 1, 0.30),
         ("schema_ok", lambda s: s["schema_ok"] < 1, 0.40),
         ("ocr_conf_min", lambda s: s["ocr_conf_min"] < 0.8, 0.20),
@@ -79,8 +76,7 @@ class RuleTableScorer:
         ("rules_found", lambda s: s["rules_found"] < 1, 0.12),
         ("history_delta", lambda s: s["history_delta"] >= 0.6, 0.10),
     )
-    BONUSES = (("ai_found", lambda s: s["ai_found"] > 0 and s["rules_found"] > 0 and s["_disagree"] == 0, 0.02),
-               ("challenger", lambda s: s["challenger"] == 1.0, 0.01),
+    BONUSES = (("ai_found", lambda s: s["ai_found"] > 0 and s["rules_found"] > 0 and s["agree"] > 0, 0.02),
                ("label_known", lambda s: s["label_known"] > 0, 0.01))
 
     def score(self, s: dict) -> Score:

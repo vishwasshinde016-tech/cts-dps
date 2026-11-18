@@ -42,7 +42,7 @@ def field(**kw):
 # ---------- scorer ----------
 
 def test_signals_and_rule_table():
-    good = signals(field(method="RULES+AI_CONFIRMED", signals={"challenger": "AGREE"}), {1: (0.95, "NATIVE")}, "LOW")
+    good = signals(field(method="RULES+AI_CONFIRMED"), {1: (0.95, "NATIVE")}, "LOW")
     s = RuleTableScorer().score(good)
     assert s.confidence >= 0.95 and s.reasons == []
     bad = signals(field(source={"page": None, "quote": None}, method="AI",
@@ -83,7 +83,7 @@ def test_logistic_training_calibration_and_metrics(tmp_path):
         grounded = rnd.random() < 0.8
         agree = rnd.random() < 0.7
         s = signals(field(source={"page": 1, "quote": "q"} if grounded else {"page": None, "quote": None},
-                          signals={"challenger": "AGREE" if agree else "DISAGREE"}), None, "MEDIUM")
+                          issues=[] if agree else [{"code": "MODELS_DISAGREE"}]), None, "MEDIUM")
         p_right = 0.95 if grounded and agree else (0.6 if grounded else 0.2)
         rows.append((s, rnd.random() < p_right))
     model = train(rows[:400])
@@ -92,7 +92,7 @@ def test_logistic_training_calibration_and_metrics(tmp_path):
     held = [(model.score(s).confidence, ok) for s, ok in rows[500:]]
     assert expected_calibration_error(held) <= 0.12  # small held-out set; the target 0.05 is for real data
     assert brier(held) < 0.25
-    assert model.weights["grounded"] > 0 and model.weights["challenger"] > 0
+    assert model.weights["grounded"] > 0 and model.weights["agree"] > 0
     path = tmp_path / "sanction.json"
     path.write_text(model.to_json(), encoding="utf-8")
     scorer = Scorer(tmp_path)

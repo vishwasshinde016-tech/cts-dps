@@ -180,7 +180,7 @@ def _routes(settings) -> dict[str, str]:
 
     routes = Routes.load(getattr(settings, "ai_routes_file", "") or None, settings.ai_model)
     out: dict[str, str] = {}
-    for name in ("challenger", "vision", "small", "strong"):  # strong wins when one deployment serves several
+    for name in ("vision", "small", "strong"):  # strong wins when one deployment serves several
         r = routes.routes.get(name)
         if r and r.deployment:
             out[r.deployment] = name

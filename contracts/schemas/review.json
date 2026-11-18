@@ -22,7 +22,7 @@
           "readers": {
             "type": "object",
             "description": "Each reader's value when they differ",
-            "properties": { "rules": {}, "ai": {}, "challenger": {} }
+            "properties": { "rules": {}, "ai": {} }
           },
           "confidence": { "type": ["number", "null"] },
           "reasons": { "type": "array", "items": { "type": "string", "description": "Codes from catalogues/errors.yaml" } },

@@ -72,7 +72,7 @@ class Script:
         return complete
 
 
-def gateway(script: Script, routes=("small", "strong", "challenger", "vision")) -> Gateway:
+def gateway(script: Script, routes=("small", "strong", "vision")) -> Gateway:
     return Gateway(Routes({n: Route(n, "fake", f"dep-{n}", retries=0) for n in routes}), script, sleep=lambda _s: None)
 
 
@@ -216,16 +216,15 @@ def test_completion_for_the_agreement_and_statement_readers():
 def test_sanction_job_rules_and_agent_agree_and_schedule_skill_runs():
     final = {("strong", "sanction"): {"items": [{"name": "SANCTIONED_AMOUNT", "page": 1, "quote": AMOUNT_QUOTE,
                                                  "value": AMOUNT}]},
-             ("challenger", "sanction"): {"items": [{"name": "SANCTIONED_AMOUNT", "page": 1, "quote": AMOUNT_QUOTE,
-                                                     "value": AMOUNT}]},
              ("strong", "schedule_terms"): {"items": []}}
     script = Script(final, tool={("strong", "sanction"): ("search_text", {"query": "sanctioned limit"})})
     result = skills.run(load("sanction"), fake_job("EXTRACT_SANCTION"), model_of(SANCTION), gateway(script), Tools())
     by = {f["name"]: f for f in result["fields"]}
     assert by["SANCTIONED_AMOUNT"]["method"] == "RULES+AI_CONFIRMED"
-    assert by["SANCTIONED_AMOUNT"]["signals"]["challenger"] == 1.0
-    assert ("strong", "schedule_terms") in script.calls and ("challenger", "sanction") in script.calls
-    assert result["usage"]["model_calls"] >= 3 and not [w for w in result["warnings"] if w["code"] == "AI_UNAVAILABLE"]
+    assert by["SANCTIONED_AMOUNT"]["signals"]["agree"] == 1.0
+    assert ("strong", "schedule_terms") in script.calls
+    assert not [c for c in script.calls if c[0] == "challenger"]  # no second-model re-read
+    assert result["usage"]["model_calls"] >= 2 and not [w for w in result["warnings"] if w["code"] == "AI_UNAVAILABLE"]
 
 
 def test_covenants_match_by_metric_and_an_agent_only_covenant_goes_to_a_person():

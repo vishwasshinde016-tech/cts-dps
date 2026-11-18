@@ -4,7 +4,7 @@ version: 1.6.0
 # rules are the same extractor, reused by the sanction and amendment packs.
 engine: legacy_flow
 job_types: [EXTRACT_AGREEMENT]
-routes: {extract: strong, verify: challenger, images: vision}
+routes: {extract: strong, images: vision}
 tools: [page_text, search_text, find_definition, covenant_library, validate_formula]
 page_selection: {max_pages: 25, rules: covenant_section}
 limits: {max_tool_calls: 8, max_model_turns: 3, max_seconds: 240, token_budget: 120000}
