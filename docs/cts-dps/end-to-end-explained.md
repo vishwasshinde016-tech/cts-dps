@@ -1,6 +1,6 @@
 # CTS DPS — upload to covenant result, end to end
 
-*For the architect walkthrough · 18 Nov 2026 · repo `Vishwas2311/cts-dps` (private), local copy `C:\Users\vishw\OneDrive\Desktop\Covanent\DPS`*
+*For the architect walkthrough · 18 Nov 2026 · repo `vishwasshinde016-tech/cts-dps` (private; moved from `Vishwas2311/cts-dps` on 18 Nov 2026), local copy `C:\Users\vishw\OneDrive\Desktop\Covanent\DPS`*
 
 All paths below are relative to that repo root. Python code is under `dps/src/dps/`.
 
