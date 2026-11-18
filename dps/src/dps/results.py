@@ -146,6 +146,10 @@ def build(db: Session, job: Job, pipeline_version: str, store=None) -> dict:
 
     extra_fields, warnings = skills.legacy_extras(db, job, store)
     fields += extra_fields
+    from dps.skills.covenants.codes import stamp
+    from dps.skills.covenants.taxonomy import get as taxonomy
+
+    stamp(fields, defaults=False)  # the proven flows: codes only, their review state stays as it was
     if job.flow == "STATEMENT_PROCESSING":
         warnings += skills.statement_warnings(fields, approved_figures(db, doc))
     if job.rollout == "ASSISTED":  # phase 7 pilot: analysts review every field
@@ -166,7 +170,8 @@ def build(db: Session, job: Job, pipeline_version: str, store=None) -> dict:
         "documentId": job.document_id,
         "documentVersionId": job.document_version_id,
         "sha256": job.sha256 or (doc.sha256 if doc else None),
-        "pipeline": {"version": pipeline_version, "skillPack": job.flow, "models": None},
+        "pipeline": {"version": pipeline_version, "skillPack": job.flow, "models": None,
+                     "taxonomyVersion": taxonomy().version},
         "classification": None,
         "identifiers": [],
         "fields": fields,

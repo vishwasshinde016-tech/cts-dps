@@ -1,0 +1,109 @@
+# DPS overlay on default_taxonomy.yaml (loaded after it; same format).
+#
+# 1. Types DPS already extracts that the default taxonomy lacks (EBITDA/EMI, tangible net worth, collateral value,
+#    disposal cap, subordination, material contracts).
+# 2. `dps_keys`: the DPS rules' own metric names for each code, so every covenant the rules find gets its code and
+#    the rules and the agent are compared on the same code.
+#
+# Patching rules (see taxonomy/__init__.py): an entry whose code exists patches it; aliases, keywords and dps_keys
+# are added to the existing ones unless the entry sets `replace_aliases: true`; `enabled: false` disables a type.
+
+version: "dps.1"
+
+types:
+  # ---------------------------------------------------------------- new types
+  - code: FIN_EBITDA_TO_EMI
+    category: financial
+    name: EBITDA to EMI
+    description: Minimum ratio of EBITDA to the instalments (EMI) due on the loan; common in Indian MSME and term loans.
+    aliases: [EBITDA to EMI, EBITDA/EMI, EBITDA to EMI Ratio, EMI Coverage, EMI Coverage Ratio]
+    keywords: [EMI coverage]
+    quantitative: true
+    default_operator: ">="
+    unit: ratio
+    frequency: annual
+    dps_keys: [EBITDA_TO_EMI]
+  - code: FIN_MIN_TANGIBLE_NET_WORTH
+    category: financial
+    name: Minimum Tangible Net Worth
+    description: Minimum tangible net worth (net worth less intangible assets).
+    aliases: [Tangible Net Worth, Minimum Tangible Net Worth, Consolidated Tangible Net Worth, Adjusted Tangible Net Worth, TNW]
+    keywords: [tangible net worth]
+    quantitative: true
+    default_operator: ">="
+    unit: amount
+    frequency: annual
+    dps_keys: [MIN_TANGIBLE_NET_WORTH]
+  - code: FIN_MIN_COLLATERAL_VALUE
+    category: financial
+    name: Minimum Collateral Value
+    description: Minimum value of the collateral or security, as an amount.
+    aliases: [Minimum Collateral Value, Value of the Collateral, Value of the Security, Collateral Value]
+    keywords: [value of the collateral]
+    quantitative: true
+    default_operator: ">="
+    unit: amount
+    frequency: annual
+    dps_keys: [MIN_COLLATERAL_VALUE]
+  - code: NEG_DISPOSAL_CAP
+    category: negative
+    name: Asset disposal limit (amount)
+    description: Disposals allowed only up to a stated amount without lender consent.
+    aliases: [Asset Disposal Cap, Disposal Cap, Asset Disposal Limit, Disposal Limit]
+    keywords: [not exceeding in aggregate]
+    quantitative: true
+    default_operator: "<="
+    unit: amount
+    frequency: annual
+    dps_keys: [ASSET_DISPOSAL_CAP]
+  - code: AFF_SUBORDINATION
+    category: affirmative
+    name: Subordination of promoter / group loans
+    description: Loans from promoters, directors or group companies stay subordinated to the lender.
+    aliases: [Subordination, Subordination of Promoter Loans, Subordinated Debt, Unsecured Loans from Promoters to be Subordinated]
+    keywords: [subordinated, subordination]
+    dps_keys: [SUBORDINATION]
+  - code: NEG_MATERIAL_CONTRACTS
+    category: negative
+    name: Material contracts / project documents
+    description: Keep material contracts or project documents in force; do not end, amend or waive them without consent.
+    aliases: [Material Contracts, Material Agreements, Project Documents, Amendment of Material Contracts]
+    keywords: [material contract, project documents]
+    dps_keys: [MATERIAL_CONTRACTS]
+
+  # ---------------------------------------------------------------- patches
+  # Tangible net worth has its own type above, so its names leave the net worth type.
+  - code: FIN_MIN_NET_WORTH
+    replace_aliases: true
+    aliases: [Net Worth, Minimum Net Worth, Consolidated Net Worth, Shareholders Equity, Minimum Shareholders' Equity, Net Assets]
+    dps_keys: [MIN_NET_WORTH]
+  # "Collateral" alone is too loose a name for security perfection; "Security" alone too.
+  - code: AFF_SECURITY_PERFECTION
+    replace_aliases: true
+    aliases: [Further Assurances, Additional Guarantors, Creation of Security, Perfection of Security, Security Creation, Additional Subsidiaries]
+    dps_keys: [SECURITY_CREATION]
+
+  # ---------------------------------------------------------------- the rules' names for existing codes
+  - {code: FIN_DSCR, dps_keys: [DSCR]}
+  - {code: FIN_INTEREST_COVERAGE, dps_keys: [ICR]}
+  - {code: FIN_FCCR, dps_keys: [FIXED_CHARGE_COVERAGE_RATIO]}
+  - {code: FIN_TOTAL_LEVERAGE, dps_keys: [DEBT_TO_EBITDA]}
+  - {code: FIN_NET_LEVERAGE, dps_keys: [NET_LEVERAGE_RATIO]}
+  - {code: FIN_DEBT_TO_EQUITY, dps_keys: [DEBT_TO_EQUITY, DEBT_TO_NET_WORTH]}
+  - {code: FIN_CURRENT_RATIO, dps_keys: [CURRENT_RATIO]}
+  - {code: FIN_QUICK_RATIO, dps_keys: [QUICK_RATIO]}
+  - {code: FIN_MIN_EBITDA, dps_keys: [MIN_EBITDA]}
+  - {code: FIN_LTV, dps_keys: [LOAN_TO_VALUE]}
+  - {code: FIN_MIN_LIQUIDITY, dps_keys: [MINIMUM_LIQUIDITY]}
+  - {code: FIN_ASSET_COVERAGE, dps_keys: [SECURITY_COVER]}
+  - {code: NEG_LIENS, dps_keys: [NEGATIVE_PLEDGE]}
+  - {code: NEG_INDEBTEDNESS, dps_keys: [DEBT_INCURRANCE_RESTRICTION]}
+  - {code: NEG_DISPOSALS, dps_keys: [ASSET_DISPOSAL_RESTRICTION]}
+  - {code: NEG_CHANGE_OF_CONTROL, dps_keys: [CHANGE_OF_CONTROL]}
+  - {code: AFF_INSURANCE, dps_keys: [INSURANCE_MAINTENANCE]}
+  - {code: AFF_BOOKS_RECORDS, dps_keys: [BOOKS_AND_RECORDS]}
+  - {code: AFF_COMPLIANCE_LAWS, dps_keys: [REGULATORY_AND_TAX_COMPLIANCE]}
+  - {code: AFF_USE_OF_PROCEEDS, dps_keys: [END_USE]}
+  - {code: AFF_ACCOUNTS, dps_keys: [ESCROW_ACCOUNT]}
+  - {code: REP_COMPLIANCE_CERT, dps_keys: [COMPLIANCE_CERTIFICATE]}
+  - {code: REP_OTHER_INFO, dps_keys: [REPORTING_COVENANT]}

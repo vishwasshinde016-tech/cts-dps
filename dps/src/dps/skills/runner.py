@@ -134,7 +134,12 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
 
 
 def _covenant_key(f: dict) -> str:
-    return re.sub(r"[^a-z0-9]", "", str((f.get("value") or {}).get("metric") or f.get("name") or "").lower())
+    """Covenants are matched on their taxonomy code (the rules' DEBT_TO_NET_WORTH and the agent's FIN_DEBT_TO_EQUITY
+    are one covenant); a name the taxonomy does not know is matched as written."""
+    from dps.skills.covenants.names import code_of
+
+    raw = (f.get("value") or {}).get("metric") or f.get("name") or ""
+    return code_of(raw) or re.sub(r"[^a-z0-9]", "", str(raw).lower())
 
 
 def _same_test(a: dict, b: dict | None) -> bool:
@@ -265,6 +270,9 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         from dps.analyze.identify import find_identifiers
 
         warnings += obligations.check(ctx, find_identifiers(model), model=model)
+    from dps.skills.covenants.codes import stamp
+
+    stamp(fields)  # taxonomy codes on every covenant-like field; defaults marked and sent to a person
     if fields:  # phase 5: every field's confidence from the scorer, routed by the pack's thresholds
         from dps.scoring import Scorer
 
@@ -287,7 +295,7 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         "schema": SCHEMA, "runId": job.id, "jobId": job.id, "jobType": job.job_type,
         "status": "DONE" if route == "AUTO_ACCEPTED" else "NEEDS_REVIEW",
         "documentId": job.document_id, "documentVersionId": job.document_version_id, "sha256": job.sha256,
-        "pipeline": {"version": pipeline_version, "skillPack": pack.ref,
+        "pipeline": {"version": pipeline_version, "skillPack": pack.ref, "taxonomyVersion": _taxonomy_version(),
                      "models": dict(budget.models) if budget and budget.models else None},
         "classification": None, "identifiers": [], "fields": fields,
         "document": {"confidence": None, "route": route, "reasons": reasons,
@@ -298,6 +306,12 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         **extra,
     }
     return result
+
+
+def _taxonomy_version() -> str:
+    from dps.skills.covenants.taxonomy import get
+
+    return get().version
 
 
 def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, pipeline_version: str):
@@ -319,8 +333,15 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     lookup_ctx = {"cpIds": ctx.get("cpIds") or [], "obligorId": ctx.get("obligorId"),
                   "facilityIds": ctx.get("facilityIds") or []}
     notes: list[dict] = []
-    proposals = batched_proposals(pack, gateway, batches or [[]], notes=notes, spring=tools,
-                                  correlation_id=job.correlation_id, lookup_context=lookup_ctx, all_pages=pages)
+    events = None
+    if pack.name == "covenants" and pack.page_selection.get("parts"):  # focused parts, one taxonomy slice each
+        from dps.skills.covenants import parts
+
+        proposals, events = parts.read(pack, gateway, batches or [[]], notes=notes, spring=tools,
+                                       correlation_id=job.correlation_id, lookup_context=lookup_ctx, all_pages=pages)
+    else:
+        proposals = batched_proposals(pack, gateway, batches or [[]], notes=notes, spring=tools,
+                                      correlation_id=job.correlation_id, lookup_context=lookup_ctx, all_pages=pages)
     if pack.name in ("covenants", "amendment_diff"):  # library metric keys; agreements also drop loan mechanics
         from dps.skills.covenants import names
 
@@ -330,6 +351,10 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     if pack.name == "amendment_diff":
         _explain_changes(fields, proposals)
     fields += _agent_only(pack, pages, fields, proposals)
+    if events:  # events of default: their own fields, not covenants
+        from dps.skills.covenants.codes import event_fields
+
+        fields += event_fields(pack.name, pages, events)
     warnings: list[dict] = []
     unreadable = [p["no"] for p in pages
                   if float(p.get("quality", 1.0)) < UNREADABLE_QUALITY and p.get("sourceMethod") != "BLANK"]

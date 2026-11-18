@@ -21,8 +21,10 @@ from __future__ import annotations
 
 import re
 
-from dps.skills.covenants.names import FINANCIAL, OTHER, canonical
+from dps.skills.covenants.names import FINANCIAL, OTHER, canonical, code_of
 from dps.skills.covenants.pages import is_duty, sentences
+from dps.skills.covenants.taxonomy import COVENANT_CATEGORIES
+from dps.skills.covenants.taxonomy import get as taxonomy
 
 MECHANICS = re.compile(r"draw\s?down|utili[sz]ation|prepay|repay|instal+ment|"
                        r"interest\s+(?:shall\s+be\s+)?pa(?:id|yable)|"
@@ -77,22 +79,71 @@ def duties(text: str) -> list[str]:
     return [s for s in sentences(text) if is_duty(s) and not MECHANICS.search(s) and not DEFINES.search(s)]
 
 
+# Taxonomy codes that cover the same duties for this check (one reporting covenant explains the clause's other
+# reporting sentences, one compliance covenant the tax and environmental ones ...).
+FAMILY = {"NEG_GUARANTEES": "NEG_INDEBTEDNESS", "NEG_FUNDAMENTAL_CHANGES": "NEG_CHANGE_OF_CONTROL",
+          "NEG_CHANGE_OF_BUSINESS": "NEG_CHANGE_OF_CONTROL", "AFF_INSPECTION": "AFF_BOOKS_RECORDS",
+          "AFF_TAXES": "AFF_COMPLIANCE_LAWS", "AFF_SANCTIONS_ABC": "AFF_COMPLIANCE_LAWS",
+          "AFF_ENVIRONMENTAL": "AFF_COMPLIANCE_LAWS", "NEG_DISPOSAL_CAP": "NEG_DISPOSALS"}
+
+
+def family(key: str | None) -> str | None:
+    """The taxonomy code a DPS name or code stands for, folded into its coverage family; None for OTHER. Every
+    reporting code (the general REPORTING_COVENANT included) is one family."""
+    if not key or key == OTHER:
+        return None
+    t = taxonomy().get(code_of(key))
+    if t is None:
+        return None
+    if t.category == "reporting":
+        return "REPORTING"
+    if t.is_other:
+        return None
+    return FAMILY.get(t.code, t.code)
+
+
+_WORDS: dict[int, list[tuple[re.Pattern[str], str]]] = {}
+
+
+def _taxonomy_words() -> list[tuple[re.Pattern[str], str]]:
+    """The taxonomy's keywords and aliases (several words, or one word of six letters or more) for the covenant
+    categories, longest first: the last way to tell a duty sentence's kind."""
+    tax = taxonomy()
+    if id(tax) not in _WORDS:
+        found = []
+        for t in tax.types.values():
+            if t.category not in COVENANT_CATEGORIES or (t.is_other and t.category != "reporting"):
+                continue
+            for w in (*t.aliases, *t.keywords):
+                n = re.sub(r"[^a-z0-9]+", " ", w.lower()).strip()
+                if " " in n or len(n) >= 6:
+                    found.append((n, t.code))
+        found.sort(key=lambda x: -len(x[0]))
+        _WORDS.clear()
+        _WORDS[id(tax)] = [(re.compile(r"\b" + r"\s+".join(map(re.escape, n.split())) + r"\b", re.I), code)
+                           for n, code in found]
+    return _WORDS[id(tax)]
+
+
 def sentence_kind(sentence: str) -> str | None:
-    """The covenant kind a duty sentence is about: a financial metric named in it, else the first non-financial kind
-    whose words it uses; None when it is about none of them."""
+    """The covenant kind a duty sentence is about, as a coverage family: a financial metric named in it, else the
+    first non-financial kind whose words it uses, else a taxonomy name, alias or keyword in it; None when none fits."""
     metric = canonical(None, sentence)
     if metric in FINANCIAL:
-        return metric
-    return next((key for key, words in SENTENCE_KINDS if words.search(sentence)), None)
+        return family(metric)
+    key = next((key for key, words in SENTENCE_KINDS if words.search(sentence)), None)
+    if key:
+        return family(key)
+    code = taxonomy().code_for(sentence) or next((c for p, c in _taxonomy_words() if p.search(sentence)), None)
+    return family(code)
 
 
 def field_kind(f: dict) -> str | None:
-    """A covenant field's kind: its library metric key (None for OTHER and for fields that are not covenants)."""
+    """A covenant field's coverage family (None for OTHER and for fields that are not covenants)."""
     if f.get("group") not in COVENANT_GROUPS:
         return None
     value = f.get("value") or {}
-    key = canonical(value.get("metric"), f.get("name"))
-    return None if key == OTHER else key
+    return family(canonical(value.get("code") or value.get("metric"), f.get("name")))
 
 
 def _explains(quote: str, sentence: str) -> bool:
