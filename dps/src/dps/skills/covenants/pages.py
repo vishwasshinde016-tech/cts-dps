@@ -33,7 +33,13 @@ METRIC_WORD = re.compile(r"ebitda|debt|net\s+worth|coverage|leverage|interest|li
 # A sentence ends at ". " or "; " or a blank line; single line breaks inside a paragraph are joined (PDF text).
 SENTENCE_END = re.compile(r"(?<=[.;])\s+|\n[ \t]*\n")
 # Not duties: lead-ins ("the Borrower shall comply with the following covenants:") and what a breach leads to.
-NOT_A_DUTY = re.compile(r":\s*$|\bevents?\s+of\s+default\b|\bshall\s+constitute\b", re.I)
+NOT_A_DUTY = re.compile(r":\s*$|\bevents?\s+of\s+default\b|\bshall\s+constitute\b|"
+                        # the parties clause ("which expression shall, unless repugnant, include its successors"),
+                        # interpretation ("any reference to the Lender shall include its successors") and the
+                        # grant of the loan ("the Lender agrees to grant"): the agreement's mechanics, not duties.
+                        r"\bexpression\s+shall\s*,?\s*(?:unless|include|mean|be\s+deemed)|"
+                        r"\breferences?\s+(?:in\s+this\s+agreement\s+)?to\b[^.;]{0,120}?\bshall\s+(?:include|be\s+construed|mean)|"
+                        r"\blender\s+(?:hereby\s+)?agrees?\s+to\s+(?:grant|lend|make\s+available|advance)", re.I)
 NON_FINANCIAL_DUTY = re.compile(
     r"\b(?:lien|charge|encumbrance|pledge|mortgage|security\s+interest|dispos|sell|transfer|lease|merge|amalgamat|"
     r"consolidat|demerge|reorgani[sz]|dividend|distribution|guarantee|invest|lend|loan|borrow|indebtedness|"
