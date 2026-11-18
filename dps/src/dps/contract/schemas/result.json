@@ -968,11 +968,13 @@
           "properties": {
             "dutySentences": { "type": "integer" },
             "explained": { "type": "integer" },
+            "byQuote": { "type": "integer", "description": "explained because a field quotes the sentence" },
+            "byKind": { "type": "integer", "description": "explained by a covenant of the same kind on the page or a neighbour" },
             "percent": { "type": "number" },
             "unexplainedCount": { "type": "integer" },
             "unexplained": {
               "type": "array",
-              "items": { "type": "object", "properties": { "page": { "type": "integer" }, "text": { "type": "string" } } }
+              "items": { "type": "object", "properties": { "page": { "type": "integer" }, "text": { "type": "string" }, "kind": { "type": ["string", "null"] } } }
             }
           }
         }

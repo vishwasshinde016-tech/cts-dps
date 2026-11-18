@@ -431,3 +431,66 @@ def test_the_covenants_skill_reads_a_long_agreement_in_several_batches():
     gw = Recorder()
     skills.run(load("covenants"), fake_job("ONBOARD"), model_of(*([duty] * 40)), gw, None)
     assert len(gw.prompts) >= 2 and "part 1 of" in gw.prompts[0]
+
+
+# ---------- coverage counts a covenant's whole clause, not only its quoted sentence ----------
+
+def test_one_insurance_covenant_covers_its_whole_clause_and_an_escrow_duty_stays_listed():
+    from dps.skills.covenants import coverage
+
+    page = ("INSURANCE. The Borrower shall insure the plant against all risks. "
+            "The Borrower shall pay all premiums on time. "
+            "The Borrower shall send copies of the policies to the Lender. "
+            "The Borrower shall renew the policies before they expire. "
+            "The Borrower shall open and maintain an escrow account with a bank approved by the Lender.")
+    field = {"group": "NON_FINANCIAL_COVENANT", "name": "INSURANCE_MAINTENANCE",
+             "value": {"metric": "INSURANCE_MAINTENANCE"},
+             "source": {"page": 3, "quote": "The Borrower shall insure the plant against all risks"}}
+    cov = coverage.check([{"no": 3, "text": page}], [field])
+    assert cov["dutySentences"] == 5 and cov["byQuote"] == 1 and cov["byKind"] == 3
+    assert cov["unexplainedCount"] == 1 and "escrow" in cov["unexplained"][0]["text"]
+    assert cov["unexplained"][0]["kind"] == "ESCROW_ACCOUNT"  # its own kind, and no escrow covenant: still listed
+
+
+def test_a_financial_sentence_is_covered_only_by_a_covenant_on_the_same_metric():
+    from dps.skills.covenants import coverage
+
+    page = ("The Borrower shall maintain a Debt Service Coverage Ratio of not less than 1.25 times. "
+            "The Borrower shall maintain an Interest Coverage Ratio of not less than 2.00 times.")
+    dscr = {"group": "FINANCIAL_COVENANT", "name": "DSCR", "value": {"metric": "DSCR"},
+            "source": {"page": 5, "quote": "unrelated words only"}}
+    cov = coverage.check([{"no": 5, "text": page}], [dscr])
+    assert cov["byKind"] == 1 and cov["unexplainedCount"] == 1
+    assert cov["unexplained"][0]["kind"] == "ICR"  # the ICR duty is not covered by the DSCR covenant
+    far = dict(dscr, source={"page": 9, "quote": "unrelated words only"})
+    assert coverage.check([{"no": 5, "text": page}], [far])["byKind"] == 0  # a covenant far away covers nothing here
+
+
+def test_schedule_terms_and_other_fields_have_no_kind():
+    from dps.skills.covenants.coverage import field_kind
+
+    assert field_kind({"group": "SCHEDULE_TERM", "name": "cure_window", "value": {"kind": "cure_window"}}) is None
+    assert field_kind({"group": "POSSIBLE_COVENANT", "name": "x", "value": {"metric": "OTHER"}}) is None
+    assert field_kind({"group": "NON_FINANCIAL_COVENANT", "name": "x", "value": {"metric": "NEGATIVE_PLEDGE"}}) \
+        == "NEGATIVE_PLEDGE"
+
+
+def test_the_newer_kinds_are_recognised_in_sentences_and_covered_by_their_covenant():
+    from dps.skills.covenants import coverage
+
+    cases = {
+        "The Loan shall be utilized by the Borrower solely for capital expenditure.": "END_USE",
+        "The Borrower shall open and maintain an escrow account with a bank approved by the Lender.": "ESCROW_ACCOUNT",
+        "The Borrower shall procure that all loans from its promoters are subordinated to the Facility.":
+            "SUBORDINATION",
+        "The Borrower shall create a first-ranking mortgage over the property within 90 days.": "SECURITY_CREATION",
+        "The Borrower shall not terminate any material contract without consent of the Lender.": "MATERIAL_CONTRACTS",
+    }
+    for sentence, kind in cases.items():
+        assert coverage.sentence_kind(sentence) == kind, sentence
+    page = " ".join(cases)
+    escrow = {"group": "POSSIBLE_COVENANT", "name": "Escrow account", "value": {"metric": "ESCROW_ACCOUNT"},
+              "source": {"page": 4, "quote": "unrelated words"}}
+    cov = coverage.check([{"no": 4, "text": page}], [escrow])
+    assert cov["byKind"] == 1 and cov["unexplainedCount"] == 4
+    assert "escrow" not in " ".join(u["text"] for u in cov["unexplained"])
