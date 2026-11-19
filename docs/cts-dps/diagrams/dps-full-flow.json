@@ -10,7 +10,7 @@
    "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
    "provider": "github",
    "link_mode": "web",
-   "revision": "2915c40ffd1182e3fb60dac0e261ff76d9d416a4"
+   "revision": "313b69516b14a40a3e8d118d06d16e3b9a32f25a"
   },
   "views": [
    {
@@ -160,7 +160,7 @@
    "lane": "l0",
    "col": 0,
    "type": "external",
-   "label": "Job API contract",
+   "label": "0.1 Job API contract",
    "sublabel": "contracts/dps-jobs-api.yaml:32",
    "sources": [
     {
@@ -188,7 +188,7 @@
    "lane": "l0",
    "col": 1,
    "type": "backend",
-   "label": "Caller schema",
+   "label": "0.2 Caller schema",
    "sublabel": "contracts/schemas/job-request.json",
    "sources": [
     {
@@ -215,7 +215,7 @@
    "lane": "l0",
    "col": 2,
    "type": "backend",
-   "label": "Page model schema",
+   "label": "0.3 Page model schema",
    "sublabel": "contracts/schemas/page-model.json",
    "sources": [
     {
@@ -236,7 +236,7 @@
    "lane": "l0",
    "col": 3,
    "type": "backend",
-   "label": "Skill answer schema",
+   "label": "0.4 Skill answer schema",
    "sublabel": "skills/covenants/schema.json",
    "sources": [
     {
@@ -264,7 +264,7 @@
    "lane": "l0",
    "col": 4,
    "type": "backend",
-   "label": "Extraction (result) schema",
+   "label": "0.5 Result schema",
    "sublabel": "contracts/schemas/result.json:82",
    "sources": [
     {
@@ -289,7 +289,7 @@
    "lane": "l0",
    "col": 5,
    "type": "backend",
-   "label": "Event schema",
+   "label": "0.6 Event schema",
    "sublabel": "contracts/schemas/event.json",
    "sources": [
     {
@@ -310,7 +310,7 @@
    "lane": "l1",
    "col": 0,
    "type": "external",
-   "label": "Spring app",
+   "label": "1.1 Spring app",
    "sublabel": "POST /dps/v1/jobs",
    "sources": [
     {
@@ -325,7 +325,7 @@
    "lane": "l1",
    "col": 1,
    "type": "backend",
-   "label": "submit_job",
+   "label": "1.2 submit_job",
    "sublabel": "api/jobs.py:312",
    "sources": [
     {
@@ -353,7 +353,7 @@
    "lane": "l1",
    "col": 2,
    "type": "security",
-   "label": "validate_job",
+   "label": "1.3 validate_job",
    "sublabel": "api/jobs.py:166 · SHA-256",
    "sources": [
     {
@@ -369,7 +369,7 @@
    "lane": "l1",
    "col": 3,
    "type": "backend",
-   "label": "Already in DPS?",
+   "label": "1.4 Already in DPS?",
    "sublabel": "_input_key · api/jobs.py:268",
    "sources": [
     {
@@ -385,7 +385,7 @@
    "lane": "l1",
    "col": 4,
    "type": "database",
-   "label": "create_job",
+   "label": "1.5 create_job",
    "sublabel": "api/jobs.py:240 · dps_job",
    "sources": [
     {
@@ -407,7 +407,7 @@
    "lane": "l2",
    "col": 4,
    "type": "backend",
-   "label": "Worker.run_once",
+   "label": "2.1 Worker.run_once",
    "sublabel": "worker.py:131 · every 2 s",
    "sources": [
     {
@@ -423,7 +423,7 @@
    "lane": "l2",
    "col": 3,
    "type": "database",
-   "label": "claim (atomic)",
+   "label": "2.2 claim (atomic)",
    "sublabel": "jobs.py:85",
    "sources": [
     {
@@ -439,7 +439,7 @@
    "lane": "l2",
    "col": 2,
    "type": "security",
-   "label": "lease + attempt fence",
+   "label": "2.3 lease + attempt fence",
    "sublabel": "jobs.py:162 · :54",
    "sources": [
     {
@@ -461,7 +461,7 @@
    "lane": "l2",
    "col": 1,
    "type": "backend",
-   "label": "_run: route by flow",
+   "label": "2.4 _run: route by flow",
    "sublabel": "worker.py:211",
    "sources": [
     {
@@ -483,7 +483,7 @@
    "lane": "l3",
    "col": 0,
    "type": "backend",
-   "label": "read + SHA-256",
+   "label": "3.1 read + SHA-256",
    "sublabel": "ingest/pipeline.py:48",
    "sources": [
     {
@@ -505,7 +505,7 @@
    "lane": "l3",
    "col": 1,
    "type": "security",
-   "label": "inspect file",
+   "label": "3.2 inspect file",
    "sublabel": "ingest/inspect.py:63",
    "sources": [
     {
@@ -521,7 +521,7 @@
    "lane": "l3",
    "col": 2,
    "type": "security",
-   "label": "sandbox parse",
+   "label": "3.3 sandbox parse",
    "sublabel": "parse/sandbox.py:157",
    "sources": [
     {
@@ -537,7 +537,7 @@
    "lane": "l3",
    "col": 3,
    "type": "backend",
-   "label": "page_model.build",
+   "label": "3.4 page_model.build",
    "sublabel": "parse/page_model.py:30",
    "sources": [
     {
@@ -559,7 +559,7 @@
    "lane": "l3",
    "col": 4,
    "type": "backend",
-   "label": "pypdf, pdfplumber, RapidOCR",
+   "label": "3.5 PDF readers + OCR",
    "sublabel": "parse/engine.py:127 · :71",
    "sources": [
     {
@@ -587,7 +587,7 @@
    "lane": "l3",
    "col": 5,
    "type": "database",
-   "label": "page model saved",
+   "label": "3.6 page model saved",
    "sublabel": "derived/ · dps_artifact",
    "sources": [
     {
@@ -615,7 +615,7 @@
    "lane": "l4",
    "col": 5,
    "type": "backend",
-   "label": "SkillJobFlow (CrewAI)",
+   "label": "4.1 SkillJobFlow",
    "sublabel": "flows/skill_job.py:27",
    "sources": [
     {
@@ -631,7 +631,7 @@
    "lane": "l4",
    "col": 4,
    "type": "backend",
-   "label": "rule_scores",
+   "label": "4.2 rule_scores",
    "sublabel": "analyze/classify.py:134",
    "sources": [
     {
@@ -653,7 +653,7 @@
    "lane": "l4",
    "col": 3,
    "type": "backend",
-   "label": "Rules sure?",
+   "label": "4.3 Rules sure?",
    "sublabel": "decide_rules · classify.py:193",
    "sources": [
     {
@@ -674,7 +674,7 @@
    "lane": "l4",
    "col": 2,
    "type": "backend",
-   "label": "Agent second opinion",
+   "label": "4.4 Agent decides",
    "sublabel": "model_classify · classify.py:238",
    "sources": [
     {
@@ -696,7 +696,7 @@
    "lane": "l4",
    "col": 1,
    "type": "backend",
-   "label": "classify: type found",
+   "label": "4.5 type found",
    "sublabel": "analyze/classify.py:294",
    "sources": [
     {
@@ -712,7 +712,7 @@
    "lane": "l4",
    "col": 0,
    "type": "backend",
-   "label": "identify + match IDs",
+   "label": "4.6 identify + match IDs",
    "sublabel": "analyze/identify.py:153",
    "sources": [
     {
@@ -734,7 +734,7 @@
    "lane": "l5",
    "col": 0,
    "type": "backend",
-   "label": "ONBOARD_PACKS",
+   "label": "5.1 ONBOARD_PACKS",
    "sublabel": "skills/runner.py:608",
    "sources": [
     {
@@ -761,7 +761,7 @@
    "lane": "l5",
    "col": 1,
    "type": "backend",
-   "label": "skill pack",
+   "label": "5.2 skill pack",
    "sublabel": "skills/covenants/pack.yaml",
    "sources": [
     {
@@ -777,7 +777,7 @@
    "lane": "l5",
    "col": 2,
    "type": "backend",
-   "label": "prompt.md + schema.json",
+   "label": "5.3 prompt + schema",
    "sublabel": "skills/covenants/",
    "sources": [
     {
@@ -792,7 +792,7 @@
    "lane": "l5",
    "col": 3,
    "type": "backend",
-   "label": "_extract: the order",
+   "label": "5.4 _extract: the order",
    "sublabel": "skills/runner.py:391",
    "sources": [
     {
@@ -814,7 +814,7 @@
    "lane": "l6",
    "col": 3,
    "type": "backend",
-   "label": "rules (no AI)",
+   "label": "6.1 rules (no AI)",
    "sublabel": "skills/covenants/rules.py:61",
    "sources": [
     {
@@ -830,7 +830,7 @@
    "lane": "l6",
    "col": 2,
    "type": "backend",
-   "label": "is_duty",
+   "label": "6.2 is_duty",
    "sublabel": "skills/covenants/pages.py:61",
    "sources": [
     {
@@ -846,7 +846,7 @@
    "lane": "l6",
    "col": 1,
    "type": "backend",
-   "label": "covenant_batches",
+   "label": "6.3 covenant_batches",
    "sublabel": "pages.py:98 · 4 × 25 pages",
    "sources": [
     {
@@ -862,7 +862,7 @@
    "lane": "l6",
    "col": 0,
    "type": "backend",
-   "label": "4 focused reads",
+   "label": "6.4 4 focused reads",
    "sublabel": "skills/covenants/parts.py:75",
    "sources": [
     {
@@ -878,7 +878,7 @@
    "lane": "l7",
    "col": 0,
    "type": "backend",
-   "label": "prompt_for",
+   "label": "7.1 prompt_for",
    "sublabel": "skills/common.py:126",
    "sources": [
     {
@@ -906,7 +906,7 @@
    "lane": "l7",
    "col": 1,
    "type": "backend",
-   "label": "make_agent (CrewAI)",
+   "label": "7.2 make_agent (CrewAI)",
    "sublabel": "agent/document_agent.py:277",
    "sources": [
     {
@@ -928,7 +928,7 @@
    "lane": "l7",
    "col": 2,
    "type": "backend",
-   "label": "6 agent tools",
+   "label": "7.3 6 agent tools",
    "sublabel": "document_agent.py:145 … :243",
    "sources": [
     {
@@ -956,7 +956,7 @@
    "lane": "l7",
    "col": 3,
    "type": "external",
-   "label": "Spring Java rules",
+   "label": "7.4 Spring Java rules",
    "sublabel": "integrations/spring_tools.py:113",
    "sources": [
     {
@@ -977,7 +977,7 @@
    "lane": "l7",
    "col": 4,
    "type": "security",
-   "label": "Gateway.call_json",
+   "label": "7.5 Gateway.call_json",
    "sublabel": "agent/gateway.py:242",
    "sources": [
     {
@@ -1005,7 +1005,7 @@
    "lane": "l7",
    "col": 5,
    "type": "cloud",
-   "label": "Bank Azure OpenAI",
+   "label": "7.6 Bank Azure OpenAI",
    "sublabel": "selected pages only",
    "sources": [
     {
@@ -1021,7 +1021,7 @@
    "lane": "l8",
    "col": 5,
    "type": "security",
-   "label": "schema check, 1 repair",
+   "label": "8.1 schema check",
    "sublabel": "agent/document_agent.py:293",
    "sources": [
     {
@@ -1043,7 +1043,7 @@
    "lane": "l8",
    "col": 4,
    "type": "security",
-   "label": "Quote on the page?",
+   "label": "8.2 Quote on the page?",
    "sublabel": "skills/common.py:53",
    "sources": [
     {
@@ -1059,7 +1059,7 @@
    "lane": "l8",
    "col": 3,
    "type": "security",
-   "label": "number in quote",
+   "label": "8.3 number in quote",
    "sublabel": "skills/runner.py:64",
    "sources": [
     {
@@ -1075,7 +1075,7 @@
    "lane": "l8",
    "col": 2,
    "type": "backend",
-   "label": "rules vs agent vote",
+   "label": "8.4 rules vs agent",
    "sublabel": "skills/runner.py:223",
    "sources": [
     {
@@ -1097,7 +1097,7 @@
    "lane": "l8",
    "col": 1,
    "type": "backend",
-   "label": "ledger: every duty",
+   "label": "8.5 ledger: every duty",
    "sublabel": "covenants/ledger.py:146",
    "sources": [
     {
@@ -1125,7 +1125,7 @@
    "lane": "l8",
    "col": 0,
    "type": "backend",
-   "label": "Java check, code, score",
+   "label": "8.6 Java check + score",
    "sublabel": "codes.py:34 · scoring:211",
    "sources": [
     {
@@ -1153,7 +1153,7 @@
    "lane": "l9",
    "col": 0,
    "type": "database",
-   "label": "finish: dps_run",
+   "label": "9.1 finish: dps_run",
    "sublabel": "skills/runner.py:557",
    "sources": [
     {
@@ -1180,7 +1180,7 @@
    "lane": "l9",
    "col": 1,
    "type": "messagebus",
-   "label": "event needs_review",
+   "label": "9.2 event needs_review",
    "sublabel": "feed.py:39",
    "sources": [
     {
@@ -1196,7 +1196,7 @@
    "lane": "l9",
    "col": 2,
    "type": "external",
-   "label": "Spring pulls result",
+   "label": "9.3 Spring pulls result",
    "sublabel": "api/jobs.py:352",
    "sources": [
     {
@@ -1217,7 +1217,7 @@
    "lane": "l9",
    "col": 3,
    "type": "external",
-   "label": "Person reviews",
+   "label": "9.4 Person reviews",
    "sublabel": "api/review.py:141 · new run",
    "sources": [
     {
@@ -1233,7 +1233,7 @@
    "lane": "l9",
    "col": 4,
    "type": "external",
-   "label": "Spring decides compliance",
+   "label": "9.5 Spring decides",
    "sublabel": "never DPS"
   },
   {
@@ -1241,7 +1241,7 @@
    "lane": "l10",
    "col": 0,
    "type": "database",
-   "label": "dps_job",
+   "label": "10.1 dps_job",
    "sublabel": "models.py:128 · the queue",
    "sources": [
     {
@@ -1269,7 +1269,7 @@
    "lane": "l10",
    "col": 1,
    "type": "database",
-   "label": "dps_document",
+   "label": "10.2 dps_document",
    "sublabel": "models.py:78 · the file",
    "sources": [
     {
@@ -1291,7 +1291,7 @@
    "lane": "l10",
    "col": 2,
    "type": "database",
-   "label": "dps_artifact",
+   "label": "10.3 dps_artifact",
    "sublabel": "models.py:245 · page models",
    "sources": [
     {
@@ -1313,7 +1313,7 @@
    "lane": "l10",
    "col": 3,
    "type": "database",
-   "label": "dps_ai_call",
+   "label": "10.4 dps_ai_call",
    "sublabel": "models.py:511 · model calls",
    "sources": [
     {
@@ -1335,7 +1335,7 @@
    "lane": "l10",
    "col": 4,
    "type": "database",
-   "label": "dps_run",
+   "label": "10.5 dps_run",
    "sublabel": "models.py:267 · results",
    "sources": [
     {
@@ -1363,7 +1363,7 @@
    "lane": "l10",
    "col": 5,
    "type": "database",
-   "label": "dps_review_decision",
+   "label": "10.6 dps_review_decision",
    "sublabel": "models.py:284 · decisions",
    "sources": [
     {
