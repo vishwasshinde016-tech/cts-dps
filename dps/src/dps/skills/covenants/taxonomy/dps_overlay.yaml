@@ -80,7 +80,7 @@ types:
   # "Collateral" alone is too loose a name for security perfection; "Security" alone too.
   - code: AFF_SECURITY_PERFECTION
     replace_aliases: true
-    aliases: [Further Assurances, Additional Guarantors, Creation of Security, Perfection of Security, Security Creation, Additional Subsidiaries]
+    aliases: [Further Assurances, Creation of Security, Perfection of Security, Security Creation]
     dps_keys: [SECURITY_CREATION]
 
   # ---------------------------------------------------------------- the rules' names for existing codes

@@ -9,10 +9,12 @@ become ``EVENT_OF_DEFAULT`` fields of their own, always for a person to confirm.
 
 from __future__ import annotations
 
+from dps.skills.covenants.taxonomy import COVENANT_CATEGORIES
 from dps.skills.covenants.taxonomy import get as taxonomy
 
 COVENANT_GROUPS = {"FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "INFO_COVENANT", "POSSIBLE_COVENANT"}
 STAMPED = COVENANT_GROUPS | {"CERTIFIED_FIGURE", "EVENT_OF_DEFAULT"}
+RESULT_CATEGORIES = frozenset((*COVENANT_CATEGORIES, "event_of_default"))
 UNITS = {"ratio": "TIMES", "multiple": "TIMES", "percent": "PERCENT"}
 FREQUENCIES = {"annual": "YEARLY", "yearly": "YEARLY", "quarterly": "QUARTERLY", "monthly": "MONTHLY",
                "semi_annual": "HALF_YEARLY", "half_yearly": "HALF_YEARLY"}
@@ -38,6 +40,8 @@ def stamp(fields: list[dict], defaults: bool = True) -> None:
             continue
         v = f["value"]
         code = code_for_field(f)
+        if tax.category_of(code) not in RESULT_CATEGORIES:
+            code = None  # richer obligation roles have no representation in the v1 covenant field schema
         v["code"] = code
         v["category"] = tax.category_of(code)
         t = tax.get(code)
@@ -48,7 +52,7 @@ def stamp(fields: list[dict], defaults: bool = True) -> None:
             if not v.get("operator") and t.default_operator:
                 v["operator"] = t.default_operator
                 filled.append("operator")
-            if not v.get("unit") and UNITS.get(t.unit or ""):
+            if not v.get("unit") and (t.default_operator or t.frequency) and UNITS.get(t.unit or ""):
                 v["unit"] = UNITS[t.unit]
                 filled.append("unit")
             test = f.get("test") if isinstance(f.get("test"), dict) else None
@@ -61,6 +65,9 @@ def stamp(fields: list[dict], defaults: bool = True) -> None:
             f.setdefault("issues", []).append(issue(
                 "TAXONOMY_DEFAULT", f"not stated in the document; the taxonomy's usual {', '.join(filled)} for "
                                     f"{t.name} was used"))
+            f["status"] = "NEEDS_REVIEW"
+        elif v.get("threshold") is not None and (not v.get("operator") or not v.get("unit")):
+            f.setdefault("issues", []).append(issue("REQUIRED_MISSING", "Confirm the operator and threshold unit."))
             f["status"] = "NEEDS_REVIEW"
 
 

@@ -54,19 +54,23 @@ class Ingestor:
             raise IngestFailed(ex.code, str(ex), retry=ex.code == "STORAGE_UNAVAILABLE") from ex
 
     def page_model(self, db: Session, job: Job, doc: Document, data: bytes) -> dict:
-        existing = db.scalars(select(Artifact).where(Artifact.source_sha256 == doc.sha256,
+        try:
+            fmt = declared_format(doc.file_name)
+        except InspectionFailed as ex:
+            raise IngestFailed(ex.code, str(ex)) from ex
+        existing = db.scalars(select(Artifact).where(Artifact.tenant_id == _safe(job.tenant_id or "default"),
+                                                     Artifact.source_sha256 == doc.sha256,
                                                      Artifact.kind == PAGE_MODEL,
                                                      Artifact.pipeline_version == self.pipeline_version)
                               .order_by(Artifact.created_at)).first()
         if existing is not None:
             try:
-                return json.loads(gzip.decompress(self.store.get_derived(existing.path, existing.sha256)))
+                model = json.loads(gzip.decompress(self.store.get_derived(existing.path, existing.sha256)))
+                if model.get("format") == fmt:
+                    model["documentVersionId"] = job.document_version_id
+                    return model
             except StoreError as ex:
                 log.warning("Page model %s unreadable (%s); building it again", existing.path, ex.code)
-        try:
-            fmt = declared_format(doc.file_name)
-        except InspectionFailed as ex:
-            raise IngestFailed(ex.code, str(ex)) from ex
         req = sandbox.ParseRequest(data, fmt, doc.sha256, job.document_version_id, self.ocr, self.heavy)
         try:
             model = self._parse(req, None)

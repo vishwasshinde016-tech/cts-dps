@@ -501,7 +501,7 @@ ONBOARD_PACKS = {"LOAN_AGREEMENT": "covenants", "SANCTION_LETTER": "sanction", "
 
 
 def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | None = None,
-                pipeline_version: str = "1") -> dict:
+                pipeline_version: str = "1", scorer_dir: str | None = None) -> dict:
     from dps.analyze import obligations
     from dps.analyze.classify import classify
     from dps.analyze.identify import find_identifiers, legibility, match, missing_required
@@ -520,7 +520,7 @@ def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | N
         result["document"] = {"confidence": c.confidence, "route": "NEEDS_REVIEW",
                               "reasons": ["TYPE_NOT_ONBOARDING"]}
     else:
-        result = run(load(pack_name), job, model, gateway, tools, db, pipeline_version)
+        result = run(load(pack_name), job, model, gateway, tools, db, pipeline_version, scorer_dir=scorer_dir)
     found = find_identifiers(model)
     identifiers, id_warnings = match(found, tools, {"cpIds": ctx.get("cpIds") or [],
                                                      "obligorId": ctx.get("obligorId"),
@@ -554,8 +554,8 @@ def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | N
 
 
 def run_job(job: Job, model: dict | None, gateway=None, tools=None, db: Session | None = None,
-            pipeline_version: str = "1", raw: bytes | None = None) -> dict:
+            pipeline_version: str = "1", raw: bytes | None = None, scorer_dir: str | None = None) -> dict:
     """The worker's entry point for every SKILL_PACK job."""
     if job.job_type == "ONBOARD":
-        return run_onboard(job, model or {"pages": []}, gateway, tools, db, pipeline_version)
-    return run(pack_for(job.job_type), job, model, gateway, tools, db, pipeline_version, raw)
+        return run_onboard(job, model or {"pages": []}, gateway, tools, db, pipeline_version, scorer_dir)
+    return run(pack_for(job.job_type), job, model, gateway, tools, db, pipeline_version, raw, scorer_dir)

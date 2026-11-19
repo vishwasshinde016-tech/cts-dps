@@ -19,6 +19,7 @@ dependencies = [
   "httpx==0.28.*",
   "pypdf==6.21.4",
   "openpyxl==3.1.*",
+  "PyYAML>=6,<7",
 ]
 
 [project.optional-dependencies]
@@ -56,7 +57,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 # The CTS job contract's schemas and catalogues, served by GET /dps/v1/schemas.
 dps = ["contract/schemas/*.json", "contract/catalogues/*.yaml", "skills/*/pack.yaml", "skills/*/prompt.md",
-       "skills/*/schema.json"]
+       "skills/*/schema.json", "skills/covenants/taxonomy/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

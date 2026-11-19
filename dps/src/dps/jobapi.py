@@ -212,38 +212,38 @@ def validate_job(store, body: JobRequest, settings: Settings) -> dict:
 
 def _document_for(db: Session, body: JobRequest, spec: dict) -> Document:
     ctx, ref = body.context, body.document
-    doc = None
     if ref.versionId:
-        doc = db.scalars(select(Document).where(Document.tenant_id == ctx.tenantId,
-                                                Document.external_version_id == ref.versionId)).first()
-    if doc is None:
-        doc = Document(type=spec["document_type"], file_name=ref.fileName,
-                       storage_path=ref.objectKey or ref.stagingRef or "",
-                       sha256=ref.sha256, size_bytes=ref.sizeBytes, as_of_date=ctx.asOfDate, status="QUEUED",
-                       uploaded_by=ctx.requestedBy, tenant_id=ctx.tenantId, external_version_id=ref.versionId,
-                       object_key=ref.objectKey)
-        db.add(doc)
-        db.flush()
-        for cp_id in sorted(set(ctx.cpIds)):
-            db.add(DocumentCpLink(document_id=doc.id, cp_id=cp_id, linked_by=ctx.requestedBy))
-    else:
-        doc.status = "QUEUED"
+        previous = db.scalars(select(Document).where(Document.tenant_id == ctx.tenantId,
+                                                     Document.external_version_id == ref.versionId)).first()
+        if previous is not None and (previous.sha256, previous.object_key) != (ref.sha256, ref.objectKey):
+            raise ApiError(400, "INTEGRITY_MISMATCH", "The document version already refers to a different object.")
+    # Local state is scoped to the job. The immutable DMS object remains shared.
+    doc = Document(type=spec["document_type"], file_name=ref.fileName,
+                   storage_path=ref.objectKey or ref.stagingRef or "",
+                   sha256=ref.sha256, size_bytes=ref.sizeBytes, as_of_date=ctx.asOfDate, status="QUEUED",
+                   uploaded_by=ctx.requestedBy, tenant_id=ctx.tenantId, external_version_id=ref.versionId,
+                   object_key=ref.objectKey)
+    db.add(doc)
+    db.flush()
+    for cp_id in sorted(set(ctx.cpIds)):
+        db.add(DocumentCpLink(document_id=doc.id, cp_id=cp_id, linked_by=ctx.requestedBy))
     return doc
 
 
 def create_job(db: Session, body: JobRequest, spec: dict, settings: Settings, *, key: str | None,
                request_hash: str, correlation_id: str | None, batch_id: str | None = None,
                client_ref: str | None = None) -> Job:
-    """Adds the document (once per version) and its job, and the accepted event. The caller commits."""
+    """Adds the scoped document record, job and accepted event. The caller commits."""
     doc = _document_for(db, body, spec)
     priority = jobs.PRIORITY[body.priority]
     job = Job(document_id=doc.id, flow=spec["flow"], job_type=body.jobType, tenant_id=body.context.tenantId,
               priority=priority, due_at=utcnow(), idempotency_key=key, request_hash=request_hash,
+              input_key=_input_key(body, settings.pipeline_version, _rollout(body, settings)),
               request_json=body.model_dump_json(), correlation_id=correlation_id, batch_id=batch_id,
               client_file_reference=client_ref, pipeline_version=settings.pipeline_version,
               document_version_id=body.document.versionId, sha256=body.document.sha256,
               requested_by=body.context.requestedBy,
-              rollout=settings.rollout_modes.get(body.jobType, settings.rollout_default))
+              rollout=_rollout(body, settings))
     db.add(job)
     db.flush()
     doc.latest_job_id = job.id
@@ -254,15 +254,42 @@ def create_job(db: Session, body: JobRequest, spec: dict, settings: Settings, *,
     return job
 
 
+def _rollout(body: JobRequest, settings: Settings) -> str:
+    return settings.rollout_modes.get(body.jobType, settings.rollout_default)
+
+
+def _input_key(body: JobRequest, pipeline: str, rollout: str) -> str:
+    context = body.context.model_dump(mode="json", exclude={"requestedBy"})
+    for field in ("cpIds", "facilityIds"):
+        context[field] = sorted(set(context[field]))
+    if context["baseCovenants"] is not None:
+        context["baseCovenants"] = sorted(
+            context["baseCovenants"], key=lambda covenant: covenant["appliedCovenantId"])
+    ref = body.document
+    data = [body.jobType, pipeline, rollout, ref.versionId, ref.objectKey, ref.sha256, ref.mediaType,
+            ref.fileName.rsplit(".", 1)[-1].lower(), context]
+    return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def _same_input(db: Session, body: JobRequest, settings: Settings) -> Job | None:
-    if body.jobType == "ANALYZE":  # a staged file has no version id yet: the same bytes are the same input
-        return db.scalars(select(Job).where(Job.tenant_id == body.context.tenantId, Job.job_type == "ANALYZE",
-                                            Job.sha256 == body.document.sha256,
-                                            Job.pipeline_version == settings.pipeline_version)).first()
-    return db.scalars(select(Job).where(Job.tenant_id == body.context.tenantId,
-                                        Job.document_version_id == body.document.versionId,
-                                        Job.job_type == body.jobType,
-                                        Job.pipeline_version == settings.pipeline_version)).first()
+    key = _input_key(body, settings.pipeline_version, _rollout(body, settings))
+    tenant = Job.tenant_id == body.context.tenantId
+    existing = db.scalars(select(Job).where(tenant, Job.input_key == key)).first()
+    if existing is not None:
+        return existing
+    # Preserve equivalent historical jobs without hashing incomplete legacy request records.
+    older = db.scalars(select(Job).where(
+        tenant, Job.input_key.is_(None), Job.job_type == body.jobType, Job.sha256 == body.document.sha256,
+        Job.pipeline_version == settings.pipeline_version, Job.document_version_id == body.document.versionId,
+        Job.request_json.is_not(None)))
+    for job in older:
+        try:
+            previous = JobRequest.model_validate_json(job.request_json)
+        except ValueError:
+            continue
+        if _input_key(previous, job.pipeline_version, job.rollout) == key:
+            return job
+    return None
 
 
 def _job_or_404(db: Session, job_id: str) -> Job:
@@ -305,6 +332,9 @@ def submit_job(body: JobRequest, request: Request, response: Response, db: DB, u
             or _same_input(db, body, settings)
         if winner is None:
             raise
+        if winner.idempotency_key == key and winner.request_hash != request_hash:
+            raise ApiError(409, "IDEMPOTENCY_KEY_REUSED",
+                           "This Idempotency-Key was used for a different request.") from None
         response.status_code = 200
         return _accepted(winner, duplicate=True)
     response.headers["Location"] = f"/dps/v1/jobs/{job.id}"
@@ -424,6 +454,9 @@ def _submit_item(db: Session, request: Request, settings: Settings, batch: Batch
         db.rollback()
         _refused_item(db, batch, item, request_hash, "DUPLICATE", "Same input as an earlier job", cid,
                       status=jobs.DONE)
+    except ApiError as ex:
+        db.rollback()
+        _refused_item(db, batch, item, request_hash, ex.code, ex.message, cid)
 
 
 def _refused_item(db: Session, batch: Batch, item: BatchItem, request_hash: str, code: str, message: str,

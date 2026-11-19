@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import random
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -41,6 +42,32 @@ class Limits:
 
 class JobFinished(Exception):
     """The job already ended; it cannot be cancelled."""
+
+
+class LeaseLost(Exception):
+    """A stale worker attempt may no longer publish results."""
+
+
+worker_attempt: ContextVar[tuple[str, str, int] | None] = ContextVar("worker_attempt", default=None)
+
+
+def guard_attempt(db: Session) -> None:
+    """Hold the claim row until the transaction publishing this attempt commits.
+
+    The attempt still owns the job while no other worker has claimed it: a claim changes ``locked_by`` and
+    ``attempts``. A lease that ran out (a late heartbeat during a long OCR) does not throw finished work away."""
+    attempt = worker_attempt.get()
+    if attempt is None:
+        return
+    job_id, worker_id, number = attempt
+    with db.no_autoflush:
+        result = db.execute(
+            update(Job).where(Job.id == job_id, Job.status == RUNNING, Job.locked_by == worker_id,
+                              Job.attempts == number)
+            .values(updated_at=utcnow()).execution_options(synchronize_session=False))
+    if result.rowcount != 1:
+        db.rollback()
+        raise LeaseLost(job_id)
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -132,12 +159,17 @@ def _bury_poison(db: Session, job: Job, crashes: int) -> None:
     db.commit()
 
 
-def renew_lease(db: Session, job_id: str, worker_id: str, lease_seconds: int) -> bool:
-    """Heartbeat: pushes the lease out while ``worker_id`` still holds the running job. False if it lost it."""
+def renew_lease(db: Session, job_id: str, worker_id: str, lease_seconds: int,
+                attempt: int | None = None) -> bool:
+    """Heartbeat: pushes the lease out while ``worker_id`` still holds the running job. False if it lost it.
+
+    A late beat after the lease ran out still renews it when no other worker has claimed the job since."""
     now = utcnow()
+    claim = update(Job).where(Job.id == job_id, Job.status == RUNNING, Job.locked_by == worker_id)
+    if attempt is not None:
+        claim = claim.where(Job.attempts == attempt)
     result = db.execute(
-        update(Job)
-        .where(Job.id == job_id, Job.status == RUNNING, Job.locked_by == worker_id)
+        claim
         .values(locked_until=now + timedelta(seconds=lease_seconds), updated_at=now)
         .execution_options(synchronize_session=False))
     db.commit()
@@ -145,6 +177,7 @@ def renew_lease(db: Session, job_id: str, worker_id: str, lease_seconds: int) ->
 
 
 def record_step(db: Session, job: Job, step: str, **detail) -> None:
+    guard_attempt(db)
     steps = json.loads(job.steps_json or "[]")
     steps.append({"step": step, "at": utcnow().isoformat(), **detail})
     job.steps_json, job.current_step, job.updated_at = json.dumps(steps, default=str), step, utcnow()
@@ -161,6 +194,7 @@ def _close_attempt(db: Session, job: Job, outcome: str, error_code: str | None) 
 def finish(db: Session, job: Job, status: str, error: str | None = None, error_code: str | None = None,
            payload: dict | None = None) -> None:
     """Ends the job's current attempt with ``status``; a final status also emits its event."""
+    guard_attempt(db)
     now = utcnow()
     job.status, job.error, job.locked_by, job.locked_until, job.updated_at = status, error, None, None, now
     if error_code is not None or status in (DONE, NEEDS_REVIEW):
@@ -199,6 +233,7 @@ def release_for_retry(db: Session, job: Job, error: str, max_attempts: int, erro
     if job.attempts >= max_attempts:
         finish(db, job, DEAD, error, error_code)
         return
+    guard_attempt(db)
     now = utcnow()
     job.status, job.error, job.error_code = RETRY_WAIT, error, error_code
     job.locked_by, job.locked_until, job.updated_at = None, None, now
@@ -209,6 +244,7 @@ def release_for_retry(db: Session, job: Job, error: str, max_attempts: int, erro
 
 def move_to_pool(db: Session, job: Job, pool: str) -> None:
     """Hands the job to another pool (fast parse not good enough → HEAVY) without using up an attempt."""
+    guard_attempt(db)
     job.pool, job.status = pool, QUEUED
     job.attempts = max(0, job.attempts - 1)
     job.locked_by, job.locked_until, job.updated_at = None, None, utcnow()

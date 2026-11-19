@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from dps import jobs
 from dps.models import FlowState, utcnow
 
 
@@ -33,6 +34,7 @@ class SqlFlowPersistence(FlowPersistence):
     def save_state(self, flow_uuid: str, method_name: str, state_data: dict[str, Any] | BaseModel) -> None:
         data = state_data.model_dump(mode="json") if isinstance(state_data, BaseModel) else state_data
         with self.session_factory() as db:
+            jobs.guard_attempt(db)
             # Two checkpoints in the same clock tick were ordered by their random id, so a resumed run could load
             # the older state (found by a flaky test, 9 November 2026). Each save is now later than the last.
             latest = db.scalar(select(func.max(FlowState.saved_at)).where(FlowState.flow_uuid == flow_uuid))
