@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     llm_enabled: bool = False
     # Model routes (small, strong, vision): deployments, timeouts, rate limits, token budgets.
     ai_routes_file: str = ""
+    # Worker processes sharing the Azure deployments: each process uses rpm / ai_rpm_share (full review G16).
+    ai_rpm_share: int = Field(default=1, ge=1)
     # Hosts the model calls may go to (comma separated, e.g. "bank-ai.openai.azure.com"). With llm_enabled, every
     # configured model base URL (AZURE_API_BASE, OPENAI_API_BASE, ...) must be on this list, or no model is used.
     ai_allowed_hosts: str = ""

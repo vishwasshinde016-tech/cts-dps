@@ -90,3 +90,96 @@ def test_g21_a_clean_statement_waits_for_review_before_core_sees_it(database):  
     assert values(database) == {}  # nothing reached Core
     assert review_done(flow).state.outcome == "REPORTED"
     assert values(database)["EBITDA"].value == 5.0
+
+
+# ---------- WP2: jobs, queue and events ----------
+
+def _queued_job(database, **kw):  # noqa: F811
+    from dps.models import Job, utcnow
+
+    doc = add_document(database)
+    with database.session_factory() as s:
+        j = Job(document_id=doc, flow="AGREEMENT_INTAKE", job_type="EXTRACT_AGREEMENT", tenant_id="default",
+                priority=1, due_at=utcnow(), status="QUEUED", pool="STANDARD", attempts=0, crash_count=0,
+                cancel_requested=False, **kw)
+        s.add(j)
+        s.commit()
+        return j.id
+
+
+def test_g6_a_job_whose_worker_died_on_its_last_attempt_ends_dead(database):  # noqa: F811
+    from datetime import timedelta
+
+    from dps import jobs
+    from dps.models import EventFeed, Job, utcnow
+
+    job_id = _queued_job(database)
+    with database.session_factory() as s:
+        for n in range(3):
+            j = jobs.claim(s, f"w{n}", "STANDARD", 120, 3, poison_crashes=99)
+            assert j is not None
+            j.locked_until = utcnow() - timedelta(seconds=1)  # the worker died: its lease ran out
+            s.commit()
+        assert jobs.claim(s, "w9", "STANDARD", 120, 3, poison_crashes=99) is None
+        assert s.get(Job, job_id).status == jobs.RUNNING  # before the fix it stayed here for ever
+        assert jobs.reap(s, 3) == 1
+        j = s.get(Job, job_id)
+        assert (j.status, j.error_code) == (jobs.DEAD, "LEASE_EXPIRED_EXHAUSTED")
+        events = [e.type for e in s.scalars(select(EventFeed).where(EventFeed.job_id == job_id))]
+        assert events == ["dps.job.dead"]
+        assert jobs.reap(s, 3) == 0
+
+
+def test_g7_a_job_cancelled_while_running_is_not_published(database):  # noqa: F811
+    from dps import jobs
+    from dps.models import Job
+
+    job_id = _queued_job(database)
+    with database.session_factory() as s:
+        j = jobs.claim(s, "w1", "STANDARD", 120, 3)
+        jobs.request_cancel(s, j, "rm-anil")
+        token = jobs.worker_attempt.set((job_id, "w1", j.attempts))
+        try:
+            jobs.finish(s, j, jobs.DONE)  # the flow ended normally after the cancel
+        finally:
+            jobs.worker_attempt.reset(token)
+        assert (s.get(Job, job_id).status, s.get(Job, job_id).error_code) == (jobs.CANCELLED, "JOB_CANCELLED")
+
+
+def test_g8_review_and_mapping_are_different_batch_outcomes():
+    from dps import jobs
+    from dps.models import Job
+
+    assert jobs.item_outcome(Job(status=jobs.NEEDS_REVIEW, error_code=None)) == "PENDING_REVIEW"
+    assert jobs.item_outcome(Job(status=jobs.NEEDS_REVIEW, error_code="MAPPING_REVIEW")) == "PENDING_MAPPING"
+
+
+def test_g24_the_feed_never_passes_a_recent_gap(database):  # noqa: F811
+    from datetime import UTC, datetime, timedelta
+
+    from dps import feed
+    from dps.models import EventFeed
+
+    now = datetime.now(UTC)
+    with database.session_factory() as s:
+        for seq in (1, 2, 4):  # 3 is still being written by another transaction
+            s.add(EventFeed(seq=seq, type="dps.job.accepted", tenant_id="default", payload_json="{}",
+                            occurred_at=now))
+        s.commit()
+        events, cursor = feed.read(s, 0, 100, now=now)
+        assert [e["seq"] for e in events] == [1, 2] and cursor == 2
+        later = now + timedelta(seconds=feed.GAP_SETTLE_SECONDS + 1)  # an old gap is a rollback: read past it
+        events, cursor = feed.read(s, 2, 100, now=later)
+        assert [e["seq"] for e in events] == [4] and cursor == 4
+
+
+def test_g16_each_worker_takes_its_share_of_the_deployment_rate():
+    from dps.agent.gateway import Routes
+
+    assert Routes.load(None, "gpt", share=4).routes["strong"].rpm == 75
+    assert Routes.load(None, "gpt").routes["strong"].rpm == 300
+
+
+def test_g5_readiness_reports_the_workers(client):
+    body = client.get("/health/ready").json()
+    assert body["workers"] in ("UP", "DOWN", "UNKNOWN")

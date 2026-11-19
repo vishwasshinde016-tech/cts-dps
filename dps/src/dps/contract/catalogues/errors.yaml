@@ -119,6 +119,10 @@ errors:
   # --- degraded (continue without AI, every field to review) ---
   - { code: AI_UNAVAILABLE, class: DEGRADED, http: null, retry: false, message: "Read without the AI checker; please review." }
   - { code: AI_NOT_USED, class: DEGRADED, http: null, retry: false, message: "The Document Agent is switched off: read by the rules only, with no second reading or residual check; review every field." }
+  - { code: LEASE_EXPIRED_EXHAUSTED, class: INTERNAL, http: null, retry: false, message: "The worker stopped during the last attempt; the job was set aside. Support can retry it." }
+  - { code: FILE_FLAGS, class: QUALITY, http: null, retry: false, message: "The file has content a reviewer must know about (tracked changes, hidden sheets, a repaired PDF ...)." }
+  - { code: STEP_TABLE, class: QUALITY, http: null, retry: false, message: "Levels were read from a table; check each date and level against the page." }
+  - { code: DISMISSED_SAMPLE, class: QUALITY, http: null, retry: false, message: "A sampled sentence the Document Agent said is not a covenant; confirm or reject." }
   - { code: FORMULA_TEMPLATE, class: QUALITY, http: null, retry: false, message: "The formula is DPS's standard template, not the agreement's own definition; confirm it against the defined terms." }
   - { code: AI_BUDGET_EXCEEDED, class: DEGRADED, http: null, retry: false, message: "Read without the AI checker; please review." }
   - { code: AI_UNGROUNDED, class: DEGRADED, http: null, retry: false, message: "The AI answer quoted text that is not on the page and was dropped; please review." }

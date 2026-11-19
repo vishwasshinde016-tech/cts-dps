@@ -562,8 +562,9 @@ def finish(db: Session, job: Job, result: dict) -> None:
 
     save_run(db, job, result)
     status = jobs.NEEDS_REVIEW if result["status"] == "NEEDS_REVIEW" else jobs.DONE
-    jobs.finish(db, job, status, None, None, payload={"skillPack": result["pipeline"]["skillPack"],
-                                                      "fields": len(result["fields"])})
+    mapping = (result.get("document") or {}).get("route") == "MAPPING_REVIEW"
+    jobs.finish(db, job, status, None, "MAPPING_REVIEW" if mapping and status == jobs.NEEDS_REVIEW else None,
+                payload={"skillPack": result["pipeline"]["skillPack"], "fields": len(result["fields"])})
 
 
 def legacy_extras(db: Session, job: Job, store) -> tuple[list[dict], list[dict]]:

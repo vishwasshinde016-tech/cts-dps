@@ -79,8 +79,11 @@ class Routes:
     per_tenant_day_tokens: int = 20_000_000
 
     @classmethod
-    def load(cls, path: str | Path | None, default_model: str = "") -> Routes:
-        """The route file, or (no file) every route on ``default_model`` so today's single-model set-up works."""
+    def load(cls, path: str | Path | None, default_model: str = "", share: int = 1) -> Routes:
+        """The route file, or (no file) every route on ``default_model`` so today's single-model set-up works.
+
+        ``share``: how many worker processes call the same deployments. Each process keeps its own token bucket, so
+        each gets ``rpm / share`` and together they stay within the deployment's limit (full review G16)."""
         if path and Path(path).is_file():
             raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
         else:
@@ -93,7 +96,7 @@ class Routes:
             routes[name] = Route(name, str(merged.get("provider", "default")), str(merged.get("deployment", "")),
                                  int(merged.get("max_tokens", 3000)), float(merged.get("timeout_s", 60)),
                                  merged.get("temperature", 0.0), int(merged.get("retries", 3)),
-                                 int(merged.get("rpm", 300)))
+                                 max(1, int(merged.get("rpm", 300)) // max(1, share)))
         budgets = raw.get("budgets") or {}
         return cls(routes, int(budgets.get("per_job_tokens", 150_000)),
                    int(budgets.get("per_tenant_day_tokens", 20_000_000)))
@@ -302,7 +305,8 @@ def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cove
     from dps.advisory.advisor import crewai_completion
     from dps.agent.guard import guarded
 
-    routes = Routes.load(getattr(settings, "ai_routes_file", "") or None, settings.ai_model)
+    routes = Routes.load(getattr(settings, "ai_routes_file", "") or None, settings.ai_model,
+                         int(getattr(settings, "ai_rpm_share", 1) or 1))
 
     def provider(route: Route) -> Completion:
         raw = crewai_completion(route.deployment, settings.ai_temperature, route.timeout_s)

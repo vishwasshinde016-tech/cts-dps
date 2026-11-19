@@ -711,6 +711,7 @@ components:
           properties:
             SUCCEEDED: { type: integer }
             PENDING_MAPPING: { type: integer }
+            PENDING_REVIEW: { type: integer }
             DUPLICATE: { type: integer }
             REJECTED: { type: integer }
             FAILED_RETRYABLE: { type: integer }
@@ -723,7 +724,7 @@ components:
             properties:
               clientFileReference: { type: string }
               jobId: { type: string }
-              outcome: { type: string, enum: [SUCCEEDED, PENDING_MAPPING, DUPLICATE, REJECTED, FAILED_RETRYABLE, RUNNING] }
+              outcome: { type: string, enum: [SUCCEEDED, PENDING_MAPPING, PENDING_REVIEW, DUPLICATE, REJECTED, FAILED_RETRYABLE, RUNNING] }
               errorCode: { type: [string, "null"] }
     EventPage:
       type: object

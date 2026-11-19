@@ -10,7 +10,7 @@ import csv
 import hashlib
 import io
 import json
-from datetime import date
+from datetime import UTC, date
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -598,7 +598,22 @@ def ready(request: Request) -> JSONResponse:
         checks["database"] = "DOWN"
     checks["storage"] = "UP" if request.app.state.store.root.is_dir() else "DOWN"
     up = all(v == "UP" for v in checks.values())
-    return JSONResponse({"status": "UP" if up else "DOWN", **checks}, status_code=200 if up else 503)
+    # G5: is any worker alive? The leader renews the scheduler lock every 10 s; an expired lock means no worker is
+    # processing. Reported for operations and alerts, not used for this API's own readiness.
+    workers = "UNKNOWN"
+    if checks["database"] == "UP":
+        try:
+            from dps.models import Leader
+
+            with request.app.state.db.session_factory() as db:
+                lock = db.get(Leader, "scheduler")
+            if lock is not None:
+                until = lock.until if lock.until.tzinfo else lock.until.replace(tzinfo=UTC)
+                workers = "UP" if until >= utcnow() else "DOWN"
+        except Exception:  # noqa: BLE001 - informational only
+            workers = "UNKNOWN"
+    return JSONResponse({"status": "UP" if up else "DOWN", **checks, "workers": workers},
+                        status_code=200 if up else 503)
 
 
 @router.get("/dps/v1/ops/scaling")

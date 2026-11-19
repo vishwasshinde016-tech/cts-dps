@@ -159,6 +159,34 @@ def _bury_poison(db: Session, job: Job, crashes: int) -> None:
     db.commit()
 
 
+def reap(db: Session, max_attempts: int) -> int:
+    """Leader task (full review G6): a RUNNING job whose lease expired after its last attempt can never be claimed
+    again (claims need ``attempts < max_attempts``), so without this it would show "in progress" for ever. It ends
+    DEAD with ``LEASE_EXPIRED_EXHAUSTED`` and its event, so Spring and operations see it. Returns how many."""
+    now = utcnow()
+    stuck = db.scalars(select(Job).where(Job.status == RUNNING, Job.locked_until < now,
+                                         Job.attempts >= max_attempts)).all()
+    count = 0
+    for job in stuck:
+        result = db.execute(
+            update(Job)
+            .where(Job.id == job.id, Job.status == RUNNING, Job.attempts == job.attempts, Job.locked_until < now)
+            .values(status=DEAD, error_code="LEASE_EXPIRED_EXHAUSTED", locked_by=None, locked_until=None,
+                    error="The worker stopped during the last attempt; the job was set aside.", finished_at=now,
+                    updated_at=now)
+            .execution_options(synchronize_session=False))
+        if result.rowcount != 1:
+            continue  # a late heartbeat renewed it, or it finished meanwhile
+        db.refresh(job)
+        _close_attempt(db, job, DEAD, "LEASE_EXPIRED_EXHAUSTED")
+        feed.emit_for_job(db, "dps.job.dead", job, {"errorCode": "LEASE_EXPIRED_EXHAUSTED", "message": job.error,
+                                                    "attempts": job.attempts})
+        _sync_batch(db, job)
+        count += 1
+    db.commit()
+    return count
+
+
 def renew_lease(db: Session, job_id: str, worker_id: str, lease_seconds: int,
                 attempt: int | None = None) -> bool:
     """Heartbeat: pushes the lease out while ``worker_id`` still holds the running job. False if it lost it.
@@ -193,8 +221,12 @@ def _close_attempt(db: Session, job: Job, outcome: str, error_code: str | None) 
 
 def finish(db: Session, job: Job, status: str, error: str | None = None, error_code: str | None = None,
            payload: dict | None = None) -> None:
-    """Ends the job's current attempt with ``status``; a final status also emits its event."""
+    """Ends the job's current attempt with ``status``; a final status also emits its event. A job cancelled while it
+    ran ends CANCELLED instead of publishing its result (full review G7)."""
     guard_attempt(db)
+    if status in (DONE, NEEDS_REVIEW) and cancelled(db, job.id):
+        status, error, error_code = CANCELLED, "Cancelled while it ran; the result was not published", "JOB_CANCELLED"
+        payload = {"cancelled": True}
     now = utcnow()
     job.status, job.error, job.locked_by, job.locked_until, job.updated_at = status, error, None, None, now
     if error_code is not None or status in (DONE, NEEDS_REVIEW):
@@ -306,13 +338,15 @@ def queue_report(db: Session) -> list[dict]:
 
 # ---------- batches ----------
 
-BATCH_OUTCOME = {DONE: "SUCCEEDED", NEEDS_REVIEW: "PENDING_MAPPING", FAILED: "REJECTED", DEAD: "FAILED_RETRYABLE",
+BATCH_OUTCOME = {DONE: "SUCCEEDED", NEEDS_REVIEW: "PENDING_REVIEW", FAILED: "REJECTED", DEAD: "FAILED_RETRYABLE",
                  CANCELLED: "REJECTED"}
 
 
 def item_outcome(job: Job) -> str:
     if job.error_code == "DUPLICATE":
         return "DUPLICATE"
+    if job.status == NEEDS_REVIEW and job.error_code == "MAPPING_REVIEW":
+        return "PENDING_MAPPING"  # the borrower or facility is unresolved (architect Flow 4); else field review (G8)
     return BATCH_OUTCOME.get(job.status, "RUNNING")
 
 
