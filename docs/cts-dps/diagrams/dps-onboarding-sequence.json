@@ -1,0 +1,411 @@
+{
+ "schema_version": 1,
+ "diagram_type": "sequence",
+ "meta": {
+  "title": "Onboarding job (Miro onboarding board): ONBOARD from submit to review",
+  "output": "docs/cts-dps/diagrams/dps-onboarding-sequence.html",
+  "locale": "en",
+  "quality_profile": "showcase",
+  "repository": {
+   "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
+   "provider": "github",
+   "link_mode": "web",
+   "revision": "ce996d3d33d461c19d0071b3df8aa5b63a77def8"
+  }
+ },
+ "participants": [
+  {
+   "id": "spring",
+   "type": "external",
+   "label": "Spring app",
+   "sublabel": "CTS (other team)",
+   "sources": [
+    {
+     "path": "contracts/dps-jobs-api.yaml",
+     "line": 32,
+     "label": "job API"
+    }
+   ]
+  },
+  {
+   "id": "api",
+   "type": "backend",
+   "label": "DPS job API",
+   "sublabel": "api/jobs.py",
+   "sources": [
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 312,
+     "end_line": 348,
+     "label": "submit_job"
+    },
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 352,
+     "end_line": 368,
+     "label": "job_result"
+    }
+   ]
+  },
+  {
+   "id": "queue",
+   "type": "database",
+   "label": "dps_job / dps_run",
+   "sublabel": "SQL Server schema dps",
+   "sources": [
+    {
+     "path": "dps/src/dps/jobs.py",
+     "line": 85,
+     "end_line": 129,
+     "label": "claim"
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 128,
+     "end_line": 178,
+     "label": "Job"
+    }
+   ]
+  },
+  {
+   "id": "worker",
+   "type": "backend",
+   "label": "Worker",
+   "sublabel": "worker.py",
+   "sources": [
+    {
+     "path": "dps/src/dps/worker.py",
+     "line": 131,
+     "end_line": 147,
+     "label": "run_once"
+    },
+    {
+     "path": "dps/src/dps/worker.py",
+     "line": 195,
+     "end_line": 209,
+     "label": "_process"
+    }
+   ]
+  },
+  {
+   "id": "parse",
+   "type": "security",
+   "label": "Ingest + sandbox",
+   "sublabel": "ingest/, parse/",
+   "sources": [
+    {
+     "path": "dps/src/dps/ingest/pipeline.py",
+     "line": 56,
+     "end_line": 84,
+     "label": "page_model"
+    },
+    {
+     "path": "dps/src/dps/parse/sandbox.py",
+     "line": 157,
+     "end_line": 186,
+     "label": "run (no network)"
+    }
+   ]
+  },
+  {
+   "id": "runner",
+   "type": "backend",
+   "label": "Flow + runner",
+   "sublabel": "flows/, skills/runner.py",
+   "sources": [
+    {
+     "path": "dps/src/dps/flows/skill_job.py",
+     "line": 27,
+     "end_line": 49,
+     "label": "SkillJobFlow"
+    },
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 611,
+     "end_line": 661,
+     "label": "run_onboard"
+    },
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 391,
+     "end_line": 520,
+     "label": "_extract"
+    }
+   ]
+  },
+  {
+   "id": "agent",
+   "type": "backend",
+   "label": "Document Agent",
+   "sublabel": "agent/ + gateway",
+   "sources": [
+    {
+     "path": "dps/src/dps/agent/document_agent.py",
+     "line": 293,
+     "end_line": 318,
+     "label": "read"
+    },
+    {
+     "path": "dps/src/dps/agent/gateway.py",
+     "line": 242,
+     "end_line": 257,
+     "label": "call_json"
+    }
+   ]
+  },
+  {
+   "id": "tools",
+   "type": "external",
+   "label": "Spring tools",
+   "sublabel": "Java business rules",
+   "sources": [
+    {
+     "path": "dps/src/dps/integrations/spring_tools.py",
+     "line": 113,
+     "end_line": 237,
+     "label": "SpringTools"
+    }
+   ]
+  }
+ ],
+ "segments": [
+  {
+   "from": 165,
+   "to": 371,
+   "label": "1 Submit"
+  },
+  {
+   "from": 383,
+   "to": 589,
+   "label": "2 Claim and parse"
+  },
+  {
+   "from": 601,
+   "to": 1243,
+   "label": "3 Classify and extract"
+  },
+  {
+   "from": 1255,
+   "to": 1405,
+   "label": "4 Publish and review"
+  }
+ ],
+ "messages": [
+  {
+   "id": "submit",
+   "from": "spring",
+   "to": "api",
+   "y": 175,
+   "label": "POST /dps/v1/jobs ONBOARD",
+   "variant": "emphasis",
+   "note": "api/jobs.py:312 submit_job; same input queued = duplicate (in progress)"
+  },
+  {
+   "id": "insert",
+   "from": "api",
+   "to": "queue",
+   "y": 267,
+   "label": "insert job + accepted event",
+   "variant": "emphasis",
+   "note": "api/jobs.py:240 create_job; feed.py:39 event"
+  },
+  {
+   "id": "accepted",
+   "from": "api",
+   "to": "spring",
+   "y": 359,
+   "label": "202 jobId",
+   "variant": "return"
+  },
+  {
+   "id": "claim",
+   "from": "worker",
+   "to": "queue",
+   "y": 393,
+   "label": "poll + claim",
+   "variant": "emphasis",
+   "note": "worker.py:131 run_once; jobs.py:85 claim, lease"
+  },
+  {
+   "id": "read",
+   "from": "worker",
+   "to": "parse",
+   "y": 485,
+   "label": "read, inspect, parse",
+   "variant": "security",
+   "note": "ingest/pipeline.py:56; parse/sandbox.py:157 no network"
+  },
+  {
+   "id": "model",
+   "from": "parse",
+   "to": "worker",
+   "y": 577,
+   "label": "page model",
+   "variant": "return"
+  },
+  {
+   "id": "kickoff",
+   "from": "worker",
+   "to": "runner",
+   "y": 611,
+   "label": "kickoff CrewAI Flow",
+   "variant": "emphasis",
+   "note": "flows/skill_job.py:27 \u2192 skills/runner.py:611"
+  },
+  {
+   "id": "classify",
+   "from": "runner",
+   "to": "agent",
+   "y": 703,
+   "label": "AI 1 classify (only if rules unsure)",
+   "note": "analyze/classify.py:291 rules first"
+  },
+  {
+   "id": "type",
+   "from": "agent",
+   "to": "runner",
+   "y": 795,
+   "label": "type + quoted lines",
+   "variant": "return"
+  },
+  {
+   "id": "covenants",
+   "from": "runner",
+   "to": "agent",
+   "y": 829,
+   "label": "AI 2 covenants: 4 focused reads",
+   "variant": "emphasis",
+   "note": "covenants/rules.py:61, pages.py:98, parts.py:75"
+  },
+  {
+   "id": "java",
+   "from": "agent",
+   "to": "tools",
+   "y": 921,
+   "label": "covenant_library, validate_formula",
+   "variant": "dashed",
+   "note": "integrations/spring_tools.py:151 batched"
+  },
+  {
+   "id": "javaok",
+   "from": "tools",
+   "to": "agent",
+   "y": 1013,
+   "label": "matches, formula ok",
+   "variant": "return"
+  },
+  {
+   "id": "proposals",
+   "from": "agent",
+   "to": "runner",
+   "y": 1047,
+   "label": "grounded proposals",
+   "variant": "return",
+   "note": "skills/common.py:53 grounded; runner.py:223 vote"
+  },
+  {
+   "id": "residual",
+   "from": "runner",
+   "to": "agent",
+   "y": 1139,
+   "label": "second read: unexplained duties",
+   "note": "covenants/ledger.py:146; omissions.py:82"
+  },
+  {
+   "id": "decisions",
+   "from": "agent",
+   "to": "runner",
+   "y": 1231,
+   "label": "COVENANT or NOT_A_COVENANT",
+   "variant": "return"
+  },
+  {
+   "id": "save",
+   "from": "runner",
+   "to": "queue",
+   "y": 1265,
+   "label": "save dps_run + needs_review event",
+   "variant": "emphasis",
+   "note": "schedule terms, codes, score; runner.py:557 finish"
+  },
+  {
+   "id": "pull",
+   "from": "spring",
+   "to": "api",
+   "y": 1357,
+   "label": "GET /events, GET /jobs/{id}/result"
+  },
+  {
+   "id": "result",
+   "from": "api",
+   "to": "spring",
+   "y": 1391,
+   "label": "dps.result/1.0 to the review screen",
+   "variant": "return"
+  }
+ ],
+ "activations": [
+  {
+   "participant": "api",
+   "from": 170,
+   "to": 364,
+   "type": "backend"
+  },
+  {
+   "participant": "worker",
+   "from": 388,
+   "to": 621,
+   "type": "backend"
+  },
+  {
+   "participant": "parse",
+   "from": 480,
+   "to": 582,
+   "type": "security"
+  },
+  {
+   "participant": "runner",
+   "from": 606,
+   "to": 1270,
+   "type": "backend"
+  },
+  {
+   "participant": "agent",
+   "from": 698,
+   "to": 1236,
+   "type": "backend"
+  },
+  {
+   "participant": "tools",
+   "from": 916,
+   "to": 1018,
+   "type": "external"
+  },
+  {
+   "participant": "api",
+   "from": 1352,
+   "to": 1396,
+   "type": "backend"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "Miro AI functions",
+   "items": [
+    "AI 1 classify and identify: analyze/classify.py, analyze/identify.py",
+    "AI 2 extract covenants: skills/covenants/ (rules, pages, parts, ledger, omissions, codes)",
+    "AI 3 extract schedule terms: skills/schedule_terms/"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Exception flow",
+   "items": [
+    "Transient errors go back to the queue with back-off (jobs.py release_for_retry)",
+    "A model problem never fails the job: rules only, fields to review",
+    "Out of attempts: DEAD and dps.job.dead event"
+   ]
+  }
+ ]
+}

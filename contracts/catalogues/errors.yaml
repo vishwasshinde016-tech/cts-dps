@@ -62,6 +62,48 @@ errors:
   - { code: PROMPT_LIMIT, class: QUALITY, http: null, retry: false, message: "Some pages did not fit in the agent's prompt; its tools could still open them." }
   - { code: LINES_NOT_FOUND, class: QUALITY, http: null, retry: false, message: "Statement lines the reader did not find; listed so none is missing silently." }
   - { code: TOKEN_BUDGET_HIGH, class: QUALITY, http: null, retry: false, message: "The job used most of its token budget; a longer document of this kind may not be read in full." }
+  - { code: AI_READ_DIFFERENT, class: QUALITY, http: null, retry: false, message: "The AI reader read another number for this covenant than the rules; please check the source." }
+  - { code: AI_RESIDUAL, class: QUALITY, http: null, retry: false, message: "Found by the Document Agent's second read of a duty no covenant explained; please confirm it." }
+  - { code: AMBIGUOUS_AMENDMENT_TARGET, class: QUALITY, http: null, retry: false, message: "The amendment change has no unique approved covenant it applies to; please pick the target." }
+  - { code: AMOUNT_CURRENCY_DIFFERS, class: QUALITY, http: null, retry: false, message: "The limit is in a different currency than the loan; please confirm the conversion." }
+  - { code: AMOUNT_SCALE_UNCLEAR, class: QUALITY, http: null, retry: false, message: "No scale (thousand, lakh, crore, million) is stated for the amount; please confirm it." }
+  - { code: BASE_FROM_DPS, class: QUALITY, http: null, retry: false, message: "Compared with DPS's earlier extraction, not the approved covenants; send baseCovenants." }
+  - { code: BASE_UNKNOWN, class: QUALITY, http: null, retry: false, message: "The amended agreement's covenants were not found; please check the base." }
+  - { code: CHANGED_TWICE, class: QUALITY, http: null, retry: false, message: "The amendment changes this covenant more than once; please check which change applies." }
+  - { code: CLAUSE_NOT_IN_BASE, class: QUALITY, http: null, retry: false, message: "The amendment refers to a clause that is not in the amended agreement." }
+  - { code: CURRENCY_DIFFERS, class: QUALITY, http: null, retry: false, message: "The statement's currency differs from the loan's; figures were converted, please confirm." }
+  - { code: CURRENCY_MIXED, class: QUALITY, http: null, retry: false, message: "The statement shows amounts in more than one currency; please confirm which applies." }
+  - { code: DEBT_DOES_NOT_ADD_UP, class: QUALITY, http: null, retry: false, message: "Short-term and long-term debt do not add up to total debt." }
+  - { code: DEFINITION_DIFFERS, class: QUALITY, http: null, retry: false, message: "The agreement defines this input with adjustments; the reported figure may not match the definition." }
+  - { code: DIRECTION_MISMATCH, class: QUALITY, http: null, retry: false, message: "The operator contradicts the clause wording (floor or ceiling); please check it." }
+  - { code: FORMULA_INVALID, class: QUALITY, http: null, retry: false, message: "Core rejected the covenant formula; please correct it." }
+  - { code: INTEREST_IS_NET, class: QUALITY, http: null, retry: false, message: "Interest is shown net of income; the covenant may need gross interest." }
+  - { code: LABEL_MEMORY_CONFLICT, class: QUALITY, http: null, retry: false, message: "A line was confirmed earlier as another item for this borrower; please check which is right." }
+  - { code: LOANS_DIFFER, class: QUALITY, http: null, retry: false, message: "The borrower's loans are in different currencies; please confirm the currency used." }
+  - { code: LOAN_CURRENCY_UNKNOWN, class: QUALITY, http: null, retry: false, message: "The loan's currency is not known; set it in the borrower's settings." }
+  - { code: LOW_OCR_QUALITY, class: QUALITY, http: null, retry: false, message: "Scanned pages were read with low OCR confidence; please check the figures." }
+  - { code: MISSING_LINE_ITEMS, class: QUALITY, http: null, retry: false, message: "Lines the covenants need (EBITDA, total debt, net worth) were not found." }
+  - { code: MORE_POSSIBLE_COVENANTS, class: QUALITY, http: null, retry: false, message: "More covenant-like sentences were found than are listed; open the document to see all." }
+  - { code: NEGATIVE_VALUE, class: QUALITY, http: null, retry: false, message: "A figure that cannot be negative was read as negative; please check its sign." }
+  - { code: NO_DECLARATION, class: QUALITY, http: null, retry: false, message: "The certificate has no complied or not-complied wording for this covenant." }
+  - { code: NUMBER_STYLE_UNCLEAR, class: QUALITY, http: null, retry: false, message: "The statement writes numbers in two styles; please confirm the decimal separator." }
+  - { code: OUTSIDE_TENOR, class: QUALITY, http: null, retry: false, message: "A date falls after the end of the facility's tenor." }
+  - { code: POSSIBLE_COVENANT_NOT_UNDERSTOOD, class: QUALITY, http: null, retry: false, message: "A sentence reads like a covenant the rules do not understand; please check it." }
+  - { code: PROMPT_INJECTION_SUSPECTED, class: QUALITY, http: null, retry: false, message: "The document contains text addressed to an AI model; every proposal waits for a person." }
+  - { code: RESTATED, class: QUALITY, http: null, retry: false, message: "This figure differs from the one approved earlier for the same period (restatement)." }
+  - { code: SECOND_COVENANT_OF_FAMILY, class: QUALITY, http: null, retry: false, message: "A second covenant of the same family was found; check the formula measures this one." }
+  - { code: SECOND_READER_DIFFERS, class: QUALITY, http: null, retry: false, message: "The AI checker read another figure than the rules; please check the source." }
+  - { code: SECOND_READER_EMPTY, class: QUALITY, http: null, retry: false, message: "The AI checker read none of the figures; the statement waits for a person." }
+  - { code: SEVERAL_LEVELS, class: QUALITY, http: null, retry: false, message: "The clause gives several levels for this covenant; please check which applies when." }
+  - { code: SIGNATORY_MISSING, class: QUALITY, http: null, retry: false, message: "The certificate's signatory was not read." }
+  - { code: STEP_DOWN, class: QUALITY, http: null, retry: false, message: "The covenant steps down over time; please check the levels and dates." }
+  - { code: STEP_DOWN_ORDER, class: QUALITY, http: null, retry: false, message: "The step-down dates are not in order." }
+  - { code: THRESHOLD_FROM_DEFINITION, class: QUALITY, http: null, retry: false, message: "The threshold comes from a defined term; please check the definition." }
+  - { code: TYPE_NOT_ONBOARDING, class: QUALITY, http: null, retry: false, message: "The document is not an onboarding type (agreement, sanction letter, amendment)." }
+  - { code: UDIN_MISSING, class: QUALITY, http: null, retry: false, message: "No valid UDIN was found on the certificate." }
+  - { code: UNIT_NOT_STATED, class: QUALITY, http: null, retry: false, message: "The statement does not state its unit; amounts were read in the default unit, please confirm." }
+  - { code: UNRESOLVED_AMENDMENT, class: QUALITY, http: null, retry: false, message: "The amendment change could not be matched to an approved covenant; please confirm it." }
+  - { code: VERDICT_NOT_IN_RESULTS, class: QUALITY, http: null, retry: false, message: "The draft commentary states a verdict the results do not support; it was not used." }
   - { code: AI_ONLY, class: QUALITY, http: null, retry: false, message: "Only the Document Agent found this value; please confirm it." }
   - { code: READ_FROM_IMAGE, class: QUALITY, http: null, retry: false, message: "This value was read from a page image; please confirm it." }
   - { code: NOT_GROUNDED, class: QUALITY, http: null, retry: false, message: "The value was not found on its page." }

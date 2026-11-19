@@ -11,7 +11,7 @@ statements, and Indian and Sri Lankan statements. Brought over from the earlier 
 Each folder has `sources.tsv` (where each document comes from), `truth/` (the answer keys, written before DPS ran),
 `harness/` (fetch, run and score scripts) and `results/` (earlier runs). See `held-out/HOW-TO-RUN.md`.
 
-The documents themselves are not in this repository (third-party copyright): `harness/fetch.py` downloads them from
+The documents themselves are not in this repository (third-party copyright): `real-documents/harness/fetch.py` downloads them from
 SEC EDGAR with a generic User-Agent, and HTML filings are turned into PDFs before a run.
 
 The measure that matters: **missed** (a true covenant no proposal, flag or possible covenant shows a person) and

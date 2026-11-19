@@ -1,0 +1,327 @@
+{
+ "schema_version": 1,
+ "diagram_type": "sequence",
+ "meta": {
+  "title": "Amendment job (Miro amendment board): EXTRACT_AMENDMENT against the approved covenants",
+  "output": "docs/cts-dps/diagrams/dps-amendment-sequence.html",
+  "locale": "en",
+  "quality_profile": "showcase",
+  "repository": {
+   "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
+   "provider": "github",
+   "link_mode": "web",
+   "revision": "ce996d3d33d461c19d0071b3df8aa5b63a77def8"
+  }
+ },
+ "participants": [
+  {
+   "id": "spring",
+   "type": "external",
+   "label": "Spring app",
+   "sublabel": "approved covenants",
+   "sources": [
+    {
+     "path": "contracts/schemas/job-request.json",
+     "line": 232,
+     "label": "baseCovenants"
+    }
+   ]
+  },
+  {
+   "id": "api",
+   "type": "backend",
+   "label": "DPS job API",
+   "sublabel": "api/jobs.py",
+   "sources": [
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 312,
+     "end_line": 348,
+     "label": "submit_job"
+    }
+   ]
+  },
+  {
+   "id": "worker",
+   "type": "backend",
+   "label": "Worker",
+   "sublabel": "worker.py + ingest",
+   "sources": [
+    {
+     "path": "dps/src/dps/worker.py",
+     "line": 195,
+     "end_line": 209,
+     "label": "_process"
+    },
+    {
+     "path": "dps/src/dps/ingest/pipeline.py",
+     "line": 56,
+     "end_line": 84,
+     "label": "page_model"
+    }
+   ]
+  },
+  {
+   "id": "runner",
+   "type": "backend",
+   "label": "Flow + runner",
+   "sublabel": "skills/runner.py",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 275,
+     "end_line": 289,
+     "label": "approved_base"
+    },
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 391,
+     "end_line": 520,
+     "label": "_extract"
+    }
+   ]
+  },
+  {
+   "id": "diff",
+   "type": "backend",
+   "label": "Amendment rules",
+   "sublabel": "skills/amendment_diff/",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/amendment_diff/rules.py",
+     "line": 56,
+     "end_line": 124,
+     "label": "rules"
+    },
+    {
+     "path": "dps/src/dps/skills/amendment_diff/rules.py",
+     "line": 145,
+     "end_line": 169,
+     "label": "amended_set"
+    }
+   ]
+  },
+  {
+   "id": "agent",
+   "type": "backend",
+   "label": "Document Agent",
+   "sublabel": "amendment_diff skill",
+   "sources": [
+    {
+     "path": "dps/src/dps/agent/document_agent.py",
+     "line": 293,
+     "end_line": 318,
+     "label": "read"
+    },
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 261,
+     "end_line": 272,
+     "label": "_explain_changes"
+    }
+   ]
+  },
+  {
+   "id": "queue",
+   "type": "database",
+   "label": "dps_run + events",
+   "sublabel": "SQL Server schema dps",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 557,
+     "end_line": 563,
+     "label": "finish"
+    }
+   ]
+  }
+ ],
+ "segments": [
+  {
+   "from": 165,
+   "to": 313,
+   "label": "1 Submit and claim"
+  },
+  {
+   "from": 383,
+   "to": 899,
+   "label": "2 Find what changed"
+  },
+  {
+   "from": 969,
+   "to": 1119,
+   "label": "3 Publish and approve"
+  }
+ ],
+ "messages": [
+  {
+   "id": "submit",
+   "from": "spring",
+   "to": "api",
+   "y": 175,
+   "label": "POST /dps/v1/jobs EXTRACT_AMENDMENT",
+   "variant": "emphasis",
+   "note": "context.baseCovenants with appliedCovenantId (approved, from CTS DB)"
+  },
+  {
+   "id": "queued",
+   "from": "api",
+   "to": "spring",
+   "y": 267,
+   "label": "202 jobId",
+   "variant": "return"
+  },
+  {
+   "id": "start",
+   "from": "api",
+   "to": "worker",
+   "y": 301,
+   "label": "job claimed, file parsed",
+   "variant": "dashed",
+   "note": "same queue, lease and sandbox as onboarding"
+  },
+  {
+   "id": "kickoff",
+   "from": "worker",
+   "to": "runner",
+   "y": 393,
+   "label": "kickoff CrewAI Flow",
+   "variant": "emphasis",
+   "note": "flows/skill_job.py:27 \u2192 skills/runner.py:313 run"
+  },
+  {
+   "id": "base",
+   "from": "runner",
+   "to": "diff",
+   "y": 485,
+   "label": "compare with approved base",
+   "variant": "emphasis",
+   "note": "runner.py:275 approved_base; fallback DPS earlier run = BASE_FROM_DPS"
+  },
+  {
+   "id": "changes",
+   "from": "diff",
+   "to": "runner",
+   "y": 577,
+   "label": "ADD / CHANGE / DELETE per covenant",
+   "variant": "return",
+   "note": "match by appliedCovenantId and clause (rules.py:127); unclear = review"
+  },
+  {
+   "id": "explain",
+   "from": "runner",
+   "to": "agent",
+   "y": 669,
+   "label": "read the amendment pages",
+   "note": "agent proposals grounded, then vote; explanation text only"
+  },
+  {
+   "id": "why",
+   "from": "agent",
+   "to": "runner",
+   "y": 761,
+   "label": "grounded changes + explanation",
+   "variant": "return"
+  },
+  {
+   "id": "sched",
+   "from": "runner",
+   "to": "diff",
+   "y": 795,
+   "label": "schedule changes too",
+   "note": "skills/schedule_terms/ also runs for amendments"
+  },
+  {
+   "id": "set",
+   "from": "diff",
+   "to": "runner",
+   "y": 887,
+   "label": "amended set",
+   "variant": "return",
+   "note": "amended_set (rules.py:145): base minus deletes, changes, adds"
+  },
+  {
+   "id": "save",
+   "from": "runner",
+   "to": "queue",
+   "y": 979,
+   "label": "save dps_run + needs_review event",
+   "variant": "emphasis",
+   "note": "codes, score, checks; runner.py:557 finish"
+  },
+  {
+   "id": "pull",
+   "from": "spring",
+   "to": "api",
+   "y": 1071,
+   "label": "GET /events, GET /jobs/{id}/result"
+  },
+  {
+   "id": "result",
+   "from": "api",
+   "to": "spring",
+   "y": 1105,
+   "label": "changes + amendedSet for approval",
+   "variant": "return",
+   "note": "Spring records new effective versions; old ones kept"
+  }
+ ],
+ "activations": [
+  {
+   "participant": "api",
+   "from": 170,
+   "to": 306,
+   "type": "backend"
+  },
+  {
+   "participant": "worker",
+   "from": 296,
+   "to": 401,
+   "type": "backend"
+  },
+  {
+   "participant": "runner",
+   "from": 388,
+   "to": 984,
+   "type": "backend"
+  },
+  {
+   "participant": "diff",
+   "from": 480,
+   "to": 892,
+   "type": "backend"
+  },
+  {
+   "participant": "agent",
+   "from": 664,
+   "to": 766,
+   "type": "backend"
+  },
+  {
+   "participant": "api",
+   "from": 1066,
+   "to": 1110,
+   "type": "backend"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "What the board asks",
+   "items": [
+    "User requests an amendment and uploads it (Spring, DMS checks)",
+    "Invoke the Amendment Flow: job, Python worker, CrewAI Flow, AI functions",
+    "Call the API to update covenants for review; user approves; persist; update schedule"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Held for a person",
+   "items": [
+    "AMBIGUOUS_AMENDMENT_TARGET: no unique approved covenant",
+    "CHANGED_TWICE, CLAUSE_NOT_IN_BASE, BASE_FROM_DPS",
+    "Every change is reviewed; DPS never overwrites an approved covenant"
+   ]
+  }
+ ]
+}
