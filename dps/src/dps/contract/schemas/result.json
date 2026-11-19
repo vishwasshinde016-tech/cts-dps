@@ -414,6 +414,11 @@
             null
           ]
         },
+        "suggested": {
+          "type": "object",
+          "description": "What the document does not state, as the covenant taxonomy usually has it: a suggestion for the reviewer, never written into the field (TAXONOMY_DEFAULT)",
+          "properties": { "operator": { "type": "string" }, "unit": { "type": "string" }, "frequency": { "type": "string" } }
+        },
         "defaults": {
           "type": "array",
           "items": {
@@ -423,7 +428,7 @@
               "frequency"
             ]
           },
-          "description": "Values not stated in the document, filled from the taxonomy (TAXONOMY_DEFAULT; sent for review)"
+          "description": "Deprecated (results before 19 Nov 2026): values filled from the taxonomy. New results leave them empty and use suggested"
         },
         "operator": {
           "type": [

@@ -252,3 +252,9 @@ def test_a_covered_duty_stays_visible_on_the_covenant_that_covers_it():
     covered = [e for e in led["entries"] if e["state"] == "COVERED"]
     if covered:  # the second deliverable is covered by kind: it is listed on the covenant, not folded in silently
         assert any(covered[0]["text"] in (f["value"].get("covers") or []) for f in reporting)
+
+
+def test_a_job_that_used_most_of_its_token_budget_says_so():
+    assert skills.budget_warning(JobBudget(400_000, used=330_000))["code"] == "TOKEN_BUDGET_HIGH"
+    assert skills.budget_warning(JobBudget(400_000, used=100_000)) is None
+    assert skills.budget_warning(None) is None
