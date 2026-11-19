@@ -21,6 +21,8 @@ Code as you talk. Python code is under [`dps/src/dps/`](../../dps/src/dps). 19 N
 11. Logs and the live demo (§12, §13).
 12. Decisions and open items (§14).
 
+**Explain the flow block by block:** [`diagrams/dps-flow-explained.html`](diagrams/dps-flow-explained.html). Click a block to see what it does, what to say, where the data is after it, and its code. **Open in VS Code** opens the file on this laptop at that line (set the repository folder at the top, `C:\cts-dps` by default). Use the arrow keys to walk the flow.
+
 **The full flow in one diagram:** [`diagrams/dps-full-flow.html`](diagrams/dps-full-flow.html). It has 9 stages from upload to review, and every box shows its file:line. Use it when you explain the whole flow.
 
 **One page with everything:** [`diagrams/dps-complete.html`](diagrams/dps-complete.html). Open it in a browser. It holds all 4 diagrams, each with a step-through linked to its file and line. It also has every table in this guide and the real code excerpts, pinned to commit `ce996d3`. Use it on screen while you read this guide.

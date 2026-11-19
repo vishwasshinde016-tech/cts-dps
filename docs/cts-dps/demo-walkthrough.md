@@ -70,7 +70,9 @@ The folders `storage\` (the uploaded files) and `derived\` (what DPS makes from 
 
 ## 2. The picture in one minute
 
-> **For you:** to explain the whole flow in one picture, open [`diagrams/dps-full-flow.html`](diagrams/dps-full-flow.html). It has 9 stages from upload to review, and every box shows its file:line. Use the view buttons to step through the stages.
+> **For you:** to explain the flow block by block, open [`diagrams/dps-flow-explained.html`](diagrams/dps-flow-explained.html). Click a block to see what it does, what to say and its code; **Open in VS Code** opens the file at that line on this laptop.
+>
+> To explain the whole flow in one picture, open [`diagrams/dps-full-flow.html`](diagrams/dps-full-flow.html). It has 9 stages from upload to review, and every box shows its file:line. Use the view buttons to step through the stages.
 
 **Show:** browser tab 1, the architecture diagram at the top of `dps-complete.html`.
 
