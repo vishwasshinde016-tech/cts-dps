@@ -50,6 +50,11 @@ REFERENCE = re.compile(
     r"\b(clause|section|article|schedule|annex(?:ure)?|appendix|exhibit|paragraph)\s+"
     r"((?:\d+(?:\.\d+)*)(?:\s*\([a-z0-9]{1,4}\))*|[IVXLC]{1,6}\b|[A-Z]\b)", re.I)
 # Self references that need no lookup ("this Clause 21", "Clause 1.1 (Definitions)") stay listed, resolved or not.
+# A lead-in to a list of covenants is not a duty itself ("shall comply with the following financial covenants:"); the
+# listed items are the candidates (real agreement AGR-001, 19 Nov 2026).
+LEAD_IN = re.compile(r"\b(?:the\s+following|as\s+follows|set\s+out\s+below|listed\s+below)\b[^.;]{0,120}[,:]?\s*$|"
+                     r"\bthe\s+following\s+(?:[\w-]+\s+){0,3}(?:covenants?|undertakings?|ratios?|obligations?)\b",
+                     re.I)
 
 
 def _flat(text: str | None) -> str:
@@ -121,7 +126,7 @@ def candidates(pages: list[dict]) -> list[dict]:
         no = int(p["no"])
         sents = sentences(p.get("text") or "")
         for i, s in enumerate(sents):
-            if len(s) < 25 or coverage.MECHANICS.search(s) or coverage.DEFINES.search(s):
+            if len(s) < 25 or coverage.MECHANICS.search(s) or coverage.DEFINES.search(s) or LEAD_IN.search(s):
                 continue
             if is_duty(s):
                 route = "DUTY"
@@ -182,6 +187,13 @@ def attach(entries: list[dict], fields: list[dict]) -> None:
     """Puts each found candidate's qualifiers and references on its field; a qualified covenant, or one that points
     to a part of the agreement not found, goes to a person with that text."""
     by_id = {f.get("id"): f for f in fields}
+    for e in entries:
+        # A sentence covered by a covenant of the same kind stays visible on that covenant: two different duties of
+        # one kind (two reporting deliverables) must not collapse into one without a person seeing both.
+        if e["state"] == COVERED and by_id.get(e["fieldId"]) is not None:
+            covers = by_id[e["fieldId"]].setdefault("value", {}).setdefault("covers", [])
+            if len(covers) < 12 and e["text"] not in covers:
+                covers.append(e["text"])
     for e in entries:
         f = by_id.get(e["fieldId"]) if e["state"] == FINDING else None
         if f is None or f.get("group") not in coverage.COVENANT_GROUPS:

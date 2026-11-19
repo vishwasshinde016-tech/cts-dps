@@ -521,6 +521,18 @@ def build_runners(settings: Settings, database: Database, store: FileStore, core
             finally:
                 gateway.end_job()
 
+    residual = None
+    if settings.agreement_ai_check and gateway is not None:  # pragma: no cover - live model
+        from dps.skills.covenants import omissions
+
+        def residual(entries, pages):
+            # its own budget: the second read of what the first one left unexplained
+            gateway.begin_job(covenant_budget)
+            try:
+                return omissions.read(gateway, entries, pages)
+            finally:
+                gateway.end_job()
+
     def learn() -> None:
         # Phase 4: the wordings an administrator promoted (and not retired) apply to every new document.
         from dps import learning
@@ -530,7 +542,7 @@ def build_runners(settings: Settings, database: Database, store: FileStore, core
 
     def run_intake(job: Job) -> tuple[str, str, str]:
         deps = IntakeDeps(database.session_factory, read_file, parser, core, settings.review_confidence, heavy,
-                          ai_covenants, settings.default_currency)
+                          ai_covenants, settings.default_currency, residual)
         learn()
         return _kickoff(AgreementIntakeFlow(deps), job)
 

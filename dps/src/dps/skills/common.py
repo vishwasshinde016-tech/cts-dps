@@ -109,12 +109,30 @@ def select_pages(pages: list[dict], candidates: list[dict], keywords: re.Pattern
     return [p for p in pages if p["no"] in keep]
 
 
-def prompt_for(pack, pages: list[dict], extra: str = "") -> list[dict]:
+def fit_pages(pages: list[dict], limit: int = MAX_PROMPT_CHARS) -> tuple[str, list[int]]:
+    """The page blocks that fit in ``limit`` characters, whole pages only, and the pages left out. A page is never
+    cut in the middle: the agent would read half a clause and nobody would know (19 Nov 2026 review)."""
+    blocks, left_out, used = [], [], 0
+    for p in pages:
+        block = f"<<<page {p['no']}>>>\n{p.get('text') or ''}\n<<<end page {p['no']}>>>"
+        if used + len(block) + 1 > limit:
+            left_out.append(p["no"])
+            continue
+        blocks.append(block)
+        used += len(block) + 1
+    return "\n".join(blocks), left_out
+
+
+def prompt_for(pack, pages: list[dict], extra: str = "", notes: list | None = None) -> list[dict]:
     from dps.agent.guard import DATA_NOT_INSTRUCTIONS
 
-    blocks = "\n".join(f"<<<page {p['no']}>>>\n{p.get('text') or ''}\n<<<end page {p['no']}>>>" for p in pages)
+    blocks, left_out = fit_pages(pages)
+    if left_out and notes is not None:
+        listed = ", ".join(map(str, left_out[:30]))
+        notes.append(issue("PROMPT_LIMIT", f"{pack.name}: pages {listed} did not fit in the agent's prompt (its tools "
+                                           "can still open them)"))
     content = "\n\n".join([HEADER.format(guard=DATA_NOT_INSTRUCTIONS), pack.prompt.strip(),
-                           "Schema:\n" + json.dumps(pack.schema), extra, blocks[:MAX_PROMPT_CHARS]])
+                           "Schema:\n" + json.dumps(pack.schema), extra, blocks])
     return [{"role": "user", "content": content}]
 
 
@@ -151,7 +169,7 @@ def agent_proposals(pack, gateway, pages: list[dict], extra: str = "", route: st
         return None
 
     route = route or pack.routes.get("extract", "strong")
-    messages = prompt_for(pack, pages, extra)
+    messages = prompt_for(pack, pages, extra, notes)
     try:
         if pack.tools and callable(getattr(gateway, "call", None)):
             from dps.agent import document_agent

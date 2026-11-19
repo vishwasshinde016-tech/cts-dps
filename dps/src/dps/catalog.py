@@ -60,3 +60,13 @@ for _key in ("REVENUE", "EBITDA", "EBIT", "PBT", "PAT", "INTEREST_PAID", "DEPREC
 def catalog() -> dict:
     return {"columns": [{"key": k, "label": v, "dataType": "NUMBER", "kind": "METRIC"}
                         for k, v in LINE_ITEMS.items()]}
+
+
+def lines_not_found(found_keys) -> dict:
+    """Every period line of the catalogue a statement did not yield (19 Nov 2026 review). A line that was not found
+    was dropped silently before: only EBITDA, total debt and net worth were required. The 12-month and annualised
+    variants are left out (they are built from the period lines)."""
+    base = [k for k in LINE_ITEMS if not k.endswith(("_TTM", "_ANN"))]
+    found = set(found_keys)
+    return {"expected": len(base), "found": sum(1 for k in base if k in found),
+            "notFound": [k for k in base if k not in found]}

@@ -50,6 +50,9 @@ class IntakeDeps:
     # Optional AI covenant reader (extraction.agreement_ai.read): confirms, questions or adds to the rules' terms.
     ai_reader: Callable[[list[Page], list], list] | None = None
     default_currency: str = "INR"  # DPS_DEFAULT_CURRENCY: the loan's currency when Core cannot say
+    # Optional residual read (skills/covenants/omissions.read): the Document Agent looks again at every duty sentence
+    # nothing explains. (unresolved ledger entries, pages) -> (proposals, {candidate id: decision}).
+    residual: Callable[[list[dict], list[dict]], tuple[list[dict], dict]] | None = None
 
 
 class IntakeState(BaseModel):
@@ -117,8 +120,69 @@ class AgreementIntakeFlow(Flow[IntakeState]):
                                                      "the rules read English only. Switch on the AI reader "
                                                      "(DPS_AI_MODEL) or enter its covenants by hand"],
                               name=f"Agreement in {language_name(lang)}"))
+        found += self._account_for_every_duty(pages, found)
         self.state.terms = [t.as_dict() for t in found + extract_info(pages)]
         self._checkpoint("extract")
+
+    def _account_for_every_duty(self, pages: list[Page], found: list) -> list:
+        """The whole-document candidate ledger (skills/covenants/ledger.py) on this flow too: the safety net above
+        only sees financial-shaped sentences, so a non-financial duty nothing explains was missed silently. Every
+        duty sentence now ends found, covered, dismissed by the residual read with a reason, or as a review item.
+        Qualifiers and unresolved references go onto the terms that quote them. The ledger's counts are a job step
+        (``coverage``) the result reads."""
+        from dps.extraction.agreement import Term
+        from dps.skills.covenants import ledger
+        from dps.skills.covenants.rules import GROUP
+        from dps.skills.runner import page_accounting
+
+        page_dicts = [{"no": p.no, "text": p.text or ""} for p in pages]
+
+        def fields(terms: list) -> list[dict]:
+            return [{"id": f"t{i}", "group": GROUP.get(t.category, "POSSIBLE_COVENANT"), "name": t.name or t.metric,
+                     "value": {"metric": t.metric}, "source": {"page": t.page, "quote": t.quote}}
+                    for i, t in enumerate(terms)]
+
+        entries = ledger.settle(ledger.candidates(page_dicts), fields(found))
+        added: list = []
+        if self._deps.residual is not None and ledger.unresolved(entries):
+            proposals, decisions = self._deps.residual(ledger.unresolved(entries), page_dicts)
+            for p in proposals:
+                added.append(Term("POSSIBLE_COVENANT", "CANDIDATE", None, None, None, None, p["page"], p["quote"][:480],
+                                  None, 0.6, method="AI", name=p.get("name"),
+                                  issues=["AI_RESIDUAL: found by the Document Agent's second read of a duty no "
+                                          "covenant explained; confirm it"]))
+            entries = ledger.settle(entries, fields(found + added), decisions)
+        by_id = {f"t{i}": t for i, t in enumerate(found + added)}
+        for e in entries:
+            term = by_id.get(e["fieldId"]) if e["state"] == ledger.FINDING else None
+            if term is None:
+                continue
+            if e["qualifiers"] and not any(i.startswith("QUALIFIED") for i in term.issues):
+                term.issues.append("QUALIFIED: the covenant has a condition or exception: "
+                                   + "; ".join(e["qualifiers"])[:240])
+            missing = [r["ref"] for r in e["references"] if r["page"] is None]
+            if missing and not any(i.startswith("UNRESOLVED_REFERENCE") for i in term.issues):
+                term.issues.append("UNRESOLVED_REFERENCE: refers to " + ", ".join(missing)
+                                   + ", which was not found in this document")
+        groups: dict[tuple, list[dict]] = {}
+        for e in ledger.unresolved(entries):
+            groups.setdefault((e["page"], e["kind"]), []).append(e)
+        for (page, _), items in sorted(groups.items(), key=lambda g: (g[0][0], g[0][1] or "")):
+            why = next((e["reason"] for e in items if e["reason"]), None)
+            added.append(Term("POSSIBLE_COVENANT", "CANDIDATE", None, None, None, None, page, items[0]["_full"][:480],
+                              None, 0.3, method="COVERAGE", name=f"Unresolved duty on page {page}",
+                              issues=[f"UNRESOLVED_CANDIDATE: {len(items)} duty sentence(s) on page {page} that no "
+                                      "extracted covenant explains" + (f" ({why})" if why else "")
+                                      + "; confirm or dismiss"]))
+        summary = ledger.summary(entries, page_dicts)
+        with self._deps.session_factory() as db:
+            job = db.get(Job, self.state.job_id)
+            if job is not None:
+                jobs.record_step(db, job, "coverage", ledger={k: v for k, v in summary.items() if k != "entries"},
+                                 unresolved=[{"page": e["page"], "text": e["text"][:200], "kind": e["kind"]}
+                                             for e in summary["entries"] if e["state"] == ledger.UNRESOLVED][:10],
+                                 pages=page_accounting([p.as_dict() for p in pages]))
+        return added
 
     @listen(extract)
     def normalize_terms(self) -> None:

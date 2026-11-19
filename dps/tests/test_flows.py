@@ -341,7 +341,10 @@ def test_worker_runs_flow_a_and_marks_job_done(database, tmp_path):
     assert w.run_once() is True
     j = job(database, job_id)
     assert j.status == jobs.DONE and j.flow_state_id and j.locked_by is None
-    assert [s["step"] for s in json.loads(j.steps_json)] == ["START", "END"]
+    steps = json.loads(j.steps_json)
+    assert [s["step"] for s in steps] == ["START", "coverage", "END"]
+    ledger = steps[1]["ledger"]  # every duty sentence of the agreement is accounted for
+    assert ledger["scope"] == "WHOLE_DOCUMENT" and ledger["accounted"] == ledger["candidates"]
     assert w.run_once() is False
 
 
@@ -452,7 +455,13 @@ def test_build_runners_wires_real_parser(database, tmp_path):
     w = Worker(settings(tmp_path), database.session_factory, FakeCore(), runners)
     job_id = add_job(database, doc_id)
     w.run_once()
-    assert job(database, job_id).status == jobs.DONE
+    # AGR-001 has an end-use covenant ("2.1 The proceeds of the Facility shall be used exclusively for ...") the rules
+    # do not read: the whole-document ledger holds it for a person instead of publishing without it.
+    assert job(database, job_id).status == jobs.NEEDS_REVIEW
+    with database.session_factory() as s:
+        held = s.scalars(select(ExtractedTerm).where(ExtractedTerm.document_id == doc_id,
+                                                     ExtractedTerm.issues_json.like("%UNRESOLVED_CANDIDATE%"))).all()
+    assert [t.page for t in held] == [2] and "proceeds of the Facility" in held[0].quote
     assert set(runners) == {"AGREEMENT_INTAKE", "STATEMENT_PROCESSING"}
 
 

@@ -599,6 +599,37 @@ complete, and removing the Core-demo modules.
 
 **Decision note, covenant taxonomy (18 Nov 2026):** the bank's covenant taxonomy (92 types, categories financial, affirmative, negative, reporting, event of default) is the one list that names covenants (`dps/src/dps/skills/covenants/taxonomy/`). DPS keeps it as the master for now; Spring imports it later. A DPS overlay adds 6 types and `NEG_DISPOSAL_CAP` and maps the rules' 32 older metric names to codes. Every covenant field gives `metric` (older name) and `code`, `category`; every result gives `pipeline.taxonomyVersion` (`2026.11.0+dps.1`). The covenants skill (3.0.0) reads in four focused parts (financial, undertakings, reporting, events of default), each prompt listing only its part's codes. Events of default are their own `EVENT_OF_DEFAULT` fields, always for a person. Where the document does not state a quantitative covenant's operator, unit or test frequency, the taxonomy default is used, listed in `value.defaults`, flagged `TAXONOMY_DEFAULT` and sent to review. The vote and the coverage check work on codes. Rules keep their regex. Taxonomy changes go in only by pull request with the golden-set gate. Gate after the change: synthetic recall, thresholds 1.0, values 0.9924 (unchanged); synthetic coverage 100%.
 
+**Decision note, nothing missed silently (19 Nov 2026, review against the requirements and the Codex design, `dps-review-2026-11-19.md`):**
+
+- **Ledger.** Every covenant-shaped sentence of the whole document goes into a candidate ledger. Each sentence ends in one state: found, covered by a covenant of the same kind (listed on it in `value.covers`), dismissed with the Document Agent's reason, or unresolved. Unresolved sentences become review items, one per page and kind.
+- **Residual read.** The agent reads the unexplained sentences a second time, grounded and within budget.
+- **Qualifiers and references.** Conditions and exceptions stay with their covenant (`QUALIFIED`). Clause and schedule references are resolved to their page; an unresolved one is flagged `UNRESOLVED_REFERENCE`.
+- **Pages and empty results.** Every page gets an outcome. Zero findings always go to a person.
+- **Numbers.** A threshold must be written in its own quote (`NUMBER_NOT_IN_QUOTE`).
+- **Prompts.** A prompt holds whole pages only (`PROMPT_LIMIT`).
+- **Statements.** A statement lists every catalogue line it did not yield (`LINES_NOT_FOUND`).
+- **Both agreement paths.** EXTRACT_AGREEMENT and ONBOARD now share one ledger. Before, EXTRACT_AGREEMENT dropped non-financial duties nothing explained; the real case was AGR-001's end-use clause.
+
+Same-input comparison on 20 labelled agreements, rules only:
+
+- **This DPS:** typed 112 of 115 labelled covenants.
+- **Codex DPS (clause router and typed reader):** typed 0 of 115. It reached 113, but sent about 600 sentences per 85-page agreement to review.
+
+Live Azure, AGR-007/008: 100% of duty sentences explained, at 165k and 241k tokens.
+
+Not adopted:
+
+- Codex's fixture regex extraction.
+- A separate greenfield API.
+
+Open:
+
+- Document sets (needs Spring's set manifest).
+- Large-file windows.
+- Word and Excel locators.
+- OCR measured on the bank's scans.
+- The owner's call on taxonomy defaults versus never filling them.
+
 Each bake-off is recorded as a short decision note (what was compared, numbers, chosen, why) under this table, so the team and the architect can see why each tool was picked.
 
 ## What exists today vs gaps

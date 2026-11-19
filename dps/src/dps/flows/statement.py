@@ -454,6 +454,13 @@ class StatementProcessingFlow(Flow[StatementState]):
         else:
             route = "report"
         self.state.route = route
+        if route != "failed":  # every catalogue line not found is listed, never dropped silently
+            from dps.catalog import lines_not_found
+
+            with self._deps.session_factory() as db:
+                job = db.get(Job, self.state.job_id)
+                if job is not None:
+                    jobs.record_step(db, job, "coverage", lines=lines_not_found(v["key"] for v in self.state.values))
         self._checkpoint("validate")
         return route
 

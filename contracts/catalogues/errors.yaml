@@ -59,6 +59,8 @@ errors:
   - { code: NUMBER_NOT_IN_QUOTE, class: QUALITY, http: null, retry: false, message: "The threshold is not written in the quoted text; please check the source." }
   - { code: RESIDUAL_BUDGET, class: QUALITY, http: null, retry: false, message: "Some unexplained duty sentences were not read again within the budget; they are listed for review." }
   - { code: RESIDUAL_INCOMPLETE, class: QUALITY, http: null, retry: false, message: "A second read of unexplained duty sentences failed; they are listed for review." }
+  - { code: PROMPT_LIMIT, class: QUALITY, http: null, retry: false, message: "Some pages did not fit in the agent's prompt; its tools could still open them." }
+  - { code: LINES_NOT_FOUND, class: QUALITY, http: null, retry: false, message: "Statement lines the reader did not find; listed so none is missing silently." }
   - { code: AI_ONLY, class: QUALITY, http: null, retry: false, message: "Only the Document Agent found this value; please confirm it." }
   - { code: READ_FROM_IMAGE, class: QUALITY, http: null, retry: false, message: "This value was read from a page image; please confirm it." }
   - { code: NOT_GROUNDED, class: QUALITY, http: null, retry: false, message: "The value was not found on its page." }
