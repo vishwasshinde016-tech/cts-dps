@@ -52,7 +52,7 @@ errors:
   - { code: ENTITY_MISMATCH, class: QUALITY, http: null, retry: false, message: "The document is for a different legal entity than the cycle expects." }
   - { code: CURRENCY_MISMATCH, class: QUALITY, http: null, retry: false, message: "The document is in a different currency than the cycle expects." }
   - { code: UNITS_MISMATCH, class: QUALITY, http: null, retry: false, message: "The amounts are in different units than the cycle expects." }
-  - { code: TAXONOMY_DEFAULT, class: QUALITY, http: null, retry: false, message: "Not stated in the document; the covenant taxonomy's usual value was used. Please confirm it." }
+  - { code: TAXONOMY_DEFAULT, class: QUALITY, http: null, retry: false, message: "Not stated in the document; the covenant taxonomy's usual value is suggested. Please confirm or correct it." }
   - { code: QUALIFIED, class: QUALITY, http: null, retry: false, message: "The covenant has a condition or exception; please check it applies as extracted." }
   - { code: UNRESOLVED_REFERENCE, class: QUALITY, http: null, retry: false, message: "The covenant refers to a clause or schedule that was not found in this document." }
   - { code: UNRESOLVED_CANDIDATE, class: QUALITY, http: null, retry: false, message: "A duty sentence no extracted covenant explains; please confirm or dismiss it." }
@@ -61,6 +61,7 @@ errors:
   - { code: RESIDUAL_INCOMPLETE, class: QUALITY, http: null, retry: false, message: "A second read of unexplained duty sentences failed; they are listed for review." }
   - { code: PROMPT_LIMIT, class: QUALITY, http: null, retry: false, message: "Some pages did not fit in the agent's prompt; its tools could still open them." }
   - { code: LINES_NOT_FOUND, class: QUALITY, http: null, retry: false, message: "Statement lines the reader did not find; listed so none is missing silently." }
+  - { code: TOKEN_BUDGET_HIGH, class: QUALITY, http: null, retry: false, message: "The job used most of its token budget; a longer document of this kind may not be read in full." }
   - { code: AI_ONLY, class: QUALITY, http: null, retry: false, message: "Only the Document Agent found this value; please confirm it." }
   - { code: READ_FROM_IMAGE, class: QUALITY, http: null, retry: false, message: "This value was read from a page image; please confirm it." }
   - { code: NOT_GROUNDED, class: QUALITY, http: null, retry: false, message: "The value was not found on its page." }

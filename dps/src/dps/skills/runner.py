@@ -46,6 +46,19 @@ COVENANT_GROUPS = ("FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "INFO_COVENAN
 
 
 RATIO_UNITS = {"TIMES", "PERCENT", "RATIO", "MULTIPLE", "X", "%"}
+BUDGET_WARN_SHARE = 0.8
+
+
+def budget_warning(budget) -> dict | None:
+    """A job that used most of its token budget (``TOKEN_BUDGET_HIGH``): a longer document of the same kind may not
+    be read in full, so operations sees it before it happens (the residual read and review items still catch what a
+    spent budget leaves unread). Not blocking."""
+    limit = getattr(budget, "limit", None)
+    used = getattr(budget, "used", 0) or 0
+    if not limit or used < BUDGET_WARN_SHARE * limit:
+        return None
+    return issue("TOKEN_BUDGET_HIGH", f"used {used:,} of {limit:,} tokens ({100 * used / limit:.0f}%); a longer "
+                                      "document may not be read in full")
 
 
 def check_numbers(fields: list[dict]) -> None:
@@ -313,6 +326,9 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
     finally:
         if gateway is not None:
             gateway.end_job()
+    high = budget_warning(budget)
+    if high:
+        warnings.append(high)
     if pack.name == "certificate" and model:  # spec Flow 3: the certificate against what the cycle expects
         from dps.analyze import obligations
         from dps.analyze.identify import find_identifiers

@@ -248,3 +248,13 @@ def test_an_agreement_job_returns_codes_events_and_the_taxonomy_version_in_a_val
     assert (dscr_field["value"]["code"], dscr_field["value"]["category"]) == ("FIN_DSCR", "financial")
     events = by_group["EVENT_OF_DEFAULT"]
     assert [e["value"]["code"] for e in events] == ["EOD_NON_PAYMENT"] and events[0]["status"] == "NEEDS_REVIEW"
+
+
+def test_a_taxonomy_default_is_only_suggested_never_written_into_the_field():
+    bare = field("FINANCIAL_COVENANT", {"metric": "FIN_EBITDA_TO_EMI", "threshold": 1.2})
+    codes.stamp([bare])
+    v = bare["value"]
+    assert v.get("operator") is None and v.get("unit") is None and not (bare.get("test") or {}).get("frequency")
+    assert v["suggested"] == {"operator": ">=", "unit": "TIMES", "frequency": "YEARLY"}
+    assert "defaults" not in v and bare["status"] == "NEEDS_REVIEW"
+    assert bare["issues"][-1]["code"] == "TAXONOMY_DEFAULT" and "suggested" in bare["issues"][-1]["message"]

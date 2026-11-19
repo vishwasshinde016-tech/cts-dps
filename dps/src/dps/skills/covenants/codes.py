@@ -2,9 +2,10 @@
 
 Every covenant-like field (covenants, certified figures, amended covenants) gets ``value.code`` and
 ``value.category`` from the covenant taxonomy, next to the DPS name it already has in ``value.metric``. Where the
-document does not say a quantitative covenant's operator, unit or test frequency, the taxonomy's default fills it,
-the field says which in ``value.defaults``, carries ``TAXONOMY_DEFAULT`` and waits for a person. Events of default
-become ``EVENT_OF_DEFAULT`` fields of their own, always for a person to confirm.
+document does not say a quantitative covenant's operator, unit or test frequency, the field stays empty and the
+taxonomy's usual value is offered in ``value.suggested`` (never written into the field), with ``TAXONOMY_DEFAULT``,
+for a person to confirm. Events of default become ``EVENT_OF_DEFAULT`` fields of their own, always for a person to
+confirm.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ def code_for_field(f: dict) -> str | None:
 
 
 def stamp(fields: list[dict], defaults: bool = True) -> None:
-    """Sets value.code and value.category; fills taxonomy defaults on quantitative covenants (``defaults``)."""
+    """Sets value.code and value.category; suggests taxonomy defaults on quantitative covenants (``defaults``)."""
     from dps.skills.common import issue
 
     tax = taxonomy()
@@ -51,24 +52,23 @@ def stamp(fields: list[dict], defaults: bool = True) -> None:
         t = tax.get(code)
         if not defaults or t is None or not t.quantitative or f.get("group") not in COVENANT_GROUPS:
             continue
-        filled = []
+        # What the document does not state stays empty. The taxonomy's usual value is only a suggestion beside it
+        # (``value.suggested``), so an unconfirmed default can never be applied as if the document said it
+        # (19 Nov 2026 decision; the Codex profiles' "never fill from typical-market assumptions").
+        suggested = {}
         if v.get("threshold") is not None:
             if not v.get("operator") and t.default_operator:
-                v["operator"] = t.default_operator
-                filled.append("operator")
+                suggested["operator"] = t.default_operator
             if not v.get("unit") and (t.default_operator or t.frequency) and UNITS.get(t.unit or ""):
-                v["unit"] = UNITS[t.unit]
-                filled.append("unit")
+                suggested["unit"] = UNITS[t.unit]
             test = f.get("test") if isinstance(f.get("test"), dict) else None
             if t.frequency and not (test or {}).get("frequency"):
-                f["test"] = {**(test or {"basis": None, "firstTestDate": None}),
-                             "frequency": FREQUENCIES.get(t.frequency, str(t.frequency).upper())}
-                filled.append("frequency")
-        if filled:
-            v["defaults"] = filled
+                suggested["frequency"] = FREQUENCIES.get(t.frequency, str(t.frequency).upper())
+        if suggested:
+            v["suggested"] = suggested
             f.setdefault("issues", []).append(issue(
-                "TAXONOMY_DEFAULT", f"not stated in the document; the taxonomy's usual {', '.join(filled)} for "
-                                    f"{t.name} was used"))
+                "TAXONOMY_DEFAULT", f"not stated in the document: {', '.join(suggested)}; the taxonomy's usual "
+                                    f"value for {t.name} is suggested, a person confirms or corrects it"))
             f["status"] = "NEEDS_REVIEW"
         elif v.get("threshold") is not None and (not v.get("operator") or not v.get("unit")):
             f.setdefault("issues", []).append(issue("REQUIRED_MISSING", "Confirm the operator and threshold unit."))
