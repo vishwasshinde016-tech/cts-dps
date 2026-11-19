@@ -34,8 +34,10 @@ TYPE_TO_JOB = {"SANCTION_LETTER": "EXTRACT_SANCTION", "LOAN_AGREEMENT": "EXTRACT
 
 
 def _job(db, job_id: str) -> Job:
+    from dps.api.access import same_tenant
+
     job = db.get(Job, job_id)
-    if job is None:
+    if job is None or not same_tenant(job.tenant_id):  # G2
         raise not_found("Job")
     return job
 

@@ -460,3 +460,60 @@ def test_f9_a_text_page_mostly_covered_by_a_picture_is_also_ocr_read():
     out = _read_picture_text(b"", pages, {1: {"imageShare": 0.7}, 2: {"imageShare": 0.05}}, Engine(), model)
     assert "1.40x" in out[0].text and out[0].text.count("Header line") == 1
     assert out[1].text == "plain text page" and model["flags"] == ["IMAGE_REGIONS"]
+
+
+# ---------- WP7 / WP8: one product; sign-in and tenant safety ----------
+
+def test_g12_the_old_covenexa_routes_are_off_unless_asked_for(settings):
+    from fastapi.testclient import TestClient
+
+    from dps.main import create_app
+
+    off = TestClient(create_app(settings.model_copy(update={"legacy_api": False}), create_schema=True))
+    assert off.post("/dps/v1/documents", headers={"X-User": "rm", "X-Roles": "RM"}).status_code == 404
+    assert off.get("/health").status_code == 200 and off.get("/health/ready").status_code == 200
+
+
+def test_g11_service_token_sign_in(settings):
+    import hashlib
+
+    from fastapi.testclient import TestClient
+
+    from dps.main import create_app
+    from dps.settings import AuthMode
+
+    token = "s3cret-from-the-vault"
+    cfg = settings.model_copy(update={"auth_mode": AuthMode.SERVICE_TOKEN,
+                                      "service_token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+                                      "service_allowed_networks": "not-a-network,127.0.0.1/32"})
+    client = TestClient(create_app(cfg, create_schema=True))
+    assert client.get("/dps/v1/capabilities").status_code == 401  # no token
+    bad = client.get("/dps/v1/capabilities", headers={"Authorization": "Bearer wrong"})
+    assert bad.status_code == 401
+    # TestClient's peer is "testclient", not an address: outside every network, so refused even with the token
+    assert client.get("/dps/v1/capabilities", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+    from dps.api.auth import Authenticator
+
+    class Req:
+        headers = {"Authorization": f"Bearer {token}", "X-User": "rm-anil"}
+
+        class client:  # noqa: N801
+            host = "127.0.0.1"
+
+    principal = Authenticator(cfg).authenticate(Req())
+    assert principal.user == "rm-anil" and principal.roles == {"SERVICE"}
+
+
+def test_g2_another_tenants_job_does_not_exist_here(client, app, settings, tmp_path):
+    from test_phase5_review import SERVICE, _run_certificate
+
+    from dps.models import Job
+
+    job_id = _run_certificate(client, app, settings, tmp_path, version="cv-g2", key="key-g2-tenant")
+    assert client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).status_code == 200
+    with app.state.db.session_factory() as db:
+        db.get(Job, job_id).tenant_id = "other-bank"
+        db.commit()
+    assert client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).status_code == 404
+    assert client.get(f"/dps/v1/jobs/{job_id}/review", headers=SERVICE).status_code == 404
+    assert client.get("/dps/v1/versions/cv-g2/runs", headers=SERVICE).status_code == 404

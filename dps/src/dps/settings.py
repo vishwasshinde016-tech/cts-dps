@@ -15,6 +15,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class AuthMode(str, Enum):
     JWT = "JWT"
     DEV_HEADER = "DEV_HEADER"  # dev/test only: trust X-User / X-Roles
+    # The bank app has no identity provider: Spring calls with a service token from the vault, only from its own
+    # network; the acting user comes in X-User (full review G11).
+    SERVICE_TOKEN = "SERVICE_TOKEN"  # noqa: S105  # nosec B105 - a mode name, not a secret
 
 
 class Settings(BaseSettings):
@@ -71,6 +74,13 @@ class Settings(BaseSettings):
     jwt_roles_claim: str = "roles"
     # Clock difference allowed between the identity provider and DPS, in seconds (Core allows 60).
     jwt_leeway_seconds: int = 30
+    # SERVICE_TOKEN mode: the SHA-256 (hex) of the token Spring sends (the token itself stays in the vault) and the
+    # networks it may call from (comma separated, e.g. "10.20.0.0/24,127.0.0.1/32"). Both are required.
+    service_token_sha256: str = ""
+    service_allowed_networks: str = ""
+    # The old Covenexa routes (own upload, term review and publish, spreads, ask): off in CTS, where the DMS owns
+    # upload and Spring owns approval (full review G12). On only for the old Covenexa screens.
+    legacy_api: bool = False
 
     # Covenant Core, used for CP ownership checks and C5 data-events.
     core_base_url: str = "http://localhost:9310"

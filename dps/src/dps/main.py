@@ -37,6 +37,16 @@ def create_app(settings: Settings | None = None, *, cp_checker: CpAccessChecker 
     app.state.store = FileStore(settings.storage_dir)
     app.state.limiter = RateLimiter()
     app.state.authenticator = Authenticator(settings)
+
+    @app.middleware("http")
+    async def _tenant_scope(request, call_next):  # G2: every read below is scoped to this deployment's tenant
+        from dps.api.access import reset_tenant, set_tenant
+
+        token = set_tenant(settings.tenant_id)
+        try:
+            return await call_next(request)
+        finally:
+            reset_tenant(token)
     app.state.cp_checker = cp_checker or CoreCpAccessChecker(settings.core_base_url, settings.core_timeout_seconds)
     # Phase 3a: every model call is masked, cached and kept within the monthly budget (ai_guard).
     # Phase 3: through the model gateway (routes, retries, breaker, budgets) like every other model call.
@@ -70,7 +80,10 @@ def create_app(settings: Settings | None = None, *, cp_checker: CpAccessChecker 
         return response
 
     errors.install(app)
-    app.include_router(router)
+    if settings.legacy_api:  # G12: the old Covenexa routes; off in CTS (the DMS uploads, Spring approves)
+        app.include_router(router)
+    else:
+        app.add_api_route("/health", lambda: {"status": "UP"}, methods=["GET"])
     app.include_router(job_router)  # CTS job API (contracts/dps-jobs-api.yaml)
     app.include_router(evidence_router)  # page images, runs, ask, usage, /api/data/values
     app.include_router(review_router)  # review, reclassify, quality, /api/v1/ai/covenant-status

@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from contextvars import ContextVar
 from typing import Protocol
 
 import httpx
@@ -19,6 +20,28 @@ from dps.api.auth import ADMIN, AUDITOR, ROLES_HEADER, SERVICE, SUPPORT, USER_HE
 from dps.errors import ApiError
 
 log = logging.getLogger(__name__)
+
+
+# The deployment's tenant for this request (set by the app's middleware); reads of jobs, batches, versions and
+# events of another tenant answer 404 (full review G2). Outside a request (tests, workers) nothing is filtered.
+_TENANT: ContextVar[str | None] = ContextVar("dps_tenant", default=None)
+
+
+def set_tenant(tenant: str | None):
+    return _TENANT.set(tenant)
+
+
+def reset_tenant(token) -> None:
+    _TENANT.reset(token)
+
+
+def tenant() -> str | None:
+    return _TENANT.get()
+
+
+def same_tenant(owner: str | None) -> bool:
+    current = _TENANT.get()
+    return current is None or (owner or "default") == current
 
 
 class CpAccessChecker(Protocol):

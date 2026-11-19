@@ -37,7 +37,7 @@ def settings(tmp_path: Path) -> Settings:
         engine = make_engine(url)
         Base.metadata.drop_all(engine)
         engine.dispose()
-    return Settings(database_url=url, storage_dir=tmp_path / "store",
+    return Settings(database_url=url, storage_dir=tmp_path / "store", legacy_api=True,
                     auth_mode=AuthMode.DEV_HEADER, max_upload_mb=1, core_data_source_id="ds-dps")
 
 

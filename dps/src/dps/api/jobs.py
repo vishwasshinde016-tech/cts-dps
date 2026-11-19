@@ -239,7 +239,7 @@ def _document_for(db: Session, body: JobRequest, spec: dict) -> Document:
 
 def create_job(db: Session, body: JobRequest, spec: dict, settings: Settings, *, key: str | None,
                request_hash: str, correlation_id: str | None, batch_id: str | None = None,
-               client_ref: str | None = None) -> Job:
+               client_ref: str | None = None, principal=None) -> Job:
     """Adds the scoped document record, job and accepted event. The caller commits."""
     doc = _document_for(db, body, spec)
     priority = jobs.PRIORITY[body.priority]
@@ -257,7 +257,8 @@ def create_job(db: Session, body: JobRequest, spec: dict, settings: Settings, *,
     feed.emit_for_job(db, "dps.job.accepted", job,
                       {"jobType": job.job_type, "priority": body.priority, "batchId": batch_id})
     services.audit(db, body.context.requestedBy, "JOB_SUBMIT", "job", job.id, jobType=job.job_type,
-                   versionId=job.document_version_id, batchId=batch_id)
+                   versionId=job.document_version_id, batchId=batch_id,
+                   principal=getattr(principal, "user", None))  # G4: the caller, beside the asserted user
     return job
 
 
@@ -300,8 +301,10 @@ def _same_input(db: Session, body: JobRequest, settings: Settings) -> Job | None
 
 
 def _job_or_404(db: Session, job_id: str) -> Job:
+    from dps.api.access import same_tenant
+
     job = db.get(Job, job_id)
-    if job is None:
+    if job is None or not same_tenant(job.tenant_id):  # G2: another tenant's job does not exist here
         raise not_found("Job")
     return job
 
@@ -331,7 +334,7 @@ def submit_job(body: JobRequest, request: Request, response: Response, db: DB, u
         raise ApiError(429, "QUEUE_FULL", "Too many jobs are waiting. Try again later.", {"retryAfterSeconds": 30})
     try:
         job = create_job(db, body, spec, settings, key=key, request_hash=request_hash,
-                         correlation_id=getattr(request.state, "correlation_id", None))
+                         correlation_id=getattr(request.state, "correlation_id", None), principal=user)
         db.commit()
     except IntegrityError:  # a concurrent request with the same key or input won the race
         db.rollback()
@@ -490,8 +493,10 @@ def _refused_item(db: Session, batch: Batch, item: BatchItem, request_hash: str,
 @router.get("/dps/v1/batches/{batch_id}")
 def get_batch(batch_id: str, db: DB, user: User) -> dict:
     require_roles(user, SERVICE, ADMIN, SUPPORT)
+    from dps.api.access import same_tenant
+
     batch = db.get(Batch, batch_id)
-    if batch is None:
+    if batch is None or not same_tenant(batch.tenant_id):
         raise not_found("Batch")
     return _batch_view(db, batch)
 
@@ -537,7 +542,9 @@ def rerun_batch(batch_id: str, db: DB, user: User) -> dict:
 @router.get("/dps/v1/events")
 def read_events(db: DB, user: User, after: int = 0, limit: int = 100) -> dict:
     require_roles(user, SERVICE, ADMIN, SUPPORT)
-    events, cursor = feed.read(db, max(0, after), limit)
+    from dps.api.access import tenant
+
+    events, cursor = feed.read(db, max(0, after), limit, tenant_id=tenant())  # G2: this tenant's events only
     return {"events": events, "nextCursor": cursor}
 
 
