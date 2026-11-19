@@ -16,7 +16,7 @@
         "required": ["fieldId", "action"],
         "properties": {
           "fieldId": { "type": "string", "description": "Required for CONFIRM, CORRECT and REJECT; for ADD, a client-chosen id" },
-          "action": { "type": "string", "enum": ["CONFIRM", "CORRECT", "REJECT", "ADD"] },
+          "action": { "type": "string", "enum": ["CONFIRM", "CORRECT", "REJECT", "ADD", "ACKNOWLEDGE"], "description": "ACKNOWLEDGE: fieldId is warning:<CODE> of a blocking warning; comment required" },
           "group": { "type": "string", "description": "Required for ADD" },
           "name": { "type": "string", "description": "Required for ADD" },
           "value": { "description": "Required for CORRECT and ADD; typed as in result.json for the group" },
@@ -26,7 +26,8 @@
         },
         "allOf": [
           { "if": { "properties": { "action": { "enum": ["CORRECT", "ADD"] } } }, "then": { "required": ["value", "reasonCode"] } },
-          { "if": { "properties": { "action": { "const": "ADD" } } }, "then": { "required": ["group", "name", "page"] } }
+          { "if": { "properties": { "action": { "const": "ADD" } } }, "then": { "required": ["group", "name", "page"] } },
+          { "if": { "properties": { "action": { "const": "ACKNOWLEDGE" } } }, "then": { "required": ["comment"] } }
         ]
       }
     }

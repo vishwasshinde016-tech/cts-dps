@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from conftest import reviewed_if_clean
 from test_bug_hunt import terms_of
 from test_flows import FakeParser, add_document, doc_status, values, xlsx_bytes
 
@@ -41,7 +42,7 @@ def run(database, data: bytes, name: str, profiles: dict, cps=("CP-1",), rate=No
                          fx_rate=lambda s, d, on: rate)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    return flow, doc_id, deps
+    return reviewed_if_clean(flow), doc_id, deps
 
 
 # ---------------------------------------------------------------- profiles

@@ -37,7 +37,10 @@ def _store(request: Request) -> LocalStore:
 
 
 def _version_jobs(db, version_id: str) -> list[Job]:
-    found = list(db.scalars(select(Job).where(Job.document_version_id == version_id).order_by(Job.created_at)))
+    from dps.api.access import same_tenant
+
+    found = [j for j in db.scalars(select(Job).where(Job.document_version_id == version_id).order_by(Job.created_at))
+             if same_tenant(j.tenant_id)]  # G2: another tenant's version does not exist here
     if not found:
         raise not_found("Version")
     return found

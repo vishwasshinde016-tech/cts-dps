@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from dps.extraction.agreement import Term, extract_terms
 from dps.parse.engine import Page
 from dps.skills.common import issue, make_field
@@ -66,7 +68,39 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
     read = as_pages(pages)
     terms = extract_terms(read)
     candidates, _ = possible_covenants(read, terms)
-    return [term_field("covenants", pages, t, key=f"{t.metric}-{i}") for i, t in enumerate(terms + candidates)]
+    fields = [term_field("covenants", pages, t, key=f"{t.metric}-{i}") for i, t in enumerate(terms + candidates)]
+    return fields + step_tables(pages, fields)
+
+
+CEILING = re.compile(r"not\s+(?:to\s+)?exceed|not\s+be\s+(?:more|greater|higher)|no\s+(?:more|greater)\s+than|"
+                     r"\bmaximum\b|or\s+(?:less|lower)\b|\bat\s+most\b", re.I)
+FLOOR = re.compile(r"not\s+(?:be\s+)?(?:less|lower)|\bat\s+least\b|\bminimum\b|or\s+(?:more|higher|greater)\b|"
+                   r"no\s+less\s+than", re.I)
+
+
+def step_tables(pages: list[dict], fields: list[dict]) -> list[dict]:
+    """A covenant whose levels are a table ("shall not exceed the ratio set out opposite that date:" then dates and
+    ratios) is one field with its schedule (full review F2: such tables gave no field and no review item). Always
+    for a person: the table's reading of dates and levels is checked against the page."""
+    from dps.extraction.agreement import _best_metric
+    from dps.skills.covenants.ledger import table_blocks
+    from dps.skills.covenants.names import canonical
+
+    out = []
+    for p in pages:
+        for block in table_blocks(p.get("text") or ""):
+            metric = _best_metric(block["lead"]) or canonical(None, block["lead"]) or "OTHER"
+            op = "<=" if CEILING.search(block["lead"]) else ">=" if FLOOR.search(block["lead"]) else None
+            levels = [{"from": r["date"], "to": None, "threshold": r["value"]} for r in block["rows"]]
+            value = {"metric": metric, "operator": op, "threshold": levels[0]["threshold"], "unit": "TIMES",
+                     "expression": None, "schedule": levels}
+            f = make_field("covenants", pages, "FINANCIAL_COVENANT", metric, value, int(p["no"]), block["quote"],
+                           "RULES", 0.6, [issue("STEP_TABLE", f"{len(levels)} levels read from a table; check each "
+                                                              "date and level against the page")],
+                           key=f"{metric}-table-{p['no']}-{block['start']}")
+            f["status"] = "NEEDS_REVIEW"
+            out.append(f)
+    return out
 
 
 def checks(fields: list[dict], ctx: dict) -> list[dict]:

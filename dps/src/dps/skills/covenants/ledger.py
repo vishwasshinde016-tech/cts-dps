@@ -28,6 +28,7 @@ covenant means.
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 from dps.skills.common import issue
@@ -42,8 +43,8 @@ QUALIFIER = re.compile(
     r"\b(?:subject\s+to|unless|except(?:\s+(?:for|as|that|with|to\s+the\s+extent))?|provided\s+(?:that|always|however)|"
     r"other\s+than|save\s+(?:as|for)|without\s+prejudice\s+to|to\s+the\s+extent\s+(?:that|permitted)|"
     r"only\s+if|if\s+and\s+only\s+if|(?:for\s+)?so\s+long\s+as|notwithstanding|in\s+the\s+event\s+(?:that|of)|"
-    r"at\s+any\s+time\s+(?:when|that|during\s+which)|when(?:ever)?\s+(?:the\s+)?[\w\s]{2,40}?\s+(?:is|are|falls|"
-    r"exceeds?|drops?)\s+(?:below|above|less|more|greater|lower)|"
+    r"at\s+any\s+time\s+(?:when|that|during\s+which)|(?:when(?:ever)?|if|where|in\s+case)\s+(?:the\s+)?[\w\s,.-]{2,60}?\s+"
+    r"(?:is|are|falls|exceeds?|drops?|remains?)\s+(?:below|above|less|more|greater|lower|under|over)|"
     r"without\s+(?:the\s+)?(?:prior\s+)?(?:written\s+)?(?:consent|approval))\b", re.I)
 # A reference to a part of the agreement: "Clause 21.3", "clause 21.3(b)", "Schedule 5", "Annexure II", "Section 7.01".
 REFERENCE = re.compile(
@@ -55,6 +56,52 @@ REFERENCE = re.compile(
 LEAD_IN = re.compile(r"\b(?:the\s+following|as\s+follows|set\s+out\s+below|listed\s+below)\b[^.;]{0,120}[,:]?\s*$|"
                      r"\bthe\s+following\s+(?:[\w-]+\s+){0,3}(?:covenants?|undertakings?|ratios?|obligations?)\b",
                      re.I)
+
+
+# Duties written without "shall/will/must" (full review F1): "No member of the Group may ...", "is not to exceed",
+# "It is a condition of this Agreement that ...", "may not".
+EXTRA_DUTY = re.compile(
+    r"\b(?:may|shall|will|can)\s+not\b|\b(?:is|are)\s+not\s+to\b|"
+    r"\bno\s+(?:member\s+of\s+the\s+group|obligor|subsidiary|guarantor|group\s+company)\b[^.;]{0,80}?\b(?:may|shall|will)\b|"
+    r"\b(?:it\s+is\s+a\s+)?condition\s+of\s+this\s+(?:agreement|facility|deed)\s+that\b|"
+    r"\bit\s+is\s+a\s+condition\b", re.I)
+# Cross-default and cross-acceleration triggers (event-of-default items rarely carry an obligation word).
+CROSS_DEFAULT = re.compile(
+    r"\bcross[- ](?:default|acceleration)\b|\bindebtedness\b[^.;]{0,140}?\b(?:is\s+not\s+paid|not\s+paid\s+when\s+due|"
+    r"(?:is|are|becomes?)\s+(?:declared\s+)?(?:to\s+be\s+)?due\s+and\s+payable\s+prior|accelerat|is\s+cancelled\s+or\s+"
+    r"suspended)", re.I)
+# One level of a table of thresholds: a date and a number ("31 March 2027   4.00:1").
+STEP_ROW = re.compile(
+    r"(?P<date>\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Z][a-z]{2,8},?\s+\d{4}|\b[A-Z][a-z]{2,8}\s+\d{4}|\b\d{4}-\d{2}-\d{2}|\bQ[1-4]\s*\d{4}|"
+    r"\bFY\s*\d{2,4})\b[^\n\d]{0,60}?(?P<value>\d{1,3}(?:\.\d{1,4})?)\s*(?::\s*1(?:\.0+)?|x|times|%)?")
+
+
+def table_blocks(text: str) -> list[dict]:
+    """Lead-in sentences followed by a table of levels (full review F2): "shall not exceed the ratio set out
+    opposite that date:" and two or more date + number rows. Each block gives the lead-in, the rows and the exact
+    text of the whole block (contiguous on the page, so it can be quoted)."""
+    from dps.extraction.safety_net import _COMPARISON, _FINANCIAL, _OBLIGATION
+
+    out = []
+    lead_in = re.compile(r"[^.;\n][^.;]{20,400}?(?::|\bas\s+follows|\bset\s+out\s+(?:below|opposite)[^.;:]{0,80})"
+                         r":?[ \t]*\n")
+    for m in lead_in.finditer(text or ""):
+        lead = " ".join(m.group(0).split())
+        if not (_OBLIGATION.search(lead) and (_COMPARISON.search(lead) or _FINANCIAL.search(lead))):
+            continue
+        rows, end = [], m.end()
+        for line in (text[m.end():].split("\n"))[:30]:
+            if not line.strip():
+                end += len(line) + 1
+                continue
+            row = STEP_ROW.search(line)
+            if row is None:
+                break
+            rows.append({"date": row.group("date"), "value": float(row.group("value")), "text": " ".join(line.split())})
+            end += len(line) + 1
+        if len(rows) >= 2:
+            out.append({"lead": lead, "rows": rows, "quote": text[m.start():end].strip(), "start": m.start()})
+    return out
 
 
 def _flat(text: str | None) -> str:
@@ -124,15 +171,27 @@ def candidates(pages: list[dict]) -> list[dict]:
     index = headings(pages)
     for p in pages:
         no = int(p["no"])
-        sents = sentences(p.get("text") or "")
+        text = p.get("text") or ""
+        for b, block in enumerate(table_blocks(text)):  # F2: a lead-in with a table of levels is one candidate
+            out.append({"id": f"p{no}t{b}", "page": no, "text": block["quote"][:MAX_TEXT], "route": "TABLE",
+                        "kind": coverage.sentence_kind(block["lead"]), "qualifiers": qualifiers(block["lead"]),
+                        "references": references(block["lead"], index), "state": UNRESOLVED, "reason": None,
+                        "fieldId": None, "_full": block["quote"], "_before": "", "_after": ""})
+        sents = sentences(text)
         for i, s in enumerate(sents):
-            if len(s) < 25 or coverage.MECHANICS.search(s) or coverage.DEFINES.search(s) or LEAD_IN.search(s):
+            plain_duty = EXTRA_DUTY.search(s) or CROSS_DEFAULT.search(s)
+            if len(s) < 25 or coverage.DEFINES.search(s) or LEAD_IN.search(s) or (
+                    coverage.MECHANICS.search(s) and not plain_duty):
                 continue
             if is_duty(s):
                 route = "DUTY"
             elif (BORROWER_DUTY.search(s) and not CONDITION_PRECEDENT.search(s) and not NOT_A_DUTY.search(s)
                   and coverage.sentence_kind(s)):
                 route = "CUE"
+            elif EXTRA_DUTY.search(s) and not CONDITION_PRECEDENT.search(s):
+                route = "LEXICON"  # F1: "may not", "is not to", "No member of the Group may", "a condition that"
+            elif CROSS_DEFAULT.search(s):
+                route = "CROSS_DEFAULT"  # F1: cross-default and cross-acceleration triggers
             else:
                 continue
             following = sents[i + 1] if i + 1 < len(sents) else None
@@ -157,12 +216,19 @@ def settle(entries: list[dict], fields: list[dict], decisions: dict[str, dict] |
         kind = coverage.field_kind(f)
         if kind:
             kinds.setdefault(no, {}).setdefault(kind, f)
+    found: set = set()
     for e in entries:
         no = e["page"]
         near = quotes.get(no, []) + quotes.get(no - 1, []) + quotes.get(no + 1, [])
         hit = next((f for q, f in near if coverage._explains(q, e["_full"])), None)
+        if hit is not None and hit.get("id") in found:
+            # The field already stands for another duty its quote holds: this one is listed on it (value.covers) for
+            # the reviewer, never folded in as found (full review F7: two reporting deadlines, one field).
+            e["state"], e["fieldId"], e["reason"] = COVERED, hit.get("id"), None
+            continue
         if hit is not None:
             e["state"], e["fieldId"], e["reason"] = FINDING, hit.get("id"), None
+            found.add(hit.get("id"))
             continue
         kind_hit = None
         if e["kind"]:
@@ -251,6 +317,18 @@ def review_items(entries: list[dict], pages: list[dict], pack_name: str) -> list
         for e in items:
             e["fieldId"] = f["id"]
         out.append(f)
+    for e in entries:  # F8: one in ten dismissed sentences, chosen by its id (reproducible), is checked by a person
+        if e["state"] != NOT_A_COVENANT or int(hashlib.sha256(e["id"].encode()).hexdigest()[:8], 16) % 10:
+            continue
+        value = {"metric": e["kind"] or "OTHER", "operator": None, "threshold": None, "unit": None,
+                 "expression": None, "candidates": [e["id"]], "sentences": [e["text"]]}
+        f = make_field(pack_name, pages, "POSSIBLE_COVENANT", f"Dismissed duty on page {e['page']} (QA sample)", value,
+                       e["page"], e["_full"], method="COVERAGE", confidence=0.3, key=f"dismissed-{e['id']}")
+        f["status"] = "NEEDS_REVIEW"
+        f["issues"].append(issue("DISMISSED_SAMPLE", ("the Document Agent said this is not a covenant ("
+                                                      + (e["reason"] or "no reason")
+                                                      + "); a sampled check: confirm or reject")[:300]))
+        out.append(f)
     return out
 
 
@@ -263,6 +341,9 @@ def summary(entries: list[dict], pages: list[dict]) -> dict:
     explained = counts[FINDING] + counts[COVERED] + counts[NOT_A_COVENANT]
     return {
         "scope": "WHOLE_DOCUMENT", "pages": len(pages), "candidates": total, "accounted": total,
+        "routes": {r: sum(1 for e in entries if e["route"] == r) for r in sorted({e["route"] for e in entries})},
+        "note": "candidates are the sentences and tables these routes found; a duty written in none of their forms "
+                "is not counted, so 100% explained is not proof that nothing was missed",
         "finding": counts[FINDING], "covered": counts[COVERED], "notCovenant": counts[NOT_A_COVENANT],
         "unresolved": counts[UNRESOLVED],
         "percentExplained": round(100.0 * explained / total, 1) if total else 100.0,

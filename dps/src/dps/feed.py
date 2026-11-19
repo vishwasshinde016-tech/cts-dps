@@ -8,6 +8,7 @@ at least once and consumers de-duplicate on ``eventId``. Payloads never hold doc
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -51,10 +52,30 @@ def view(event: EventFeed) -> dict:
     }
 
 
-def read(db: Session, after: int, limit: int, tenant_id: str | None = None) -> tuple[list[dict], int]:
-    """Events with ``seq > after``, oldest first, and the cursor to pass next time."""
-    q = select(EventFeed).where(EventFeed.seq > after).order_by(EventFeed.seq).limit(max(1, min(limit, 500)))
+# A missing ``seq`` younger than this may be an event whose transaction has not committed yet (SQL Server hands out
+# IDENTITY values at insert, transactions commit in any order). Older gaps are rollbacks or identity-cache jumps.
+GAP_SETTLE_SECONDS = 60
+
+
+def read(db: Session, after: int, limit: int, tenant_id: str | None = None,
+         now: datetime | None = None) -> tuple[list[dict], int]:
+    """Events with ``seq > after``, oldest first, and the cursor to pass next time.
+
+    The page stops before a recent gap in ``seq`` (full review G24): a reader that moved its cursor past a sequence
+    number still being written would never see that event. Once the gap is older than ``GAP_SETTLE_SECONDS`` it is
+    a rollback, not a pending write, and reading goes on past it."""
+    now = now or datetime.now(UTC)
+    size = max(1, min(limit, 500))
+    rows = list(db.scalars(select(EventFeed).where(EventFeed.seq > after).order_by(EventFeed.seq).limit(size)))
+    kept, expected = [], after + 1
+    for e in rows:
+        if e.seq != expected:
+            at = e.occurred_at if e.occurred_at.tzinfo else e.occurred_at.replace(tzinfo=UTC)
+            if (now - at).total_seconds() < GAP_SETTLE_SECONDS:
+                break  # an earlier number may still commit: wait for it
+        kept.append(e)
+        expected = e.seq + 1
+    cursor = kept[-1].seq if kept else after
     if tenant_id is not None:
-        q = q.where(EventFeed.tenant_id == tenant_id)
-    events = list(db.scalars(q))
-    return [view(e) for e in events], (events[-1].seq if events else after)
+        kept = [e for e in kept if e.tenant_id == tenant_id]
+    return [view(e) for e in kept], cursor

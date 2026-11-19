@@ -134,7 +134,7 @@ def clean(proposals: list[dict] | None, drop_mechanics: bool = True, collapse: b
     if proposals is None:
         return None
     out: list[dict] = []
-    seen: dict[str, list[int | None]] = {}
+    seen: dict[str, list[tuple[int | None, str]]] = {}
     for p in proposals:
         value = dict(p.get("value") or {})
         written = p.get("_written") or p.get("name") or value.get("metric")
@@ -146,11 +146,16 @@ def clean(proposals: list[dict] | None, drop_mechanics: bool = True, collapse: b
                 and is_mechanics(value.get("metric"), p.get("name")):
             continue
         if collapse and key in NON_FINANCIAL:
+            # The same clause read twice (two parts or two batches) is one item; two duties of one kind with
+            # different wording (accounts in 120 days, permit copies in 10 days) stay two items (full review G19).
             page = p.get("page") if isinstance(p.get("page"), int) else None
-            pages = seen.setdefault(key, [])
-            if any(q is None or page is None or abs(q - page) <= 1 for q in pages):
+            quote = re.sub(r"\s+", " ", str(p.get("quote") or "")).strip().lower()
+            known = seen.setdefault(key, [])
+            if any((q is None or page is None or abs(q - page) <= 1) and (not quote or not other or quote in other
+                                                                          or other in quote)
+                   for q, other in known):
                 continue
-            pages.append(page)
+            known.append((page, quote))
         value["metric"] = key
         if is_other(key):
             value["nameAsWritten"] = str(written or "")[:120]

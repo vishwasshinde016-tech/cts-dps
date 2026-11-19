@@ -131,8 +131,11 @@ def prompt_for(pack, pages: list[dict], extra: str = "", notes: list | None = No
         listed = ", ".join(map(str, left_out[:30]))
         notes.append(issue("PROMPT_LIMIT", f"{pack.name}: pages {listed} did not fit in the agent's prompt (its tools "
                                            "can still open them)"))
-    content = "\n\n".join([HEADER.format(guard=DATA_NOT_INSTRUCTIONS), pack.prompt.strip(),
-                           "Schema:\n" + json.dumps(pack.schema), extra, blocks])
+    # The pages come right after the shared header and before the task: reads of the same pages with different
+    # tasks (the four covenant parts) share a long identical prefix, which Azure's prompt cache serves at a discount
+    # (full review G32). The task, schema and batch note follow the pages.
+    content = "\n\n".join([HEADER.format(guard=DATA_NOT_INSTRUCTIONS), blocks, "Task:\n" + pack.prompt.strip(),
+                           "Schema:\n" + json.dumps(pack.schema), extra])
     return [{"role": "user", "content": content}]
 
 

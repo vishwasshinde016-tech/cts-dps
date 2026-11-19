@@ -134,6 +134,7 @@ class Worker:
             self.send_events()
             self.push_events()
             self._age_queue()
+            self._reap()
             self._seal()
         limits = jobs.Limits(per_tenant=self.settings.queue_max_running_per_tenant,
                              per_batch=self.settings.queue_max_running_per_batch)
@@ -155,6 +156,18 @@ class Worker:
         with self.session_factory() as db:
             jobs.age(db, self.settings.queue_aging_minutes)
             self._queue_metrics(db)
+
+    def _reap(self) -> None:
+        """G6: jobs whose worker died on their last attempt end DEAD instead of showing "in progress" for ever."""
+        try:
+            with self.session_factory() as db:
+                if jobs.reap(db, self.settings.worker_max_attempts):
+                    log.warning("set aside jobs whose last attempt lost its worker")
+                from dps.agent.guard import purge_cache
+
+                purge_cache(db, self.settings.ai_cache_days)  # G17: no model answer kept past its days
+        except Exception:  # noqa: BLE001 - a scheduler task never stops the worker
+            log.warning("reaper failed", exc_info=True)
 
     @staticmethod
     def _queue_metrics(db: Session) -> None:

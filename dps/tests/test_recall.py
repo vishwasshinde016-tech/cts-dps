@@ -150,7 +150,7 @@ def test_the_covenants_skill_prompt_holds_the_far_section_and_says_when_pages_di
     result = skills.run(load("covenants"), fake_job("ONBOARD"), model_of(*texts), gw, None)
     assert any("<<<page 36>>>" in p and "INFORMATION UNDERTAKINGS" in p for p in gw.prompts)
     assert not [w for w in result["warnings"] if w["code"] == "PAGES_NOT_SENT"]
-    many = [("The Borrower shall maintain a ratio of not less than 1.25 times. " * 40)] * 100  # > 4 batches
+    many = [("The Borrower shall maintain a ratio of not less than 1.25 times. " * 40)] * 330  # > 12 batches
     result = skills.run(load("covenants"), fake_job("ONBOARD"), model_of(*many), Recorder(), None)
     assert [w for w in result["warnings"] if w["code"] == "PAGES_NOT_SENT"]
 

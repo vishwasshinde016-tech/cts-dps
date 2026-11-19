@@ -34,8 +34,10 @@ TYPE_TO_JOB = {"SANCTION_LETTER": "EXTRACT_SANCTION", "LOAN_AGREEMENT": "EXTRACT
 
 
 def _job(db, job_id: str) -> Job:
+    from dps.api.access import same_tenant
+
     job = db.get(Job, job_id)
-    if job is None:
+    if job is None or not same_tenant(job.tenant_id):  # G2
         raise not_found("Job")
     return job
 
@@ -90,7 +92,8 @@ def get_review(job_id: str, request: Request, db: DB, user: User) -> dict:
 class Decision(BaseModel):
     model_config = ConfigDict(extra="forbid")
     fieldId: str = Field(min_length=1, max_length=64)  # noqa: N815
-    action: Literal["CONFIRM", "CORRECT", "REJECT", "ADD"]
+    # ACKNOWLEDGE: fieldId is "warning:<CODE>" and comment says why the warning does not block (full review G29)
+    action: Literal["CONFIRM", "CORRECT", "REJECT", "ADD", "ACKNOWLEDGE"]
     group: str | None = None
     name: str | None = Field(default=None, max_length=255)
     value: object | None = None
@@ -107,6 +110,17 @@ class Decisions(BaseModel):
 
 def _apply(result: dict, d: Decision, reviewer: str) -> tuple[dict | None, dict | None]:
     """Applies one decision to the result in place; returns (old field, new field)."""
+    if d.action == "ACKNOWLEDGE":
+        code = d.fieldId.removeprefix("warning:")
+        warning = next((w for w in result.get("warnings", []) if w.get("code") == code), None)
+        if warning is None or not d.fieldId.startswith("warning:"):
+            raise ApiError(400, "VALIDATION_FAILED", "ACKNOWLEDGE needs fieldId warning:<CODE> of a warning in this "
+                                                     "result.")
+        if not d.comment:
+            raise ApiError(400, "VALIDATION_FAILED", "ACKNOWLEDGE needs a comment saying why it does not block.")
+        old = json.loads(json.dumps(warning))
+        warning["acknowledged"] = {"by": reviewer, "comment": d.comment}
+        return old, warning
     by_id = {f["id"]: f for f in result.get("fields", [])}
     if d.action == "ADD":
         if not (d.group and d.name and d.page and d.value is not None and d.reasonCode):
@@ -159,8 +173,9 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
         old, new = _apply(result, d, reviewer)
         sampled = bool((old or {}).get("signals", {}) and (old or {}).get("signals", {}).get("sampled"))
         db.add(ReviewDecision(job_id=job.id, run_no=revision + 1, field_id=d.fieldId, reviewer=reviewer,
-                              action=d.action, old_value_json=json.dumps(old["value"], default=str) if old else None,
-                              new_value_json=json.dumps(new["value"], default=str) if new else None,
+                              action=d.action,
+                              old_value_json=json.dumps(old.get("value", old), default=str) if old else None,
+                              new_value_json=json.dumps(new.get("value", new), default=str) if new else None,
                               reason_code=d.reasonCode, comment=d.comment, sampled=sampled))
         if d.action in ("CORRECT", "ADD", "REJECT"):
             db.add(GoldenCandidate(job_id=job.id, field_id=d.fieldId, job_type=job.job_type,
@@ -171,10 +186,15 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
             _learn(db, job, d, old, new, reviewer)
     _rederive(result, job)
     remaining = [f for f in result["fields"] if f["status"] == "NEEDS_REVIEW"]
-    blocking = [w for w in result.get("warnings", []) if w["code"] in ("TOTALS_DO_NOT_ADD", "NOTHING_FOUND")]
+    from dps.skills.runner import BLOCKING
+
+    # Every blocking warning (mismatched entity, period or currency, unreadable pages, nothing found ...) stays open
+    # until a person acknowledges it with a reason (full review G29).
+    blocking = [w for w in result.get("warnings", []) if w["code"] in BLOCKING and not w.get("acknowledged")]
     result["status"] = "NEEDS_REVIEW" if remaining or blocking else "DONE"
-    result["document"] = {**result.get("document", {}), "route": "NEEDS_REVIEW" if remaining else "AUTO_ACCEPTED",
-                          "reasons": [f"{len(remaining)} field(s) need review"] if remaining else []}
+    reasons = ([f"{len(remaining)} field(s) need review"] if remaining else []) + [w["code"] for w in blocking]
+    result["document"] = {**result.get("document", {}),
+                          "route": "NEEDS_REVIEW" if remaining or blocking else "REVIEWED", "reasons": reasons}
     new_run = Run(job_id=job.id, run_no=revision + 1, status=result["status"], trigger="REVIEW",
                   result_json="{}")
     result["runId"] = f"{job.id}:{revision + 1}"

@@ -141,16 +141,37 @@ def _masked(message: dict) -> dict:
     return message
 
 
+def _expired(hit: AiCache, settings: Settings, now: datetime) -> bool:
+    made = hit.created_at if hit.created_at.tzinfo else hit.created_at.replace(tzinfo=now.tzinfo)
+    return (now - made).days >= settings.ai_cache_days
+
+
+def purge_cache(db: Session, days: int, now: datetime | None = None) -> int:
+    """Deletes cached model answers older than ``days`` (full review G17: they hold document quotes)."""
+    from datetime import timedelta
+
+    from sqlalchemy import delete
+
+    cutoff = (now or utcnow()) - timedelta(days=days)
+    removed = db.execute(delete(AiCache).where(AiCache.created_at < cutoff)).rowcount or 0
+    db.commit()
+    return removed
+
+
 def guarded(completion: Completion, model: str, session_factory: sessionmaker[Session], settings: Settings,
             clock: Callable[[], datetime] = utcnow) -> Completion:
     """``completion`` with the guards above: masked text, cached answers, the monthly budget."""
 
     def call(messages: list[dict]) -> str:
         safe = [_masked(m) for m in messages]
-        key = cache_key(model, safe)
+        key = cache_key(f"{model}|{settings.pipeline_version}", safe)  # a pipeline change never reuses an answer
         with session_factory() as db:
             if settings.ai_cache:
                 hit = db.get(AiCache, key)
+                if hit is not None and _expired(hit, settings, clock()):
+                    db.delete(hit)
+                    db.commit()
+                    hit = None
                 if hit is not None:
                     hit.hits += 1
                     hit.last_used_at = clock()

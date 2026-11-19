@@ -31,6 +31,11 @@ LIBRARY: dict[str, tuple[tuple[str, ...], str | None]] = {
     "CHANGE_OF_CONTROL": (("No Change of Control",), None),
 }
 
+# A DPS formula is a standard template, not the agreement's own definition of the metric (EBITDA add-backs, gross or
+# net interest): a suggestion a person confirms, never applied on its own (full review 19 Nov 2026, F5).
+TEMPLATE_ISSUE = ("FORMULA_TEMPLATE: DPS's standard formula for this metric, not the agreement's definition; confirm "
+                  "it against the defined terms")
+
 # Custom-candidate rules over DPS statement measures, for metrics the library does not hold yet.
 # 12-month covenants (10 November 2026): ratios of a year's earnings use the trailing twelve months (<KEY>_TTM), so a
 # quarterly statement is not tested on one quarter's EBITDA (Debt / EBITDA about four times too high). Without the
@@ -215,7 +220,9 @@ def to_proposal(term: Term, masters_by_name: dict[str, CoreMaster], currency: st
     if master is not None:
         manual = master.assessment_type == "MANUAL"
         lhs = master.referenced_measures[0] if len(master.referenced_measures) == 1 else measure
-        lhs = lhs or DPS_FORMULAS.get(term.metric)
+        if lhs is None and DPS_FORMULAS.get(term.metric):
+            lhs = DPS_FORMULAS[term.metric]
+            issues.append(TEMPLATE_ISSUE)
         expression = None if manual or rule is None or lhs is None else f"{lhs} {rule}"
         return Proposal(covenant_master_id=master.id, name=master.name, expression=expression,
                         assessment_type="MANUAL" if manual else "AUTO",
@@ -223,6 +230,8 @@ def to_proposal(term: Term, masters_by_name: dict[str, CoreMaster], currency: st
 
     lhs = DPS_FORMULAS.get(term.metric)
     expression = f"{lhs} {rule}" if lhs and rule else None
+    if expression:
+        issues.append(TEMPLATE_ISSUE)
     name = DISPLAY_NAMES.get(term.metric, term.metric.replace("_", " ").title())
     return Proposal(covenant_master_id=None, name=name, expression=expression,
                     assessment_type="AUTO" if expression else "MANUAL",

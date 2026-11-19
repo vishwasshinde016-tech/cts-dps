@@ -44,6 +44,10 @@ class Authenticator:
         # token Microsoft issued for any other tenant or app would be accepted.
         if settings.auth_mode == AuthMode.JWT and not (settings.jwt_issuer and settings.jwt_audience):
             raise RuntimeError("DPS_AUTH_MODE=JWT needs DPS_JWT_ISSUER and DPS_JWT_AUDIENCE")
+        if settings.auth_mode == AuthMode.SERVICE_TOKEN and not (settings.service_token_sha256
+                                                                and settings.service_allowed_networks):
+            raise RuntimeError("DPS_AUTH_MODE=SERVICE_TOKEN needs DPS_SERVICE_TOKEN_SHA256 and "
+                               "DPS_SERVICE_ALLOWED_NETWORKS")
         if settings.auth_mode == AuthMode.JWT and not settings.jwt_public_key_pem:
             if not settings.jwt_jwks_url:
                 raise RuntimeError("DPS_AUTH_MODE=JWT needs DPS_JWT_JWKS_URL or DPS_JWT_PUBLIC_KEY_PEM")
@@ -52,7 +56,39 @@ class Authenticator:
     def authenticate(self, request: Request) -> Principal:
         if self.settings.auth_mode == AuthMode.DEV_HEADER:
             return self._from_headers(request)
+        if self.settings.auth_mode == AuthMode.SERVICE_TOKEN:
+            return self._from_service_token(request)
         return self._from_jwt(request)
+
+    def _from_service_token(self, request: Request) -> Principal:
+        """G11: the caller is the CTS Spring app (role SERVICE) when it shows the vault token from an allowed network.
+        The acting user in X-User is recorded as such; it never grants rights by itself."""
+        import hashlib
+        import hmac
+        import ipaddress
+
+        host = request.client.host if request.client else ""
+        networks = []
+        for n in self.settings.service_allowed_networks.split(","):
+            try:
+                networks.append(ipaddress.ip_network(n.strip(), strict=False))
+            except ValueError:
+                continue  # a malformed entry allows nothing
+        try:
+            address = ipaddress.ip_address(host)
+            allowed = any(address in net for net in networks)
+        except ValueError:
+            allowed = False
+        if not allowed:
+            log.warning("Sign-in refused: caller outside the allowed networks")
+            raise _unauthorized("Not allowed from this network")
+        header = request.headers.get("Authorization") or ""
+        token = header[7:].strip() if header.lower().startswith("bearer ") else ""
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        if not token or not hmac.compare_digest(digest, self.settings.service_token_sha256.lower()):
+            raise _unauthorized("Invalid token")
+        acting = (request.headers.get(USER_HEADER) or "").strip()
+        return Principal(user=acting or "cts-spring", roles=frozenset({SERVICE}), token=None)
 
     @staticmethod
     def _from_headers(request: Request) -> Principal:

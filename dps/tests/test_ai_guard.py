@@ -95,7 +95,7 @@ def test_the_same_question_is_answered_from_the_cache(database):
         calls.append(messages)
         return "answer"
 
-    ask = guarded(model, "azure/m", database.session_factory, Settings(), clock=lambda: NOW)
+    ask = guarded(model, "azure/m", database.session_factory, Settings(ai_cache=True), clock=lambda: NOW)
     msg = [{"role": "user", "content": "EBITDA of cfo@acme.lk's company?"}]
     assert ask(msg) == "answer" and ask(msg) == "answer"
     assert len(calls) == 1 and "[email]" in calls[0][0]["content"]  # sent masked, once
@@ -107,7 +107,7 @@ def test_the_same_question_is_answered_from_the_cache(database):
 
 
 def test_the_budget_warns_at_80_percent_once_and_stops_the_model_at_100(database):
-    settings = Settings(ai_monthly_token_budget=1000)
+    settings = Settings(ai_monthly_token_budget=1000, ai_cache=True)
     calls = []
     ask = guarded(lambda m: calls.append(m) or "ok", "azure/m", database.session_factory, settings,
                   clock=lambda: NOW)

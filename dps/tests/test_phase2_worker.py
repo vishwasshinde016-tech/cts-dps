@@ -64,7 +64,8 @@ def test_page_model_built_once_saved_and_reused(client, app, settings, tmp_path)
     with app.state.db.session_factory() as s:
         assert {s.get(Job, i).status for i in (first, second)} == {jobs.DONE}
         arts = s.scalars(select(Artifact)).all()
-        assert len(arts) == 1 and arts[0].path == "default/dv-1/page-model/1/page-model.json.gz"
+        version = "".join(c if c.isalnum() or c in "._-" else "_" for c in settings.pipeline_version)
+        assert len(arts) == 1 and arts[0].path == f"default/dv-1/page-model/{version}/page-model.json.gz"
         model = json.loads(gzip.decompress(store.get_derived(arts[0].path, arts[0].sha256)))
     assert model["documentVersionId"] == "dv-1" and model["pageCount"] == 1
     assert page_models == {}  # cleared after each job

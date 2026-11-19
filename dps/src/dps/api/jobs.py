@@ -10,7 +10,7 @@ import csv
 import hashlib
 import io
 import json
-from datetime import date
+from datetime import UTC, date
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -239,7 +239,7 @@ def _document_for(db: Session, body: JobRequest, spec: dict) -> Document:
 
 def create_job(db: Session, body: JobRequest, spec: dict, settings: Settings, *, key: str | None,
                request_hash: str, correlation_id: str | None, batch_id: str | None = None,
-               client_ref: str | None = None) -> Job:
+               client_ref: str | None = None, principal=None) -> Job:
     """Adds the scoped document record, job and accepted event. The caller commits."""
     doc = _document_for(db, body, spec)
     priority = jobs.PRIORITY[body.priority]
@@ -257,7 +257,8 @@ def create_job(db: Session, body: JobRequest, spec: dict, settings: Settings, *,
     feed.emit_for_job(db, "dps.job.accepted", job,
                       {"jobType": job.job_type, "priority": body.priority, "batchId": batch_id})
     services.audit(db, body.context.requestedBy, "JOB_SUBMIT", "job", job.id, jobType=job.job_type,
-                   versionId=job.document_version_id, batchId=batch_id)
+                   versionId=job.document_version_id, batchId=batch_id,
+                   principal=getattr(principal, "user", None))  # G4: the caller, beside the asserted user
     return job
 
 
@@ -300,8 +301,10 @@ def _same_input(db: Session, body: JobRequest, settings: Settings) -> Job | None
 
 
 def _job_or_404(db: Session, job_id: str) -> Job:
+    from dps.api.access import same_tenant
+
     job = db.get(Job, job_id)
-    if job is None:
+    if job is None or not same_tenant(job.tenant_id):  # G2: another tenant's job does not exist here
         raise not_found("Job")
     return job
 
@@ -331,7 +334,7 @@ def submit_job(body: JobRequest, request: Request, response: Response, db: DB, u
         raise ApiError(429, "QUEUE_FULL", "Too many jobs are waiting. Try again later.", {"retryAfterSeconds": 30})
     try:
         job = create_job(db, body, spec, settings, key=key, request_hash=request_hash,
-                         correlation_id=getattr(request.state, "correlation_id", None))
+                         correlation_id=getattr(request.state, "correlation_id", None), principal=user)
         db.commit()
     except IntegrityError:  # a concurrent request with the same key or input won the race
         db.rollback()
@@ -366,6 +369,30 @@ def job_result(job_id: str, request: Request, db: DB, user: User) -> Response:
     if request.headers.get("If-None-Match") == etag:
         return Response(status_code=304, headers={"ETag": etag})
     return Response(raw, media_type="application/json", headers={"ETag": etag})
+
+
+@router.get("/dps/v1/jobs/{job_id}")
+def get_job_status(job_id: str, db: DB, user: User) -> dict:
+    """Job status for Spring (contract getJob). With DPS_LEGACY_API on, the older route of the same path answers
+    first, with its per-CP access check; in CTS (legacy off) this one does (found in the local end-to-end run)."""
+    require_roles(user, SERVICE, ADMIN, SUPPORT)
+    return job_view(_job_or_404(db, job_id))
+
+
+@router.post("/dps/v1/jobs/{job_id}/retry", status_code=202)
+def retry_failed_job(job_id: str, db: DB, user: User) -> dict:
+    """Support puts a FAILED or DEAD job back in the queue with fresh attempts (contract retryJob); audited."""
+    require_roles(user, SUPPORT, ADMIN)
+    job = _job_or_404(db, job_id)
+    if job.status not in (jobs.FAILED, jobs.DEAD):
+        raise ApiError(409, "JOB_NOT_RETRYABLE", f"Job is {job.status}, not FAILED or DEAD")
+    now = utcnow()
+    job.status, job.attempts, job.error, job.error_code = jobs.QUEUED, 0, None, None
+    job.crash_count, job.due_at, job.finished_at, job.updated_at = 0, now, None, now
+    job.cancel_requested = False
+    services.audit(db, user.user, "JOB_RETRY", "job", job.id)
+    db.commit()
+    return job_view(job)
 
 
 @router.post("/dps/v1/jobs/{job_id}/cancel", status_code=202)
@@ -490,8 +517,10 @@ def _refused_item(db: Session, batch: Batch, item: BatchItem, request_hash: str,
 @router.get("/dps/v1/batches/{batch_id}")
 def get_batch(batch_id: str, db: DB, user: User) -> dict:
     require_roles(user, SERVICE, ADMIN, SUPPORT)
+    from dps.api.access import same_tenant
+
     batch = db.get(Batch, batch_id)
-    if batch is None:
+    if batch is None or not same_tenant(batch.tenant_id):
         raise not_found("Batch")
     return _batch_view(db, batch)
 
@@ -537,7 +566,9 @@ def rerun_batch(batch_id: str, db: DB, user: User) -> dict:
 @router.get("/dps/v1/events")
 def read_events(db: DB, user: User, after: int = 0, limit: int = 100) -> dict:
     require_roles(user, SERVICE, ADMIN, SUPPORT)
-    events, cursor = feed.read(db, max(0, after), limit)
+    from dps.api.access import tenant
+
+    events, cursor = feed.read(db, max(0, after), limit, tenant_id=tenant())  # G2: this tenant's events only
     return {"events": events, "nextCursor": cursor}
 
 
@@ -598,7 +629,22 @@ def ready(request: Request) -> JSONResponse:
         checks["database"] = "DOWN"
     checks["storage"] = "UP" if request.app.state.store.root.is_dir() else "DOWN"
     up = all(v == "UP" for v in checks.values())
-    return JSONResponse({"status": "UP" if up else "DOWN", **checks}, status_code=200 if up else 503)
+    # G5: is any worker alive? The leader renews the scheduler lock every 10 s; an expired lock means no worker is
+    # processing. Reported for operations and alerts, not used for this API's own readiness.
+    workers = "UNKNOWN"
+    if checks["database"] == "UP":
+        try:
+            from dps.models import Leader
+
+            with request.app.state.db.session_factory() as db:
+                lock = db.get(Leader, "scheduler")
+            if lock is not None:
+                until = lock.until if lock.until.tzinfo else lock.until.replace(tzinfo=UTC)
+                workers = "UP" if until >= utcnow() else "DOWN"
+        except Exception:  # noqa: BLE001 - informational only
+            workers = "UNKNOWN"
+    return JSONResponse({"status": "UP" if up else "DOWN", **checks, "workers": workers},
+                        status_code=200 if up else 503)
 
 
 @router.get("/dps/v1/ops/scaling")

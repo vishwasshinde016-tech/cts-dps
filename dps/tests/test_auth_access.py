@@ -31,7 +31,7 @@ def token(user="rm-anil", roles=("RM",), iss=ISS, aud=AUD, exp_in=300, key=KEY, 
 
 @pytest.fixture
 def jwt_client(tmp_path):
-    s = Settings(database_url=f"sqlite:///{tmp_path / 'j.db'}", storage_dir=tmp_path / "st",
+    s = Settings(legacy_api=True, database_url=f"sqlite:///{tmp_path / 'j.db'}", storage_dir=tmp_path / "st",
                  auth_mode=AuthMode.JWT, jwt_issuer=ISS, jwt_audience=AUD, jwt_public_key_pem=PUB)
     from conftest import FakeChecker
     return TestClient(create_app(s, cp_checker=FakeChecker({}), create_schema=True))

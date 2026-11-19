@@ -8,6 +8,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from conftest import reviewed_if_clean
 from test_flows import FakeParser, add_document
 
 from dps.db import Database
@@ -170,7 +171,7 @@ def flow_with_reader(database, reader, name="fs.pdf", pages=None):
     deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser(pages or []), "ds-dps", False, reader)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    return flow
+    return reviewed_if_clean(flow)
 
 
 ROWS = [("EBITDA", 50.5, 1, None), ("Total debt", 120.0, 1, None), ("Net worth", 300.0, 1, None)]
@@ -178,7 +179,7 @@ ROWS = [("EBITDA", 50.5, 1, None), ("Total debt", 120.0, 1, None), ("Net worth",
 
 def test_flow_b_uses_the_table_reader_and_holds_poor_scans(database):
     good = flow_with_reader(database, lambda d: PdfStatement(ROWS, "Rs. in crore", [], None))
-    assert good.state.outcome == "REPORTED" and good.state.route == "report"
+    assert good.state.outcome == "REPORTED"  # after "Review done" (G21)
 
     poor = flow_with_reader(database, lambda d: PdfStatement(ROWS, "Rs. in crore", [1], 0.95))
     assert poor.state.outcome == "NEEDS_REVIEW"

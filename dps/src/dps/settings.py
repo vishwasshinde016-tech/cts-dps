@@ -8,13 +8,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AuthMode(str, Enum):
     JWT = "JWT"
     DEV_HEADER = "DEV_HEADER"  # dev/test only: trust X-User / X-Roles
+    # The bank app has no identity provider: Spring calls with a service token from the vault, only from its own
+    # network; the acting user comes in X-User (full review G11).
+    SERVICE_TOKEN = "SERVICE_TOKEN"  # noqa: S105  # nosec B105 - a mode name, not a secret
 
 
 class Settings(BaseSettings):
@@ -43,6 +46,8 @@ class Settings(BaseSettings):
     llm_enabled: bool = False
     # Model routes (small, strong, vision): deployments, timeouts, rate limits, token budgets.
     ai_routes_file: str = ""
+    # Worker processes sharing the Azure deployments: each process uses rpm / ai_rpm_share (full review G16).
+    ai_rpm_share: int = Field(default=1, ge=1)
     # Hosts the model calls may go to (comma separated, e.g. "bank-ai.openai.azure.com"). With llm_enabled, every
     # configured model base URL (AZURE_API_BASE, OPENAI_API_BASE, ...) must be on this list, or no model is used.
     ai_allowed_hosts: str = ""
@@ -69,6 +74,13 @@ class Settings(BaseSettings):
     jwt_roles_claim: str = "roles"
     # Clock difference allowed between the identity provider and DPS, in seconds (Core allows 60).
     jwt_leeway_seconds: int = 30
+    # SERVICE_TOKEN mode: the SHA-256 (hex) of the token Spring sends (the token itself stays in the vault) and the
+    # networks it may call from (comma separated, e.g. "10.20.0.0/24,127.0.0.1/32"). Both are required.
+    service_token_sha256: str = ""
+    service_allowed_networks: str = ""
+    # The old Covenexa routes (own upload, term review and publish, spreads, ask): off in CTS, where the DMS owns
+    # upload and Spring owns approval (full review G12). On only for the old Covenexa screens.
+    legacy_api: bool = False
 
     # Covenant Core, used for CP ownership checks and C5 data-events.
     core_base_url: str = "http://localhost:9310"
@@ -106,8 +118,10 @@ class Settings(BaseSettings):
     queue_max_running_per_batch: int = 2
     queue_max_queued_per_tenant: int = 1000
     batch_max_items: int = 500
-    # Bumped when the pipeline changes what it produces; part of the "same input runs once" key.
-    pipeline_version: str = "1"
+    # Part of the "same input runs once" key and of the page-model cache. "auto" (default): computed at start-up from
+    # the code, skill packs, taxonomy, parser libraries and model routes (dps/versioning.py; full review G13), so a
+    # change never returns an old result. Set a fixed value only to pin a version on purpose.
+    pipeline_version: str = "auto"
     # The bank app has no tenants today: one default. A request for any other tenant is refused (TENANT_MISMATCH).
     tenant_id: str = "default"
     ocr_enabled: bool = True
@@ -145,8 +159,18 @@ class Settings(BaseSettings):
     # Phase 3a: model tokens allowed per calendar month (prompt + answer); empty: no cap. At 80% an alert is logged and
     # audited; at 100% the model is not called and the rules answer until the next month.
     ai_monthly_token_budget: int | None = Field(default=None, ge=1)
-    # The same messages to the same model are answered from the cache (dps_ai_cache) instead of a new call.
-    ai_cache: bool = True
+    # The same messages to the same model are answered from the cache (dps_ai_cache) instead of a new call. Off by
+    # default (full review G17): cached answers hold document quotes outside the DMS's custody. When on, an answer
+    # is used only for the same pipeline version and for ai_cache_days, and older answers are purged daily.
+    ai_cache: bool = False
+    ai_cache_days: int = Field(default=30, ge=1)
+
+    @model_validator(mode="after")
+    def _resolve_pipeline(self) -> Settings:
+        from dps.versioning import resolve
+
+        self.pipeline_version = resolve(self.pipeline_version, self.ai_routes_file, self.ai_model)
+        return self
 
 
 def llm_allowed(settings: Settings) -> bool:

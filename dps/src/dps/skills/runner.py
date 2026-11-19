@@ -9,6 +9,7 @@ library (Spring tools) and the pack's cross-checks;
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import logging
 import re
@@ -43,6 +44,15 @@ BLOCKING = frozenset({"NOTHING_FOUND", "NOT_GROUNDED", "VERDICT_NOT_IN_RESULTS",
                       "TOTALS_DO_NOT_ADD", "PERIOD_MISMATCH", "BASIS_MISMATCH", "ENTITY_MISMATCH",
                       "CURRENCY_MISMATCH", "UNITS_MISMATCH"})
 COVENANT_GROUPS = ("FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "INFO_COVENANT", "POSSIBLE_COVENANT")
+# Inspection and reader flags a reviewer must see on an extraction result (full review G15).
+FILE_FLAGS = {"TRACKED_CHANGES": "the text read is with every change accepted",
+              "COMMENTS": "comments are not read", "CONTENT_CONTROLS": "form fields were read",
+              "HIDDEN_SHEETS": "hidden sheets were read", "HIDDEN_ROWS_OR_COLUMNS": "hidden rows or columns were read",
+              "NO_CACHED_VALUE": "some formula cells have no saved value", "EXTERNAL_LINKS": "links to other files",
+              "REPAIRED": "the PDF was damaged and repaired", "OWNER_RESTRICTED": "the PDF has owner restrictions",
+              "IMAGES": "the file has pictures that are not read", "POOR_TEXT": "much of the text layer is poor",
+              "IMAGE_REGIONS": "pages with large pictures were also OCR-read",
+              "FORMULA_TEXT": "cells start with =, +, - or @"}
 
 
 RATIO_UNITS = {"TIMES", "PERCENT", "RATIO", "MULTIPLE", "X", "%"}
@@ -329,6 +339,9 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
     high = budget_warning(budget)
     if high:
         warnings.append(high)
+    flags = [f for f in (model or {}).get("flags", []) if f in FILE_FLAGS]
+    if flags:  # G15: tracked changes, hidden sheets, a repaired PDF ... the reviewer must know
+        warnings.append(issue("FILE_FLAGS", "the file has: " + ", ".join(f"{f} ({FILE_FLAGS[f]})" for f in flags)))
     if pack.name == "certificate" and model:  # spec Flow 3: the certificate against what the cycle expects
         from dps.analyze import obligations
         from dps.analyze.identify import find_identifiers
@@ -369,7 +382,8 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         "status": "DONE" if route == "AUTO_ACCEPTED" else "NEEDS_REVIEW",
         "documentId": job.document_id, "documentVersionId": job.document_version_id, "sha256": job.sha256,
         "pipeline": {"version": pipeline_version, "skillPack": pack.ref, "taxonomyVersion": _taxonomy_version(),
-                     "models": dict(budget.models) if budget and budget.models else None},
+                     "models": dict(budget.models) if budget and budget.models else None,
+                     "packs": _packs_used(pack)},
         "classification": None, "identifiers": [], "fields": fields,
         "document": {"confidence": None, "route": route, "reasons": reasons,
                      **({"coverage": extra.pop("_coverage")} if "_coverage" in extra else {}),
@@ -380,6 +394,13 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         **extra,
     }
     return result
+
+
+def _packs_used(pack: Pack) -> dict:
+    """Each skill pack this result used, with its version and the hash of its prompt (full review G20)."""
+    used = [pack] + ([load("schedule_terms")] if pack.name in ("sanction", "covenants", "amendment_diff") else [])
+    return {p.name: {"version": p.version, "promptSha": hashlib.sha256(p.prompt.encode("utf-8")).hexdigest()[:16]}
+            for p in used}
 
 
 def _taxonomy_version() -> str:
@@ -470,6 +491,9 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
             ledger.settle(entries, fields, decisions)
         ledger.attach(entries, fields)
         fields += ledger.review_items(entries, pages, pack.name)
+    if gateway is None and pack.routes:  # the switch is off or no model is configured (full review F12)
+        warnings.append(issue("AI_NOT_USED", "read by the rules only: the Document Agent is not switched on, so no "
+                                             "second reading and no residual check ran; review every field"))
     if gateway is not None:
         if proposals is None and not notes:
             notes.append(issue("AI_UNAVAILABLE", "read by the rules only"))
@@ -559,8 +583,9 @@ def finish(db: Session, job: Job, result: dict) -> None:
 
     save_run(db, job, result)
     status = jobs.NEEDS_REVIEW if result["status"] == "NEEDS_REVIEW" else jobs.DONE
-    jobs.finish(db, job, status, None, None, payload={"skillPack": result["pipeline"]["skillPack"],
-                                                      "fields": len(result["fields"])})
+    mapping = (result.get("document") or {}).get("route") == "MAPPING_REVIEW"
+    jobs.finish(db, job, status, None, "MAPPING_REVIEW" if mapping and status == jobs.NEEDS_REVIEW else None,
+                payload={"skillPack": result["pipeline"]["skillPack"], "fields": len(result["fields"])})
 
 
 def legacy_extras(db: Session, job: Job, store) -> tuple[list[dict], list[dict]]:

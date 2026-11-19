@@ -29,7 +29,7 @@ def _issues(raw: str | None) -> list[dict]:
 
 
 def _term_status(term: ExtractedTerm) -> str:
-    if term.status == "NEEDS_REVIEW":
+    if term.status in ("NEEDS_REVIEW", "PROPOSED"):  # PROPOSED: waiting for a person's decision (F5)
         return "NEEDS_REVIEW"
     if term.status == "REJECTED":
         return "REJECTED"
