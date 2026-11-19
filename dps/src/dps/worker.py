@@ -163,6 +163,9 @@ class Worker:
             with self.session_factory() as db:
                 if jobs.reap(db, self.settings.worker_max_attempts):
                     log.warning("set aside jobs whose last attempt lost its worker")
+                from dps.agent.guard import purge_cache
+
+                purge_cache(db, self.settings.ai_cache_days)  # G17: no model answer kept past its days
         except Exception:  # noqa: BLE001 - a scheduler task never stops the worker
             log.warning("reaper failed", exc_info=True)
 

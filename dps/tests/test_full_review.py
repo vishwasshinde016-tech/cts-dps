@@ -183,3 +183,66 @@ def test_g16_each_worker_takes_its_share_of_the_deployment_rate():
 def test_g5_readiness_reports_the_workers(client):
     body = client.get("/health/ready").json()
     assert body["workers"] in ("UP", "DOWN", "UNKNOWN")
+
+
+# ---------- WP3: versions and custody ----------
+
+def test_g13_the_pipeline_version_changes_with_what_decides_the_result(tmp_path):
+    from dps.settings import Settings
+    from dps.versioning import compute
+
+    auto = Settings().pipeline_version
+    assert auto.startswith("0.") and "+" in auto  # computed, not the old fixed "1"
+    assert Settings(pipeline_version="pinned-7").pipeline_version == "pinned-7"
+    routes = tmp_path / "routes.yaml"
+    routes.write_text("routes: {strong: {deployment: gpt-a}}", encoding="utf-8")
+    first = compute(str(routes), "")
+    routes.write_text("routes: {strong: {deployment: gpt-b}}", encoding="utf-8")
+    compute.cache_clear()
+    assert compute(str(routes), "") != first  # a model-route change is a new version
+
+
+def test_g17_the_model_answer_cache_is_off_and_expires(tmp_path):
+    from datetime import timedelta
+
+    from dps.agent.guard import guarded, purge_cache
+    from dps.db import Base, Database
+    from dps.models import AiCache, utcnow
+    from dps.settings import Settings
+
+    assert Settings().ai_cache is False
+    db = Database(f"sqlite:///{tmp_path / 'c.db'}")
+    Base.metadata.create_all(db.engine)
+    s = Settings(ai_cache=True, ai_cache_days=30)
+    calls = []
+    call = guarded(lambda m: calls.append(1) or "answer", "gpt", db.session_factory, s)
+    msgs = [{"role": "user", "content": "x"}]
+    assert call(msgs) == "answer" and call(msgs) == "answer" and len(calls) == 1  # cached
+    with db.session_factory() as session:
+        for row in session.query(AiCache):
+            row.created_at = utcnow() - timedelta(days=31)
+        session.commit()
+    assert call(msgs) == "answer" and len(calls) == 2  # expired: asked again
+    with db.session_factory() as session:
+        for row in session.query(AiCache):
+            row.created_at = utcnow() - timedelta(days=31)
+        session.commit()
+        assert purge_cache(session, 30) == 1
+
+
+def test_g15_g20_file_flags_and_pack_versions_reach_the_result():
+    from dps.skills import load
+    from dps.skills.runner import run
+
+    class Job:
+        id, correlation_id, job_type, document_version_id, tenant_id, sha256 = "j", None, "ONBOARD", "v", "d", "s"
+        document_id = "doc"
+        request_json, rollout = "{}", "NORMAL"
+
+    pages = [{"no": 1, "text": CLEAN[0].text, "quality": 0.95, "sourceMethod": "TEXT"}]
+    result = run(load("covenants"), Job(), {"pages": pages, "flags": ["TRACKED_CHANGES", "IRRELEVANT"]})
+    flags = next(w for w in result["warnings"] if w["code"] == "FILE_FLAGS")
+    assert "TRACKED_CHANGES" in flags["message"] and "IRRELEVANT" not in flags["message"]
+    packs = result["pipeline"]["packs"]
+    assert packs["covenants"]["version"] and len(packs["covenants"]["promptSha"]) == 16
+    assert "schedule_terms" in packs

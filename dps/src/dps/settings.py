@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -108,8 +108,10 @@ class Settings(BaseSettings):
     queue_max_running_per_batch: int = 2
     queue_max_queued_per_tenant: int = 1000
     batch_max_items: int = 500
-    # Bumped when the pipeline changes what it produces; part of the "same input runs once" key.
-    pipeline_version: str = "1"
+    # Part of the "same input runs once" key and of the page-model cache. "auto" (default): computed at start-up from
+    # the code, skill packs, taxonomy, parser libraries and model routes (dps/versioning.py; full review G13), so a
+    # change never returns an old result. Set a fixed value only to pin a version on purpose.
+    pipeline_version: str = "auto"
     # The bank app has no tenants today: one default. A request for any other tenant is refused (TENANT_MISMATCH).
     tenant_id: str = "default"
     ocr_enabled: bool = True
@@ -147,8 +149,18 @@ class Settings(BaseSettings):
     # Phase 3a: model tokens allowed per calendar month (prompt + answer); empty: no cap. At 80% an alert is logged and
     # audited; at 100% the model is not called and the rules answer until the next month.
     ai_monthly_token_budget: int | None = Field(default=None, ge=1)
-    # The same messages to the same model are answered from the cache (dps_ai_cache) instead of a new call.
-    ai_cache: bool = True
+    # The same messages to the same model are answered from the cache (dps_ai_cache) instead of a new call. Off by
+    # default (full review G17): cached answers hold document quotes outside the DMS's custody. When on, an answer
+    # is used only for the same pipeline version and for ai_cache_days, and older answers are purged daily.
+    ai_cache: bool = False
+    ai_cache_days: int = Field(default=30, ge=1)
+
+    @model_validator(mode="after")
+    def _resolve_pipeline(self) -> Settings:
+        from dps.versioning import resolve
+
+        self.pipeline_version = resolve(self.pipeline_version, self.ai_routes_file, self.ai_model)
+        return self
 
 
 def llm_allowed(settings: Settings) -> bool:
