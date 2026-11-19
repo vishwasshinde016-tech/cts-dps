@@ -23,8 +23,9 @@ import shutil
 import subprocess
 import sys
 import time
-import urllib.request
 from pathlib import Path
+
+import httpx
 
 # (file name, URL, what it is, which DPS flow it demonstrates)
 SOURCES = [
@@ -113,9 +114,11 @@ def main(out_dir: str | None = None) -> int:
         dest = out / name
         if not dest.exists():
             try:
-                req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "identity"})  # noqa: S310
-                with urllib.request.urlopen(req, timeout=90) as r:  # noqa: S310 - fixed https list above
-                    dest.write_bytes(r.read())
+                if not url.startswith("https://"):  # only the fixed https list above, never file:// or other schemes
+                    raise ValueError("not an https URL")
+                r = httpx.get(url, headers={"User-Agent": ua}, timeout=90, follow_redirects=True)
+                r.raise_for_status()
+                dest.write_bytes(r.content)
                 time.sleep(0.4)  # be polite to SEC and the banks' sites
             except Exception as exc:  # noqa: BLE001 - report and carry on with the next file
                 failed += 1
