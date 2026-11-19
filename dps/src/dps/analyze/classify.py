@@ -236,7 +236,7 @@ def model_classify(model: dict, gateway) -> dict | None:
     """The small route's grounded answer, or None when the gateway is unavailable or the answer is invalid.
     Image-only first pages go to the vision route instead (``vision_classify``)."""
     from dps.agent.gateway import GatewayError
-    from dps.ai_guard import DATA_NOT_INSTRUCTIONS
+    from dps.agent.guard import DATA_NOT_INSTRUCTIONS
 
     head = _pages(model)
     if not any(t.strip() for _, t in head):
@@ -261,7 +261,7 @@ def vision_classify(model: dict, gateway) -> dict | None:
     answer is marked ``fromImage`` and the caller sends the document to a person)."""
     from dps.agent import vision
     from dps.agent.gateway import GatewayError
-    from dps.ai_guard import DATA_NOT_INSTRUCTIONS
+    from dps.agent.guard import DATA_NOT_INSTRUCTIONS
 
     images = vision.page_images.get()
     available = getattr(gateway, "available", None)

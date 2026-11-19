@@ -39,11 +39,11 @@ from dps.analyze.identify import (
 )
 from dps.ingest.pipeline import Ingestor
 from dps.ingest.store import LocalStore
+from dps.integrations.spring_tools import LookupMatch
 from dps.models import EventFeed, Job, Run
 from dps.parse import sandbox
+from dps.parse.engine import ParserEngine
 from dps.parse.page_model import build
-from dps.parsing import ParserEngine
-from dps.spring_tools import LookupMatch
 from dps.worker import Worker
 
 GOLDEN = Path(__file__).resolve().parents[2] / "golden-set"
@@ -268,7 +268,7 @@ def test_gateway_repairs_once_then_invalid():
 
 
 def test_gateway_budget_and_unknown_route(monkeypatch):
-    from dps import usage
+    from dps.agent import usage
 
     gw, _ = gateway(['{"a":1}', '{"a":2}'], budget=10)
     monkeypatch.setattr(usage, "last_call_tokens", lambda: 25)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass, field
 
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 # Our metric keys → phrases (metric_mappings.json, trimmed to the reliable multi-word forms).
 FINANCIAL_ALIASES: dict[str, list[str]] = {

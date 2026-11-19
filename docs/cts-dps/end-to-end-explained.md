@@ -31,7 +31,7 @@ flowchart TB
     LIB["Spring business rules<br/>covenant library · formula check · identifier lookup<br/>contracts/spring-tools.yaml"]
   end
 
-  subgraph API["DPS API (FastAPI) — jobapi.py"]
+  subgraph API["DPS API (FastAPI) — api/jobs.py"]
     SUB --> VAL["validate request, de-duplicate,<br/>tenant queue limit"]
     VAL --> Q[("dps_job queue table<br/>jobs.py")]
   end
@@ -92,10 +92,10 @@ flowchart TB
 
 | What | Where |
 |---|---|
-| Job endpoint `POST /dps/v1/jobs` (202, `Idempotency-Key`, de-dup on same file + type + pipeline, queue limit → 429) | `dps/src/dps/jobapi.py` (`submit_job`) |
-| Job types → flow (`EXTRACT_AGREEMENT`→`AGREEMENT_INTAKE`, `ONBOARD`→`SKILL_PACK` …) | `dps/src/dps/jobapi.py` (job type table at the top) |
+| Job endpoint `POST /dps/v1/jobs` (202, `Idempotency-Key`, de-dup on same file + type + pipeline, queue limit → 429) | `dps/src/dps/api/jobs.py` (`submit_job`) |
+| Job types → flow (`EXTRACT_AGREEMENT`→`AGREEMENT_INTAKE`, `ONBOARD`→`SKILL_PACK` …) | `dps/src/dps/api/jobs.py` (job type table at the top) |
 | API contract | `contracts/dps-jobs-api.yaml`, `contracts/schemas/job-request.json`, `job-status.json` |
-| Service auth | `dps/src/dps/service_auth.py`, `auth.py` |
+| Service auth | `dps/src/dps/integrations/service_auth.py`, `api/auth.py` |
 
 ### Step 2 — Queue and worker (the Python worker polls)
 
@@ -111,9 +111,9 @@ flowchart TB
 | Read from DMS, SHA-256 check (`INTEGRITY_MISMATCH`), reuse a page model already built for the same bytes | – | `dps/src/dps/ingest/pipeline.py`, `ingest/store.py` |
 | Inspection: `TYPE_SPOOFED`, `CORRUPT`, `ENCRYPTED`, `MACRO_PRESENT`, `TOO_LARGE`, `TOO_MANY_PAGES` | **pikepdf**, **oletools** | `dps/src/dps/ingest/inspect.py` |
 | Sandbox: child process with RAM/CPU limits and no network; time limit 60 s per 10 pages, max 15 min | – | `dps/src/dps/parse/sandbox.py`, `parse/server.py` |
-| PDF text: native text first | **pypdf** | `dps/src/dps/parsing.py` (`ParserEngine`) |
-| Scanned pages (no text layer) → OCR | **RapidOCR** (onnxruntime), page images by **pypdfium2** | `dps/src/dps/parsing.py` (`RapidOcrBackend`) |
-| Bad layout → heavy fallback (opt-in pool) | **Docling** | `dps/src/dps/parsing.py` (`HeavyEngine`, `DoclingConverter`) |
+| PDF text: native text first | **pypdf** | `dps/src/dps/parse/engine.py` (`ParserEngine`) |
+| Scanned pages (no text layer) → OCR | **RapidOCR** (onnxruntime), page images by **pypdfium2** | `dps/src/dps/parse/engine.py` (`RapidOcrBackend`) |
+| Bad layout → heavy fallback (opt-in pool) | **Docling** | `dps/src/dps/parse/engine.py` (`HeavyEngine`, `DoclingConverter`) |
 | Line boxes + tables for citations | **pdfplumber** | `dps/src/dps/parse/page_model.py` |
 | Excel `.xlsx` / `.xls`, CSV | **openpyxl**, **xlrd** | `parse/page_model.py` (`build_xlsx`, `build_xls`, `build_csv`) |
 | Word `.docx` | **python-docx** | `parse/page_model.py` (`build_docx`) |
@@ -164,11 +164,11 @@ A pack changes only through a PR plus the golden-set gate.
 | `page_text` | open any page of this job's document | page model |
 | `search_text` | search the whole document | page model |
 | `find_definition` | find "EBITDA means …" etc. | page model |
-| `covenant_library` | the bank's covenant library | **Java (Spring)** via `spring_tools.py` |
-| `validate_formula` | check a covenant formula is valid | **Java (Spring)** via `spring_tools.py` |
-| `lookup_identifier` | match CP / obligor / facility IDs | **Java (Spring)** via `spring_tools.py` |
+| `covenant_library` | the bank's covenant library | **Java (Spring)** via `integrations/spring_tools.py` |
+| `validate_formula` | check a covenant formula is valid | **Java (Spring)** via `integrations/spring_tools.py` |
+| `lookup_identifier` | match CP / obligor / facility IDs | **Java (Spring)** via `integrations/spring_tools.py` |
 
-**Java business rules as Python tools.** `dps/src/dps/spring_tools.py` (`SpringTools`), contract `contracts/spring-tools.yaml`:
+**Java business rules as Python tools.** `dps/src/dps/integrations/spring_tools.py` (`SpringTools`), contract `contracts/spring-tools.yaml`:
 - **Batched:** one HTTP call per document.
 - **Bounded:** timeout, retries and a circuit breaker.
 - **Degrading:** if Spring is down, each item comes back `SPRING_UNAVAILABLE`, that field goes to review, and the job continues.
@@ -198,7 +198,7 @@ Order of work in `dps/src/dps/skills/runner.py` `_extract()`. The Agreement Inta
 | 7 | **Vote** rules vs AI | Same covenant and same number → `RULES+AI_CONFIRMED` (confidence ↑). Different number → `MODELS_DISAGREE` → review. Found by AI only → `AI_ONLY` → review. Matching is one-to-one, keyed by covenant code. | `skills/runner.py` (`_vote_covenants`, `_agent_only`), `skills/common.py` (`vote`) |
 | 8 | **Schedule terms** | Calendar clauses (repayment, fees, drawdown) are read by their own skill, with rules + agent + vote. | `skills/schedule_terms/` |
 | 9 | **Scanned pages** | A page OCR can't read goes to the vision route. Every value read from an image goes to a person (`READ_FROM_IMAGE`). | `agent/vision.py` |
-| 10 | **Verify with Java** | Formula check and covenant library through Spring tools. | `skills/runner.py` (`verify_with_spring`), `spring_tools.py` |
+| 10 | **Verify with Java** | Formula check and covenant library through Spring tools. | `skills/runner.py` (`verify_with_spring`), `integrations/spring_tools.py` |
 | 11 | **Taxonomy codes** | Each covenant gets `code` + `category` from the bank's covenant taxonomy (98 types). Missing operator/unit/frequency is filled from the taxonomy, listed in `value.defaults` and flagged `TAXONOMY_DEFAULT`; the field goes to review. Events of default become their own `EVENT_OF_DEFAULT` fields. | `skills/covenants/codes.py`, `skills/covenants/taxonomy/` (`default_taxonomy.yaml` + `dps_overlay.yaml`) |
 | 12 | **Score + route** | Confidence comes from signals (grounded, voted, OCR quality, field risk). HIGH-risk fields (threshold, operator) are always reviewed. MEDIUM is auto-accepted at ≥ 0.95, LOW at ≥ 0.90. A 3% QA sample is reviewed. | `scoring/__init__.py`, `pack.yaml` (`field_risk`, `thresholds`) |
 | 13 | **Coverage check** | Every duty sentence on the covenant pages must be explained by a field: by quote, or by kind (same covenant family nearby). Otherwise `COVERAGE_GAP` lists the pages. | `skills/covenants/coverage.py` |
@@ -212,8 +212,8 @@ Order of work in `dps/src/dps/skills/runner.py` `_extract()`. The Agreement Inta
 | Result JSON `dps.result/1.0`. It holds: fields (group, name, value, source page + quote, confidence, status, issues); document route; coverage; warnings; pipeline (version, skillPack, taxonomyVersion); usage. | `contracts/schemas/result.json`, built in `skills/runner.py` `run()` / `results.py` |
 | Saved run | table `dps_run`, `dps_extracted_term` (`models.py`) |
 | Event to Spring (same DB transaction as the change, at least once) | `dps/src/dps/feed.py`, `contracts/catalogues/events.yaml`, `GET /dps/v1/events` |
-| Spring pulls the result | `GET /dps/v1/jobs/{id}/result` (`jobapi.py`) |
-| Review decisions | `dps/src/dps/review_api.py`, `contracts/schemas/review-decisions.json` |
+| Spring pulls the result | `GET /dps/v1/jobs/{id}/result` (`api/jobs.py`) |
+| Review decisions | `dps/src/dps/api/review.py`, `contracts/schemas/review-decisions.json` |
 | Error codes (one catalogue) | `contracts/catalogues/errors.yaml`, `dps/src/dps/errors.py` |
 
 ---
@@ -222,9 +222,9 @@ Order of work in `dps/src/dps/skills/runner.py` `_extract()`. The Agreement Inta
 
 | Concern | How | Where |
 |---|---|---|
-| Logs, traces, metrics | spans `dps.ingest`, `dps.skill`, `dps.analyze`; trace events table | `observability.py`, `logcollector.py`, `dps_trace_event` |
-| AI cost and usage | per call and per job; monthly budget | `usage.py`, `ai_guard.py`, `dps_ai_usage`, `dps_ai_call` |
-| Prompt injection | text that addresses an AI → every proposal held with `PROMPT_INJECTION_SUSPECTED` | `ai_guard.py`, `flows/intake.py` |
+| Logs, traces, metrics | spans `dps.ingest`, `dps.skill`, `dps.analyze`; trace events table | `ops/observability.py`, `ops/logcollector.py`, `dps_trace_event` |
+| AI cost and usage | per call and per job; monthly budget | `agent/usage.py`, `agent/guard.py`, `dps_ai_usage`, `dps_ai_call` |
+| Prompt injection | text that addresses an AI → every proposal held with `PROMPT_INJECTION_SUSPECTED` | `agent/guard.py`, `flows/intake.py` |
 | Retries | transient errors (DMS/Spring down) → back to the queue; a crash twice on the same file → DEAD | `worker.py`, `jobs.py` |
 | Audit | sealed audit events | `dps_audit_event`, `dps_audit_seal`, `/dps/v1/ops/audit-seals` |
 | DB | SQL Server in production, SQLite in tests; Alembic migrations | `models.py`, `dps/migrations/` |
@@ -257,12 +257,12 @@ Dependencies are pinned in `dps/pyproject.toml`.
 ## 7. Files to open while explaining (in this order)
 
 1. `contracts/dps-jobs-api.yaml`: what Spring calls
-2. `dps/src/dps/jobapi.py` → `jobs.py` → `worker.py`: job, queue, worker
-3. `dps/src/dps/ingest/pipeline.py` → `ingest/inspect.py` → `parse/sandbox.py` → `parse/page_model.py` → `parsing.py`: file to pages
+2. `dps/src/dps/api/jobs.py` → `jobs.py` → `worker.py`: job, queue, worker
+3. `dps/src/dps/ingest/pipeline.py` → `ingest/inspect.py` → `parse/sandbox.py` → `parse/page_model.py` → `parse/engine.py`: file to pages
 4. `dps/src/dps/flows/intake.py` and `flows/skill_job.py`: the CrewAI Flows
 5. `dps/src/dps/skills/covenants/pack.yaml`, `prompt.md`, `schema.json`, `rules.py`: the covenants skill
 6. `dps/src/dps/skills/covenants/pages.py` → `parts.py` → `agent/document_agent.py` → `agent/gateway.py`: page finder, agent, tools, model
-7. `dps/src/dps/spring_tools.py` + `contracts/spring-tools.yaml`: Java rules as tools
+7. `dps/src/dps/integrations/spring_tools.py` + `contracts/spring-tools.yaml`: Java rules as tools
 8. `dps/src/dps/skills/runner.py` `_extract()`: the whole extraction order in one function
 9. `dps/src/dps/skills/covenants/codes.py` + `taxonomy/`: taxonomy codes
 10. `dps/src/dps/scoring/__init__.py` → `skills/covenants/coverage.py` → `contracts/schemas/result.json`: confidence, coverage, output

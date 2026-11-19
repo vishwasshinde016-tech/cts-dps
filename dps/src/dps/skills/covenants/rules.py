@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dps.extraction.agreement import Term, extract_terms
-from dps.parsing import Page
+from dps.parse.engine import Page
 from dps.skills.common import issue, make_field
 
 GROUP = {"FINANCIAL": "FINANCIAL_COVENANT", "NON_FINANCIAL": "NON_FINANCIAL_COVENANT", "INFO": "INFO_COVENANT",

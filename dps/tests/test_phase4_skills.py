@@ -16,6 +16,7 @@ from dps import jobs
 from dps.agent.gateway import AiUnavailable
 from dps.ingest.pipeline import Ingestor
 from dps.ingest.store import LocalStore
+from dps.integrations.spring_tools import FormulaCheck
 from dps.models import Job
 from dps.parse import sandbox
 from dps.skills import PACKS, for_job_type, load
@@ -23,7 +24,6 @@ from dps.skills import runner as skills
 from dps.skills.amendment_diff.rules import amended_set
 from dps.skills.commentary.rules import check_text, draft, traceable
 from dps.skills.common import vote
-from dps.spring_tools import FormulaCheck
 from dps.worker import Worker
 
 SERVICE = h("cts-spring", "SERVICE")
@@ -76,7 +76,7 @@ class Tools:
                  "expression": None, "active": True}], True
 
     def lookup_identifiers(self, items, context=None, cid=None):
-        from dps.spring_tools import LookupMatch
+        from dps.integrations.spring_tools import LookupMatch
 
         return {i: LookupMatch(i, self.up, "NONE" if self.up else None, (), None if self.up else "SPRING_UNAVAILABLE")
                 for i, _, _ in items}

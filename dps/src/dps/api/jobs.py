@@ -1,7 +1,7 @@
 """CTS job API, Phase 1 (contracts/dps-jobs-api.yaml): submit and follow jobs, batches, event feed, catalogue, ops.
 
 Callers are the CTS Spring app and its DMS with a service token. Everything here only adds to the older routes in
-``api.py``: the Covenexa screens keep working on the same queue.
+``api/documents.py``: the Covenexa screens keep working on the same queue.
 """
 
 from __future__ import annotations
@@ -22,8 +22,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from dps import feed, jobs, results, services
-from dps.api import DB, User, job_view
-from dps.auth import ADMIN, SERVICE, SUPPORT, require_roles
+from dps.api.auth import ADMIN, SERVICE, SUPPORT, require_roles
+from dps.api.documents import DB, User, job_view
 from dps.errors import ApiError, not_found
 from dps.models import Batch, Document, DocumentCpLink, Job, TenantLimit, utcnow
 from dps.settings import Settings, llm_allowed
@@ -543,7 +543,7 @@ def read_events(db: DB, user: User, after: int = 0, limit: int = 100) -> dict:
 
 # ---------- catalogue ----------
 
-CONTRACT_DIR = Path(__file__).resolve().parent / "contract"
+CONTRACT_DIR = Path(__file__).resolve().parents[1] / "contract"
 
 
 def _contract_file(*parts: str) -> Path:
@@ -605,7 +605,7 @@ def ready(request: Request) -> JSONResponse:
 def scaling_signals(db: DB, user: User) -> dict:
     """Phase 6: per pool, oldest queued age and depth per worker, with the scale-out / scale-in advice."""
     require_roles(user, SUPPORT, ADMIN)
-    from dps import ops
+    from dps.ops import production as ops
 
     return {"generatedAt": utcnow().isoformat(), "pools": ops.scaling(db)}
 
@@ -614,8 +614,8 @@ def scaling_signals(db: DB, user: User) -> dict:
 def audit_seals(db: DB, user: User) -> dict:
     """Phase 6: the daily seals and whether the hash chain still matches the rows."""
     require_roles(user, SUPPORT, ADMIN)
-    from dps import ops
     from dps.models import AuditSeal
+    from dps.ops import production as ops
 
     seals = db.scalars(select(AuditSeal).order_by(AuditSeal.day.desc()).limit(60)).all()
     return {"intact": not ops.verify_seals(db), "problems": ops.verify_seals(db),
@@ -625,7 +625,7 @@ def audit_seals(db: DB, user: User) -> dict:
 @router.get("/dps/v1/ops/queues")
 def queues(db: DB, user: User) -> dict:
     require_roles(user, SUPPORT, ADMIN)
-    from dps.ops import review_backlog
+    from dps.ops.production import review_backlog
 
     return {"generatedAt": utcnow().isoformat(), "rows": jobs.queue_report(db),
             "dead": db.scalar(select(func.count()).select_from(Job).where(Job.status == jobs.DEAD)) or 0,

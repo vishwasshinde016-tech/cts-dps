@@ -12,8 +12,8 @@ from dps.flows import skill_job
 from dps.flows.skill_job import SkillJobFlow, run_skill_job
 from dps.ingest.pipeline import Ingestor
 from dps.ingest.store import LocalStore
+from dps.integrations.spring_tools import SpringTools
 from dps.parse import sandbox
-from dps.spring_tools import SpringTools
 from dps.worker import Worker
 
 

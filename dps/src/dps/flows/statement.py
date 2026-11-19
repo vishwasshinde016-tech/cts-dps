@@ -20,7 +20,7 @@ from sqlalchemy import false, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from dps import history, jobs, services
-from dps.ai_guard import injection_signs
+from dps.agent.guard import injection_signs
 from dps.extraction.statement import (
     FLOW_KEYS,
     LINE_ALIASES,
@@ -48,7 +48,7 @@ from dps.language import detect as detect_language
 from dps.language import name as language_name
 from dps.models import Document, EventOutbox, Job, StatementValue, utcnow
 from dps.money import currency_of, detect_currency, money_unit, to_money_unit
-from dps.parsing import ParseError, needs_heavy
+from dps.parse.engine import ParseError, needs_heavy
 from dps.profiles import LoanProfile
 
 ACTOR = "dps-flow-b"

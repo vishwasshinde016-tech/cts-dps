@@ -15,8 +15,8 @@ from collections.abc import Callable
 
 import httpx
 
-from dps.advisor import ADVISORY, Completion
-from dps.auth import ROLES_HEADER, USER_HEADER, Principal
+from dps.advisory.advisor import ADVISORY, Completion
+from dps.api.auth import ROLES_HEADER, USER_HEADER, Principal
 from dps.errors import ApiError
 
 log = logging.getLogger(__name__)

@@ -515,7 +515,7 @@ def _commentary(pack: Pack, raw: bytes, gateway):
     method = "RULES"
     if gateway is not None:
         from dps.agent.gateway import GatewayError
-        from dps.ai_guard import DATA_NOT_INSTRUCTIONS
+        from dps.agent.guard import DATA_NOT_INSTRUCTIONS
 
         messages = [{"role": "user", "content": f"{DATA_NOT_INSTRUCTIONS}\n{pack.prompt}\n\nOutcome manifest:\n"
                                                 f"{json.dumps(manifest, default=str)[:20000]}"}]

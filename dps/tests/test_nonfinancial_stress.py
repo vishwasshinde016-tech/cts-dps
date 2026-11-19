@@ -6,7 +6,7 @@ from __future__ import annotations
 from stress_nonfinancial import results
 
 from dps.extraction.agreement import extract_terms
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 
 def test_every_non_financial_wording_is_proposed():

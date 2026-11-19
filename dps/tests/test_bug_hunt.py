@@ -10,7 +10,7 @@ from dps.extraction.coverage import looks_like_covenant
 from dps.extraction.mapping import foreign_currency, normalize
 from dps.extraction.statement import extract_values, match_key, parse_number, rows_from_csv
 from dps.extraction.statement_pdf import rows_from_words
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 
 def values(rows, header_text="Amounts in INR crore"):

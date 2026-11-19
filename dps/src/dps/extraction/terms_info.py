@@ -12,7 +12,7 @@ import re
 from datetime import date, datetime
 
 from dps.extraction.agreement import Term, _Doc, _quote
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 _DATE = r"(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})"
 

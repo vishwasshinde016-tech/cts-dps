@@ -20,9 +20,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import Date, cast, func, select
 
 from dps import services
-from dps.access import require_cp
-from dps.api import DB, Checker, User, ValuesRequest
-from dps.auth import ADMIN, SERVICE, SUPPORT, require_roles
+from dps.api.access import require_cp
+from dps.api.auth import ADMIN, SERVICE, SUPPORT, require_roles
+from dps.api.documents import DB, Checker, User, ValuesRequest
 from dps.errors import ApiError, not_found
 from dps.ingest.store import LocalStore, StoreError
 from dps.models import AiUsage, Artifact, Document, Job, Run, utcnow
@@ -123,7 +123,7 @@ class AskRequest(BaseModel):
 @router.post("/dps/v1/versions/{version_id}/ask")
 def ask_version(version_id: str, body: AskRequest, request: Request, db: DB, user: User) -> dict:
     require_roles(user, SERVICE, ADMIN, SUPPORT)
-    from dps import agreement_qa
+    from dps.advisory import agreement_qa
     from dps.parse.page_model import to_pages
 
     job = _version_jobs(db, version_id)[-1]

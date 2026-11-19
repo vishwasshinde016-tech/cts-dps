@@ -20,15 +20,16 @@ import httpx
 from sqlalchemy import func, select, true
 from sqlalchemy.orm import Session, sessionmaker
 
-from dps import jobs, usage
-from dps import observability as obs
-from dps.core_client import CoreClient, CoreUnavailable
+from dps import jobs
+from dps.agent import usage
 from dps.db import Database, require_snapshot_isolation
+from dps.ingest.file_store import FileStore
 from dps.ingest.pipeline import QUARANTINE, IngestFailed, Ingestor
+from dps.integrations.core import CoreClient, CoreUnavailable
 from dps.models import Document, EventOutbox, Job, utcnow
+from dps.ops import observability as obs
 from dps.profiles import currency_words
 from dps.settings import Settings, get_settings, llm_allowed
-from dps.storage import FileStore
 
 log = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ class Worker:
         now = time.monotonic()
         if now < self._leader_until:
             return self._leader
-        from dps.ops import acquire_leader
+        from dps.ops.production import acquire_leader
 
         try:
             with self.session_factory() as db:
@@ -119,7 +120,7 @@ class Worker:
         if now - self._last_seal < 3600:
             return
         self._last_seal = now
-        from dps.ops import seal_pending
+        from dps.ops.production import seal_pending
 
         try:
             with self.session_factory() as db:
@@ -158,7 +159,7 @@ class Worker:
     @staticmethod
     def _queue_metrics(db: Session) -> None:
         """Phase 6: the autoscaling and alert signals, once a minute from the leader."""
-        from dps.ops import scaling
+        from dps.ops.production import scaling
 
         try:
             for pool in scaling(db):
@@ -166,7 +167,7 @@ class Worker:
                 obs.observe("dps.queue.depth_per_worker", pool["depthPerWorker"], pool=pool["pool"])
             dead = db.scalar(select(func.count()).select_from(Job).where(Job.status == jobs.DEAD)) or 0
             obs.observe("dps.jobs.dead", dead)
-            from dps.ops import review_backlog
+            from dps.ops.production import review_backlog
 
             backlog = review_backlog(db)  # B4: jobs waiting for a person, and the oldest wait
             obs.observe("dps.review.backlog", backlog["waiting"])
@@ -440,7 +441,7 @@ def build_analyzer(settings: Settings, database: Database) -> Callable[[Session,
     """ANALYZE on the model gateway (small route) and Spring's lookup tool."""
     from dps.agent.gateway import from_settings
     from dps.analyze import analysis
-    from dps.spring_tools import SpringTools
+    from dps.integrations.spring_tools import SpringTools
 
     gateway = from_settings(settings, database.session_factory) if llm_allowed(settings) else None
     tools = SpringTools.from_settings(settings)
@@ -460,8 +461,8 @@ def build_analyzer(settings: Settings, database: Database) -> Callable[[Session,
 def build_pack_runner(settings: Settings, database: Database):
     """Phase 4: the generic flow for EXTRACT_SANCTION, EXTRACT_CERTIFICATE, EXTRACT_AMENDMENT, DRAFT_COMMENTARY."""
     from dps.agent.gateway import from_settings
+    from dps.integrations.spring_tools import SpringTools
     from dps.skills import runner as skills
-    from dps.spring_tools import SpringTools
 
     gateway = from_settings(settings, database.session_factory) if llm_allowed(settings) else None
     tools = SpringTools.from_settings(settings)
@@ -483,7 +484,7 @@ def build_runners(settings: Settings, database: Database, store: FileStore, core
     from dps.extraction.statement_pdf import read_pdf_statement
     from dps.flows.intake import AgreementIntakeFlow, IntakeDeps
     from dps.flows.statement import StatementDeps, StatementProcessingFlow
-    from dps.parsing import DoclingConverter, HeavyEngine, ParserEngine, RapidOcrBackend
+    from dps.parse.engine import DoclingConverter, HeavyEngine, ParserEngine, RapidOcrBackend
 
     heavy = settings.worker_pool == "HEAVY"
     ocr = RapidOcrBackend() if settings.ocr_enabled else None
@@ -503,7 +504,7 @@ def build_runners(settings: Settings, database: Database, store: FileStore, core
     ai_covenants = None
     if settings.agreement_ai_check and gateway is not None:  # pragma: no cover - live model
         from dps.extraction.agreement_ai import read_with_skill
-        from dps.spring_tools import SpringTools
+        from dps.integrations.spring_tools import SpringTools
 
         # The agreement's AI reader is the Document Agent running the covenants skill (the same pack, page finder,
         # tools, grounding and library names as ONBOARD), with the Java covenant tools.

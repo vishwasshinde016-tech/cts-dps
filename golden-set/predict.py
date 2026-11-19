@@ -18,7 +18,7 @@ HERE = Path(__file__).resolve().parent
 
 def predict_agreement(data: bytes) -> dict:
     from dps.extraction.agreement import extract_terms
-    from dps.parsing import ParserEngine
+    from dps.parse.engine import ParserEngine
 
     terms = extract_terms(ParserEngine().parse(data))
     return {"covenants": [{"metric": t.metric, "category": t.category, "operator": t.operator,
@@ -31,7 +31,7 @@ def predict_statement(name: str, data: bytes) -> dict:
 
     if name.endswith(".pdf"):
         from dps.extraction.statement_pdf import read_pdf_statement
-        from dps.parsing import RapidOcrBackend
+        from dps.parse.engine import RapidOcrBackend
 
         table = read_pdf_statement(data, RapidOcrBackend())
         rows, header = table.rows, table.header_text

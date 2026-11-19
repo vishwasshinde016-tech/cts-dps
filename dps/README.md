@@ -12,8 +12,38 @@ Turns loan agreements and financial statements into covenant **proposals** and f
 | Every step | [../docs/dps-how-it-works.md](../docs/dps-how-it-works.md) |
 | Workers | `python -m dps.worker`; `DPS_WORKER_POOL=HEAVY` (with `.[heavy]`) runs Docling for scans |
 | Advisory AI | Rules by default; set `DPS_AI_MODEL` (for example `azure/<deployment>`) to use an LLM through CrewAI. Always labelled advisory |
-| Tracking | Each document's history (`GET /dps/v1/documents/{id}/history`), every AI call (`dps_ai_call`), log lines with request id, user, job and document, OpenTelemetry when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and the daily log file (`python -m dps.logcollector`): [../docs/observability.md](../docs/observability.md) |
+| Tracking | Each document's history (`GET /dps/v1/documents/{id}/history`), every AI call (`dps_ai_call`), log lines with request id, user, job and document, OpenTelemetry when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and the daily log file (`python -m dps.ops.logcollector`): [../docs/observability.md](../docs/observability.md) |
 | Auth | Entra ID JWT or `DEV_HEADER`; CP access delegated to Core |
+
+## Code layout
+
+One home per concept, two levels deep at most. Processes start from `dps.main` (API) and `dps.worker` (workers).
+
+```text
+src/dps/
+  main.py, worker.py      process entry points: the FastAPI app and the job worker loop
+  settings.py, db.py, models.py, errors.py
+                          configuration, database session, tables, the error envelope
+  jobs.py, feed.py        the job queue on dps_job and the event feed Spring reads
+  results.py, services.py, history.py, learning.py
+                          the dps.result document, document services, history, the learning loop
+  catalog.py, profiles.py, money.py, language.py
+                          shared domain knowledge: statement lines, country profiles, money, language
+  api/                    HTTP edge: jobs (the CTS job API), documents, review, evidence, auth, access, rate limits
+  ingest/                 reading stored bytes (DMS store, upload store) and file inspection
+  parse/                  parsing engine (text, OCR, Docling), the page model, sandbox, segmentation
+  analyze/                classification, identifiers, key pages, obligation checks
+  extraction/             deterministic readers: agreement covenants, statements, schedules, validation
+  skills/                 skill packs run by the generic runner; covenants/ holds the taxonomy, the parts,
+                          the candidate ledger and the residual read
+  agent/                  the Document Agent, the model gateway, vision, model-call guards and usage
+  scoring/                field confidence and review routing
+  flows/                  CrewAI Flows: agreement intake, statement processing, skill jobs, state persistence
+  integrations/           outbound calls to Spring: Core client, Java business-rule tools, service identity
+  advisory/               advisory AI for people: narratives, portfolio questions, agreement Q&A
+  ops/                    observability, the daily log collector, leader lock and audit seals, go-live readiness
+  contract/               packaged copies of ../contracts (schemas and catalogues served by the API)
+```
 
 ## Run locally
 

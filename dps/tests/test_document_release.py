@@ -19,10 +19,10 @@ from test_phase2_ingest import text_pdf, xls_bytes, xlsx_bytes
 from test_phase4_skills import AMENDMENT, CERTIFICATE, SANCTION, submit
 
 from dps import jobs
-from dps.core_client import CoreClient
+from dps.ingest.file_store import FileStore
+from dps.integrations.core import CoreClient
 from dps.models import Document, EventOutbox, Job, StatementValue, utcnow
 from dps.skills import load, runner
-from dps.storage import FileStore
 from dps.worker import Worker, build_analyzer, build_ingestor, build_pack_runner, build_runners
 
 

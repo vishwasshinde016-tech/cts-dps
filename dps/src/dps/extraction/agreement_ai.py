@@ -23,12 +23,12 @@ import logging
 import re
 from collections.abc import Callable
 
-from dps.ai_guard import DATA_NOT_INSTRUCTIONS
+from dps.agent.guard import DATA_NOT_INSTRUCTIONS
 from dps.extraction.agreement import AMOUNT_METRICS, MAX_RATIO, Term, _name_key
 from dps.extraction.verify import normalize, quote_on_page, threshold_in
 from dps.language import detect as detect_language
 from dps.language import plain_digits
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 log = logging.getLogger(__name__)
 Completion = Callable[[list[dict]], str]

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dps.extraction.agreement import _defined_numbers, _Doc, extract_terms
 from dps.extraction.statement import _unit, extract_values, match_key
 from dps.extraction.statement_pages import order_pages, rank
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 
 def test_a_long_paragraph_quotes_the_covenant_not_the_end_of_the_paragraph():

@@ -16,7 +16,7 @@ from dps.extraction.mapping import normalize
 from dps.extraction.statement import identity_issues, likely_lines
 from dps.extraction.statement_pdf import PdfStatement, rows_from_words
 from dps.models import Base, Document, StatementValue
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 
 @pytest.fixture

@@ -71,7 +71,8 @@ def crewai_completion(model: str, temperature: float | None = None,  # pragma: n
                       timeout: float | None = None) -> Completion:
     from crewai import LLM
 
-    from dps import observability, usage
+    from dps.agent import usage
+    from dps.ops import observability
 
     def call(messages: list[dict]) -> str:
         # One LLM per call: its token counters then belong to this call alone, even under concurrency.

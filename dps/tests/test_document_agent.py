@@ -24,12 +24,12 @@ from dps.agent.document_agent import (
     build_tools,
 )
 from dps.agent.gateway import Gateway, LlmDisabled, Route, Routes, from_settings
-from dps.ai_guard import _masked
+from dps.agent.guard import _masked
+from dps.integrations.spring_tools import FormulaCheck, LookupMatch
 from dps.settings import Settings, endpoint_problem
 from dps.skills import load
 from dps.skills import runner as skills
 from dps.skills.common import agent_proposals
-from dps.spring_tools import FormulaCheck, LookupMatch
 
 AMOUNT_QUOTE = "Sanctioned limit: Rs. 25.50 crore"
 AMOUNT = {"key": "SANCTIONED_AMOUNT", "text": AMOUNT_QUOTE, "amount": 255000000.0, "currency": "INR", "date": None}

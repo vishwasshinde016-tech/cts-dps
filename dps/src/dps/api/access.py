@@ -15,7 +15,7 @@ from typing import Protocol
 
 import httpx
 
-from dps.auth import ADMIN, AUDITOR, ROLES_HEADER, SERVICE, SUPPORT, USER_HEADER, Principal
+from dps.api.auth import ADMIN, AUDITOR, ROLES_HEADER, SERVICE, SUPPORT, USER_HEADER, Principal
 from dps.errors import ApiError
 
 log = logging.getLogger(__name__)

@@ -5,7 +5,7 @@ import sys
 import time
 
 from dps.extraction.agreement import extract_terms
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 FAMILY = {"DSCR": "DSCR", "ICR": "ICR", "FIXED_CHARGE_COVERAGE_RATIO": "FCCR", "DEBT_TO_EBITDA": "LEVERAGE",
           "NET_LEVERAGE_RATIO": "LEVERAGE", "DEBT_TO_NET_WORTH": "DEBT_TO_NW", "DEBT_TO_EQUITY": "DEBT_TO_NW",

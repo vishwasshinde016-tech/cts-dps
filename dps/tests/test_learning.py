@@ -13,7 +13,7 @@ from dps import learning
 from dps.extraction.agreement import extract_terms, set_learned_covenants
 from dps.extraction.statement import match_key, set_learned_lines
 from dps.models import AuditEvent, Document, ExtractedTerm, LearnedWording
-from dps.parsing import Page
+from dps.parse.engine import Page
 from dps.services import remember_label
 
 ADMIN = h("ops-admin", "ADMIN")

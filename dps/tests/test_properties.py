@@ -10,7 +10,7 @@ import random
 
 import pytest
 
-from dps.ai_guard import mask_pii
+from dps.agent.guard import mask_pii
 from dps.extraction.statement import detect_number_style, number_style, parse_number
 from dps.extraction.verify import numbers_in, threshold_in
 from dps.money import SCALE_UNITS, currency_of, money_unit, to_money_unit, unit_size

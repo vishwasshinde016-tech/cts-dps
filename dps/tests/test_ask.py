@@ -4,8 +4,8 @@ import httpx
 import pytest
 from conftest import FakeChecker, h
 
-from dps.ask import MAX_CONTEXT, REFUSAL, _trim, answer, core_fetch
-from dps.auth import Principal
+from dps.advisory.ask import MAX_CONTEXT, REFUSAL, _trim, answer, core_fetch
+from dps.api.auth import Principal
 from dps.main import create_app
 
 SUMMARY = [{"cpId": "CP-1", "applied": 3, "breached": 1, "error": 0},

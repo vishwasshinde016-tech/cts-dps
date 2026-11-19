@@ -7,7 +7,7 @@ from collections.abc import Callable
 
 from dps.extraction.agreement import normalize_ws
 from dps.extraction.mapping import Proposal, base_metric
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 PUBLISH, NEEDS_REVIEW, FAILED = "publish", "needs_review", "failed"
 

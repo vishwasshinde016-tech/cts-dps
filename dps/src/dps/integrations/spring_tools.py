@@ -22,7 +22,7 @@ from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
-from dps.core_client import CoreClient, CoreUnavailable
+from dps.integrations.core import CoreClient, CoreUnavailable
 
 log = logging.getLogger(__name__)
 

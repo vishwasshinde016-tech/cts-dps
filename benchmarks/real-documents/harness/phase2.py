@@ -8,11 +8,11 @@ import os
 import sys
 import time
 
-from dps.advisor import crewai_completion
+from dps.advisory.advisor import crewai_completion
 from dps.extraction.agreement import extract_terms
 from dps.extraction.agreement_ai import ai_covenants, flag_unconfirmed, vote
 from dps.extraction.coverage import possible_covenants
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 completion = crewai_completion(os.environ["DPS_AI_MODEL"], None, 120)
 
@@ -51,7 +51,7 @@ def statements():
     from dps.extraction.statement import extract_values
     from dps.extraction.statement_ai import ai_read, mark_pages, vote as svote
     from dps.extraction.statement_pdf import read_pdf_statement
-    from dps.parsing import RapidOcrBackend
+    from dps.parse.engine import RapidOcrBackend
 
     ocr = RapidOcrBackend()
     out_path = "r_p2_st.json"

@@ -15,16 +15,17 @@ from sqlalchemy import false, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from dps import __version__, history, learning, services, usage
-from dps import observability as obs
-from dps.access import CpAccessChecker, require_cp
-from dps.auth import ADMIN, APPROVER, AUDITOR, RM, SERVICE, SUPPORT, Principal, require_roles
+from dps import __version__, history, learning, services
+from dps.agent import usage
+from dps.api.access import CpAccessChecker, require_cp
+from dps.api.auth import ADMIN, APPROVER, AUDITOR, RM, SERVICE, SUPPORT, Principal, require_roles
 from dps.catalog import LINE_ITEMS
 from dps.catalog import catalog as line_item_catalog
 from dps.errors import ApiError, is_lock_conflict, not_found
+from dps.ingest.file_store import FileStore
 from dps.models import Document, DocumentCpLink, ExtractedTerm, Job, StatementValue, utcnow
+from dps.ops import observability as obs
 from dps.settings import Settings
-from dps.storage import FileStore
 
 router = APIRouter()
 
@@ -475,7 +476,7 @@ class AskRequest(BaseModel):
 @router.post("/dps/v1/ask")
 def ask_ai(body: AskRequest, request: Request, db: DB, user: User) -> dict:
     """FR-27: answers about the caller's own portfolio only (Core data fetched with the caller's identity)."""
-    from dps.ask import answer
+    from dps.advisory.ask import answer
 
     request.app.state.limiter.check(user.user, "ask", request.app.state.settings.ask_per_minute)
     advisor = request.app.state.advisor
@@ -597,8 +598,8 @@ class AgreementQuestion(BaseModel):
 def ask_agreement(document_id: str, body: AgreementQuestion, request: Request, db: DB, user: User,
                   checker: Checker) -> dict:
     """C10: a question about one loan agreement, answered from its own pages with page citations."""
-    from dps.agreement_qa import answer
-    from dps.parsing import ParseError, ParserEngine
+    from dps.advisory.agreement_qa import answer
+    from dps.parse.engine import ParseError, ParserEngine
 
     doc = load_document(db, document_id)
     require_document_access(checker, user, doc, read_only=True)
@@ -623,7 +624,7 @@ def ask_agreement(document_id: str, body: AgreementQuestion, request: Request, d
 def ai_usage(request: Request, db: DB, user: User, days: int = 30) -> dict:
     """GAP-05: model tokens and cost over the last ``days`` days, per purpose (support and administrators)."""
     require_roles(user, SUPPORT, ADMIN)
-    from dps.ai_guard import budget_status
+    from dps.agent.guard import budget_status
 
     out = usage.summary(db, max(1, min(days, 366)))
     out["budget"] = budget_status(db, request.app.state.settings)  # Phase 3a: this month against the budget

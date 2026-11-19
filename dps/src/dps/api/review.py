@@ -22,8 +22,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, true
 
 from dps import feed, jobs, results
-from dps.api import DB, User, job_view
-from dps.auth import ADMIN, SERVICE, SUPPORT, require_roles
+from dps.api.auth import ADMIN, SERVICE, SUPPORT, require_roles
+from dps.api.documents import DB, User, job_view
 from dps.errors import ApiError, not_found
 from dps.models import DocumentCpLink, GoldenCandidate, Job, ReviewDecision, Run, utcnow
 
@@ -237,7 +237,7 @@ def reclassify(job_id: str, body: ReclassifyRequest, request: Request, response:
                x_user: Annotated[str | None, Header(alias="X-User")] = None) -> dict:
     require_roles(user, SERVICE, ADMIN, SUPPORT)
     from dps import services
-    from dps.jobapi import JOB_TYPES
+    from dps.api.jobs import JOB_TYPES
 
     old = _job(db, job_id)
     new_type = TYPE_TO_JOB.get(body.type)
@@ -294,7 +294,7 @@ def quality(db: DB, user: User) -> dict:
 def go_live(request: Request, db: DB, user: User, days: int = 30) -> dict:
     """Phase 7: measured numbers per job type against the go-live targets, and the rollout mode in force."""
     require_roles(user, ADMIN, SUPPORT)
-    from dps import golive
+    from dps.ops import golive
 
     settings = request.app.state.settings
     body = golive.report(db, max(1, min(days, 366)))

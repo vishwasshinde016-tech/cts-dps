@@ -27,7 +27,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from dps.ai_guard import DATA_NOT_INSTRUCTIONS
+from dps.agent.guard import DATA_NOT_INSTRUCTIONS
 from dps.extraction.statement import _EXPENSES, LINE_ALIASES, TO_CRORE, LineValue
 from dps.extraction.verify import number_on_line
 

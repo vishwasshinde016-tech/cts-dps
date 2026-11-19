@@ -11,13 +11,13 @@ from openpyxl import Workbook
 from sqlalchemy import select
 
 from dps import jobs
-from dps.core_client import CoreClient, CoreMaster, CoreUnavailable
 from dps.db import Base, Database
 from dps.flows.intake import AgreementIntakeFlow, IntakeDeps
 from dps.flows.persistence import SqlFlowPersistence
 from dps.flows.statement import StatementDeps, StatementProcessingFlow
+from dps.integrations.core import CoreClient, CoreMaster, CoreUnavailable
 from dps.models import Document, DocumentCpLink, EventOutbox, ExtractedTerm, FlowState, Job, StatementValue, utcnow
-from dps.parsing import Page
+from dps.parse.engine import Page
 from dps.settings import Settings
 from dps.worker import Worker, _kickoff, build_runners
 
@@ -158,7 +158,7 @@ def test_flow_a_fails_without_text_and_hands_scans_to_heavy_pool(database):
 
 
 def test_flow_a_parse_error_fails(database):
-    from dps.parsing import ParseError
+    from dps.parse.engine import ParseError
 
     class Broken:
         def parse(self, data):
@@ -440,7 +440,7 @@ def test_outbox_sender(database, tmp_path):
 
 @pytest.mark.skipif(not GOLDEN.exists(), reason="golden set not present")
 def test_build_runners_wires_real_parser(database, tmp_path):
-    from dps.storage import FileStore
+    from dps.ingest.file_store import FileStore
 
     store = FileStore(tmp_path / "store")
     _, rel = store.put((GOLDEN / "AGR-001.pdf").read_bytes(), ".pdf")

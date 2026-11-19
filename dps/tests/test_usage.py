@@ -9,8 +9,8 @@ from conftest import h
 from fastapi.testclient import TestClient
 from test_api import upload
 
-from dps import usage
-from dps.advisor import Advisor
+from dps.advisory.advisor import Advisor
+from dps.agent import usage
 from dps.main import create_app
 from dps.models import AiUsage
 

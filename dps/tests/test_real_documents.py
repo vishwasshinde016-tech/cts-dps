@@ -22,7 +22,7 @@ from dps.extraction.statement_ai import check, disagreements
 from dps.extraction.statement_pages import rank, statement_pages, usable
 from dps.extraction.statement_pdf import PdfStatement, _text_words, choose_column, rows_from_words
 from dps.models import Base
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 
 @pytest.fixture
@@ -431,8 +431,8 @@ def test_two_covenants_of_one_family_are_both_kept_under_their_own_names():
     terms = [t for t in extract_terms([Page(1, text, "TEXT", 1.0)]) if t.category == "FINANCIAL"]
     assert sorted((t.name, t.threshold) for t in terms) == [("Consolidated Leverage Ratio", 5.5),
                                                           ("Consolidated Senior Secured Leverage Ratio", 3.5)]
-    from dps.core_client import CoreMaster
     from dps.extraction.mapping import normalize
+    from dps.integrations.core import CoreMaster
 
     masters = [CoreMaster("m-lev", "Total Debt to EBITDA Ceiling", "FINANCIAL", "AUTO", ("DEBT_EBITDA",))]
     first, second = normalize(terms, masters)

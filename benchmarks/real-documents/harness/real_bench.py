@@ -35,7 +35,7 @@ def old(data):
 @method("NEW")
 def new(data):
     from dps.extraction.statement_pdf import read_pdf_statement
-    from dps.parsing import RapidOcrBackend
+    from dps.parse.engine import RapidOcrBackend
     t = read_pdf_statement(data, RapidOcrBackend())
     return t.rows, t.header_text
 

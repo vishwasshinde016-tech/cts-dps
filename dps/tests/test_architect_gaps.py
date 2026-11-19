@@ -149,8 +149,8 @@ def test_onboard_flags_a_wrong_chosen_type():
 def test_seals_go_to_their_own_folder(app, settings, tmp_path):
     from datetime import UTC, datetime
 
-    from dps import ops
     from dps.models import AuditEvent
+    from dps.ops import production as ops
 
     with app.state.db.session_factory() as s:
         s.add(AuditEvent(actor="u", action="X", target_type="t", target_id="1", detail_json="{}",
@@ -166,7 +166,7 @@ def test_seals_go_to_their_own_folder(app, settings, tmp_path):
 def test_events_are_pushed_to_spring_in_order_at_least_once(client, app, settings):
     import httpx
 
-    from dps.core_client import CoreClient
+    from dps.integrations.core import CoreClient
     from dps.models import PushCursor
     from dps.worker import Worker
 

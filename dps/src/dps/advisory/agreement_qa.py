@@ -14,10 +14,10 @@ from __future__ import annotations
 import logging
 import re
 
-from dps.advisor import ADVISORY, Completion
-from dps.ai_guard import TO_THE_MODEL  # shared with the document readers (Phase 3a)
+from dps.advisory.advisor import ADVISORY, Completion
+from dps.agent.guard import TO_THE_MODEL  # shared with the document readers (Phase 3a)
 from dps.extraction.agreement import FINANCIAL_ALIASES
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 log = logging.getLogger(__name__)
 

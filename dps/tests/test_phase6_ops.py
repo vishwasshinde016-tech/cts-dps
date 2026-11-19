@@ -11,8 +11,9 @@ from sqlalchemy import select
 from test_phase2_ingest import text_pdf
 from test_phase4_skills import submit
 
-from dps import jobs, ops
+from dps import jobs
 from dps.models import AuditEvent, AuditSeal, EventFeed, Job, Leader, ReviewDecision, utcnow
+from dps.ops import production as ops
 
 OPS = h("ops-1", "SUPPORT")
 

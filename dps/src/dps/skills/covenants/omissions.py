@@ -85,7 +85,7 @@ def read(gateway, entries: list[dict], pages: list[dict], notes: list | None = N
     if gateway is None or not entries:
         return [], {}
     from dps.agent.gateway import AiBudgetExceeded, GatewayError, ModelOutputInvalid
-    from dps.ai_guard import DATA_NOT_INSTRUCTIONS
+    from dps.agent.guard import DATA_NOT_INSTRUCTIONS
 
     pages_by_no = {int(p["no"]): p for p in pages}
     proposals: list[dict] = []

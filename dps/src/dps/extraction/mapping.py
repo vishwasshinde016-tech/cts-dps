@@ -12,8 +12,8 @@ import hashlib
 import re
 from dataclasses import asdict, dataclass, field
 
-from dps.core_client import CoreMaster
 from dps.extraction.agreement import Term
+from dps.integrations.core import CoreMaster
 
 # metric → (Core master names to try, Core measure used when the master does not name exactly one)
 LIBRARY: dict[str, tuple[tuple[str, ...], str | None]] = {

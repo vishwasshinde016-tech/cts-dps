@@ -7,19 +7,20 @@ import uuid
 
 from fastapi import FastAPI, Request
 
-from dps import __version__, ask, errors
-from dps import observability as obs
-from dps.access import CoreCpAccessChecker, CpAccessChecker
-from dps.advisor import Advisor
-from dps.api import router
-from dps.auth import Authenticator
+from dps import __version__, errors
+from dps.advisory import ask
+from dps.advisory.advisor import Advisor
+from dps.api.access import CoreCpAccessChecker, CpAccessChecker
+from dps.api.auth import Authenticator
+from dps.api.documents import router
+from dps.api.evidence import router as evidence_router
+from dps.api.jobs import router as job_router
+from dps.api.ratelimit import RateLimiter
+from dps.api.review import router as review_router
 from dps.db import Base, Database, require_snapshot_isolation
-from dps.evidence_api import router as evidence_router
-from dps.jobapi import router as job_router
-from dps.ratelimit import RateLimiter
-from dps.review_api import router as review_router
+from dps.ingest.file_store import FileStore
+from dps.ops import observability as obs
 from dps.settings import Settings, get_settings, llm_allowed
-from dps.storage import FileStore
 
 CORRELATION_HEADER = "X-Correlation-Id"
 

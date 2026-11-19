@@ -16,7 +16,7 @@ from dps.analyze import analysis, obligations
 from dps.analyze.identify import Found, find_identifiers
 from dps.analyze.keypages import key_pages
 from dps.models import Document, Job
-from dps.ops import review_backlog
+from dps.ops.production import review_backlog
 from dps.skills import load
 from dps.skills import runner as skills
 
