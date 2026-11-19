@@ -13,7 +13,7 @@ import io
 import re
 from dataclasses import asdict, dataclass, field
 
-from dps.parsing import ParseError
+from dps.parse.engine import ParseError
 
 # Catalog key → label phrases (lower case, matched on whole words; longest phrase wins).
 LINE_ALIASES: dict[str, list[str]] = {

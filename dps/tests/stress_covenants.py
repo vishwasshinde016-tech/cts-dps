@@ -29,7 +29,7 @@ from types import SimpleNamespace
 from dps.extraction.agreement import extract_terms
 from dps.extraction.coverage import possible_covenants
 from dps.extraction.validation import check_direction
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 FAMILY = {"DSCR": "DSCR", "ICR": "ICR", "FIXED_CHARGE_COVERAGE_RATIO": "FCCR", "DEBT_TO_EBITDA": "LEVERAGE",
           "NET_LEVERAGE_RATIO": "LEVERAGE", "DEBT_TO_NET_WORTH": "GEARING", "DEBT_TO_EQUITY": "GEARING",

@@ -16,7 +16,7 @@ from dps.extraction.verify import numbers_in, quote_on_page, threshold_in
 from dps.flows.statement import StatementDeps, StatementProcessingFlow
 from dps.language import detect, name, plain_digits
 from dps.models import Base
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 FRENCH_AGREEMENT = ("Article 12. Engagements financiers. L'Emprunteur s'engage à maintenir un ratio de couverture "
                     "du service de la dette au moins égal à 1,20 pour chaque période de test et un ratio "

@@ -19,9 +19,9 @@ from referencing import Registry, Resource
 from dps.ingest.inspect import InspectionFailed, declared_format, inspect
 from dps.ingest.store import LocalStore, StoreError
 from dps.parse import sandbox
+from dps.parse.engine import Page, ParserEngine
 from dps.parse.page_model import build, to_pages
 from dps.parse.segment import segment
-from dps.parsing import Page, ParserEngine
 
 CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
 

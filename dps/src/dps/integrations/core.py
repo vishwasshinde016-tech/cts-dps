@@ -13,8 +13,8 @@ from datetime import date
 
 import httpx
 
-from dps.auth import ROLES_HEADER, SERVICE, USER_HEADER
-from dps.service_auth import ClientCredentialsToken, TokenError
+from dps.api.auth import ROLES_HEADER, SERVICE, USER_HEADER
+from dps.integrations.service_auth import ClientCredentialsToken, TokenError
 from dps.settings import Settings
 
 log = logging.getLogger(__name__)

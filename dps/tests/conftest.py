@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from dps.auth import Principal
+from dps.api.auth import Principal
 from dps.db import Base, make_engine
 from dps.main import create_app
 from dps.settings import AuthMode, Settings
@@ -20,7 +20,7 @@ class FakeChecker:
         self.calls: list[tuple[str, str, bool]] = []
 
     def allowed(self, principal: Principal, cp_id: str, read_only: bool) -> bool:
-        from dps.access import has_bypass
+        from dps.api.access import has_bypass
         self.calls.append((principal.user, cp_id, read_only))
         return has_bypass(principal, read_only) or cp_id in self.owners.get(principal.user, set())
 

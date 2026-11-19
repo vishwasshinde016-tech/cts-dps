@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 from pypdf import PdfWriter
 
-from dps.core_client import CoreMaster
 from dps.extraction.agreement import Term, _Doc, _quote, _threshold, extract_terms
 from dps.extraction.mapping import normalize
 from dps.extraction.validation import FAILED, NEEDS_REVIEW, PUBLISH, check_conflicts, validate
-from dps.parsing import HeavyEngine, Page, ParseError, ParserEngine, needs_heavy, page_runs, text_quality
+from dps.integrations.core import CoreMaster
+from dps.parse.engine import HeavyEngine, Page, ParseError, ParserEngine, needs_heavy, page_runs, text_quality
 
 GOLDEN = Path(__file__).resolve().parents[2] / "golden-set" / "documents"
 
@@ -426,7 +426,7 @@ def _xls(rows):
 def test_xls_statements_are_read_with_cell_references():
     """FR-01 lists .xls: it was accepted at upload and then failed as unsupported."""
     from dps.extraction.statement import extract_values, header_from_xls, rows_from_xls
-    from dps.parsing import ParseError
+    from dps.parse.engine import ParseError
 
     data = _xls([["Amounts in INR lakhs"], ["EBITDA", 514], ["Long-term borrowings", "1,200"], ["Notes", ""]])
     rows = rows_from_xls(data)

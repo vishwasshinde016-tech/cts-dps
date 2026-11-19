@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT.parent / "dps" / "src"))
 
 from dps.ingest.inspect import InspectionFailed, declared_format, inspect  # noqa: E402
 from dps.parse.page_model import build, to_pages  # noqa: E402
-from dps.parsing import ParserEngine, RapidOcrBackend  # noqa: E402
+from dps.parse.engine import ParserEngine, RapidOcrBackend  # noqa: E402
 
 
 def _time(fn) -> tuple[float, object]:

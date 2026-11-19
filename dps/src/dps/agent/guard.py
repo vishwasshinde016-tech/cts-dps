@@ -22,8 +22,8 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from dps import observability as obs
 from dps.models import AiCache, AiUsage, AuditEvent, utcnow
+from dps.ops import observability as obs
 from dps.settings import Settings, llm_allowed
 
 log = logging.getLogger(__name__)

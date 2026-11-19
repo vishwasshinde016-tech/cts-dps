@@ -18,18 +18,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from dps import history, jobs, services
-from dps.ai_guard import injection_signs
-from dps.core_client import CoreClient
+from dps.agent.guard import injection_signs
 from dps.extraction.agreement import extract_terms
 from dps.extraction.coverage import possible_covenants
 from dps.extraction.mapping import Proposal, normalize
 from dps.extraction.terms_info import extract_info
 from dps.extraction.validation import FAILED, NEEDS_REVIEW, PUBLISH, validate
 from dps.flows.persistence import SqlFlowPersistence
+from dps.integrations.core import CoreClient
 from dps.language import detect as detect_language
 from dps.language import name as language_name
 from dps.models import Document, ExtractedTerm, Job
-from dps.parsing import Page, ParseError, needs_heavy
+from dps.parse.engine import Page, ParseError, needs_heavy
 
 log = logging.getLogger(__name__)
 

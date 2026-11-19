@@ -16,7 +16,7 @@ import sys
 import time
 
 from dps.extraction.statement import extract_values, parse_number, rows_from_text
-from dps.parsing import ParserEngine, RapidOcrBackend, needs_heavy
+from dps.parse.engine import ParserEngine, RapidOcrBackend, needs_heavy
 
 NUM = re.compile(r"^\(?-?(?:Rs\.?|₹|\$)?\s?[0-9][0-9,]*(?:\.[0-9]+)?\)?$")
 DASH = {"-", "–", "—", "nil", "Nil", "NIL"}
@@ -219,7 +219,7 @@ def m1_current(data: bytes):
 
 
 def m2_docling_text(data: bytes):
-    from dps.parsing import DoclingEngine
+    from dps.parse.engine import DoclingEngine
     pages = DoclingEngine().parse(data)
     rows = rows_from_text([(p.no, p.text) for p in pages])
     return rows, " ".join(p.text[:600] for p in pages[:2]), {}

@@ -5,7 +5,7 @@ from datetime import date
 
 from conftest import h
 
-from dps.advisor import ADVISORY, Advisor, deterministic
+from dps.advisory.advisor import ADVISORY, Advisor, deterministic
 from dps.models import Document, DocumentCpLink, StatementValue
 
 COVS = [
@@ -69,7 +69,7 @@ def test_narrative_rules_and_ai():
 
 def test_the_narrative_names_the_figures_own_currency():
     """Money for any country: an LKR statement is not summarised as rupees crore."""
-    from dps.advisor import describe_unit
+    from dps.advisory.advisor import describe_unit
 
     seen = []
     figures = [{"key": "EBITDA", "value": 800, "unit": "LKR_MN"}]

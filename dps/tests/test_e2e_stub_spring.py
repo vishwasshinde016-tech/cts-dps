@@ -9,12 +9,12 @@ from test_jobapi import check
 from test_phase2_ingest import text_pdf
 from test_phase4_skills import SERVICE, submit
 
-from dps.core_client import CoreClient
 from dps.ingest.pipeline import Ingestor
 from dps.ingest.store import LocalStore
+from dps.integrations.core import CoreClient
+from dps.integrations.spring_tools import SpringTools
 from dps.parse import sandbox
 from dps.skills import runner as skills
-from dps.spring_tools import SpringTools
 from dps.worker import Worker
 
 TEXT = AGREEMENT_TEXT + "\nCorporate Identity Number: L26940MH1990PLC056789"

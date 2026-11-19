@@ -24,7 +24,7 @@ from dps.extraction.schedule import (
 )
 from dps.extraction.schedule import test_months as months_tested
 from dps.models import Base, ExtractedTerm
-from dps.parsing import Page
+from dps.parse.engine import Page
 from dps.profiles import LoanProfile
 
 SENTENCE = ("The Borrower shall not permit the Consolidated Leverage Ratio to exceed 4.00 to 1.00 for any Test Period "

@@ -14,13 +14,13 @@ from test_api import add_term, session, upload
 from test_flows import AGREEMENT_PAGES, FakeCore, _kickoff, add_document, add_job, intake, settings
 from test_usage import GOLDEN, metered
 
-from dps import observability as obs
-from dps import usage
-from dps.advisor import Advisor
+from dps.advisory.advisor import Advisor
+from dps.agent import usage
 from dps.db import Base, Database
 from dps.flows.persistence import SqlFlowPersistence
 from dps.main import create_app
 from dps.models import AiCall, AiUsage, Job, TraceEvent
+from dps.ops import observability as obs
 from dps.worker import Worker
 
 

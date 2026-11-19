@@ -1,11 +1,11 @@
-"""The daily app log file (dps.logcollector): Docker's stream read right, one file per day, secrets masked."""
+"""The daily app log file (dps.ops.logcollector): Docker's stream read right, one file per day, secrets masked."""
 
 from __future__ import annotations
 
 import struct
 from datetime import UTC, date, datetime
 
-from dps.logcollector import Writer, demux, file_for, format_line, parse_line, prune
+from dps.ops.logcollector import Writer, demux, file_for, format_line, parse_line, prune
 
 
 def frame(text: str, stream: int = 1) -> bytes:

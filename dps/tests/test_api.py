@@ -132,7 +132,7 @@ def test_a_pdf_over_the_page_limit_is_refused(client, app):
 
 
 def test_a_failed_document_tells_the_rm_why(client, app):
-    from dps.api import failure_reason
+    from dps.api.documents import failure_reason
 
     doc_id = upload(client, data=PDF + b"%locked").json()["documentId"]
     with session(app) as db:
@@ -505,8 +505,8 @@ def test_rate_limits_uploads_per_user(client, app):
 
 
 def test_rate_limiter_window_and_switch_off():
+    from dps.api.ratelimit import RateLimiter
     from dps.errors import ApiError
-    from dps.ratelimit import RateLimiter
 
     now = [0.0]
     lim = RateLimiter(clock=lambda: now[0])

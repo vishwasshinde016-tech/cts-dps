@@ -13,7 +13,7 @@ import logging
 import re
 from datetime import date, datetime
 
-from dps.parsing import Page, ParserEngine
+from dps.parse.engine import Page, ParserEngine
 
 log = logging.getLogger(__name__)
 

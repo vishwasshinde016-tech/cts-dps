@@ -14,7 +14,7 @@ from conftest import h
 from referencing import Registry, Resource
 
 from dps import jobs
-from dps.jobapi import SCHEMA_NAMES
+from dps.api.jobs import SCHEMA_NAMES
 from dps.models import Batch, Document, EventFeed, ExtractedTerm, Job, JobAttempt, StatementValue, utcnow
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -111,7 +111,7 @@ def test_every_error_code_the_api_returns_is_in_the_catalogue():
     codes = {e["code"] for e in yaml.safe_load((CONTRACTS / "catalogues" / "errors.yaml")
                                                .read_text(encoding="utf-8"))["errors"]}
     source = "".join((ROOT / "dps" / "src" / "dps" / name).read_text(encoding="utf-8")
-                     for name in ("jobapi.py", "evidence_api.py", "review_api.py"))
+                     for name in ("api/jobs.py", "api/evidence.py", "api/review.py"))
     used = set(re.findall(r'ApiError\(\d+, "([A-Z_]+)"', source)) | set(re.findall(r'"([A-Z_]+)", f?"Same', source))
     used.discard("DUPLICATE")  # a batch item outcome, not an error
     assert used <= codes, used - codes
@@ -447,7 +447,7 @@ def test_a_file_that_kills_its_worker_twice_is_set_aside(app):
 
 def test_existing_job_columns_hash_and_feed(app):
     """The idempotency hash is stable for the same body regardless of key order."""
-    from dps.jobapi import JobRequest, _hash
+    from dps.api.jobs import JobRequest, _hash
     body = {"jobType": "EXTRACT_AGREEMENT", "context": {"requestedBy": "u"},
             "document": {"sha256": "a" * 64, "fileName": "f", "mediaType": "application/pdf", "sizeBytes": 1}}
     reordered = dict(reversed(list(body.items())))

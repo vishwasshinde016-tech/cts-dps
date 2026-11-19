@@ -277,7 +277,7 @@ def build_tools(names, ctx: ToolContext) -> list[BaseTool]:
 def make_agent(gateway, route: str, skill: str, tool_names, ctx: ToolContext, max_turns: int = 3,
                max_seconds: int = 180) -> Agent:
     """A fresh agent for one job: no memory, no delegation, the skill's tools only."""
-    from dps.ai_guard import DATA_NOT_INSTRUCTIONS
+    from dps.agent.guard import DATA_NOT_INSTRUCTIONS
 
     tools = build_tools(tool_names, ctx)
     return Agent(role=f"{ROLE} ({skill} skill)", goal=GOAL.format(skill=skill),

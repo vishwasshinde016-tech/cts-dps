@@ -7,8 +7,8 @@ from pathlib import Path
 from conftest import h
 from test_api import upload
 
-from dps.agreement_qa import answer, best_pages, quote
-from dps.parsing import Page
+from dps.advisory.agreement_qa import answer, best_pages, quote
+from dps.parse.engine import Page
 
 GOLDEN = Path(__file__).resolve().parents[2] / "golden-set" / "documents" / "AGR-003.pdf"
 
@@ -93,7 +93,7 @@ def test_planted_text_never_answers_and_aliases_find_the_real_clause():
 
 
 def test_a_question_the_agreement_does_not_answer_says_so():
-    from dps.agreement_qa import NOT_FOUND
+    from dps.advisory.agreement_qa import NOT_FOUND
 
     assert answer("What is the borrower's credit rating from CRISIL?", PLANTED, None)["citations"] == []
     out = answer("When is interest on the bond payable to trustees?", PLANTED, None)

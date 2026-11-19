@@ -11,7 +11,7 @@ from dps.extraction.mapping import TO_CRORE
 from dps.extraction.statement import _unit, match_key
 from dps.extraction.statement_pages import order_pages, rank
 from dps.extraction.statement_pdf import _text_words, choose_column, rows_from_words, unit_text
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 # ---------------------------------------------------------------- statements: the unit
 

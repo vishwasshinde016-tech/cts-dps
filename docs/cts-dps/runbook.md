@@ -36,7 +36,7 @@ ops endpoints need the SUPPORT or ADMIN role.
 
 ## Sizing
 
-`dps.ops.capacity(docs_per_hour, heavy_share, light_minutes, heavy_minutes, tokens_per_doc)` gives worker counts
+`dps.ops.production.capacity(docs_per_hour, heavy_share, light_minutes, heavy_minutes, tokens_per_doc)` gives worker counts
 (and Azure tokens per minute per route, from `tokens_per_doc`):
 
     workers = documents per hour x share x minutes per document / (60 x 0.6)

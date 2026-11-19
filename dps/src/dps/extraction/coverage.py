@@ -24,7 +24,7 @@ from dps.extraction.agreement import (
     _Doc,
     normalize_ws,
 )
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 # "permit"/"maintain" too: a list form ("the Borrower will not: ... 6.01 Permit the Leverage Ratio to exceed")
 # leaves the "will not" in an earlier sentence.

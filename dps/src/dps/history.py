@@ -20,8 +20,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from dps import observability as obs
 from dps.models import AiCall, TraceEvent
+from dps.ops import observability as obs
 
 DPS = "dps"
 METHOD_NAMES = {"TEXT": "text", "OCR": "OCR", "DOCLING": "Docling", "BLANK": "blank", "NONE": "unreadable"}

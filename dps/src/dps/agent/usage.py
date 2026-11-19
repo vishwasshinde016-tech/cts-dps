@@ -18,8 +18,8 @@ from datetime import timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from dps import observability as obs
 from dps.models import AiCall, AiUsage, utcnow
+from dps.ops import observability as obs
 from dps.settings import Settings
 
 # AGREEMENT_READ / STATEMENT_READ: the AI readers that check a document in the background (one call per document).

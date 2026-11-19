@@ -60,7 +60,7 @@ def test_go_live_report(client, app, settings, tmp_path):
     assert cert["checks"]["classificationAccuracy"] == "NO_DATA" and cert["readyToGoLive"] is False
     assert cert["rollout"] == "NORMAL"
     assert client.get("/dps/v1/ops/go-live", headers=SERVICE).status_code == 403
-    from dps import golive
+    from dps.ops import golive
 
     with app.state.db.session_factory() as s:
         ready = golive.report(s, 30, {"EXTRACT_CERTIFICATE": {"classificationAccuracy": 0.99,

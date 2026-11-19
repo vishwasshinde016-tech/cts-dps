@@ -66,7 +66,7 @@ def read_pages(pack, gateway, page_nos: list[int], notes: list | None = None) ->
     if gateway is None or images is None or not callable(available) or not available(route):
         return None
     from dps.agent.gateway import GatewayError
-    from dps.ai_guard import DATA_NOT_INSTRUCTIONS
+    from dps.agent.guard import DATA_NOT_INSTRUCTIONS
     from dps.skills.common import HEADER, issue
 
     pngs = []

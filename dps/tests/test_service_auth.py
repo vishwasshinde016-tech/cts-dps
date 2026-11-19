@@ -5,8 +5,8 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
-from dps.core_client import CoreClient, CoreUnavailable
-from dps.service_auth import ClientCredentialsToken, TokenError
+from dps.integrations.core import CoreClient, CoreUnavailable
+from dps.integrations.service_auth import ClientCredentialsToken, TokenError
 from dps.settings import Settings
 
 TOKEN_URL = "https://login.example/tenant/oauth2/v2.0/token"

@@ -9,12 +9,12 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
-from dps.access import AccessCheckUnavailable, CoreCpAccessChecker, require_cp
-from dps.auth import Authenticator, Principal
+from dps.api.access import AccessCheckUnavailable, CoreCpAccessChecker, require_cp
+from dps.api.auth import Authenticator, Principal
 from dps.errors import ApiError
+from dps.ingest.file_store import FileStore
 from dps.main import create_app
 from dps.settings import AuthMode, Settings
-from dps.storage import FileStore
 
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 PUB = KEY.public_key().public_bytes(serialization.Encoding.PEM,

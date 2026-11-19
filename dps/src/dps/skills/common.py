@@ -110,7 +110,7 @@ def select_pages(pages: list[dict], candidates: list[dict], keywords: re.Pattern
 
 
 def prompt_for(pack, pages: list[dict], extra: str = "") -> list[dict]:
-    from dps.ai_guard import DATA_NOT_INSTRUCTIONS
+    from dps.agent.guard import DATA_NOT_INSTRUCTIONS
 
     blocks = "\n".join(f"<<<page {p['no']}>>>\n{p.get('text') or ''}\n<<<end page {p['no']}>>>" for p in pages)
     content = "\n\n".join([HEADER.format(guard=DATA_NOT_INSTRUCTIONS), pack.prompt.strip(),

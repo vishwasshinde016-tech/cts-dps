@@ -27,8 +27,8 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from dps import usage
-from dps.spring_tools import CircuitBreaker
+from dps.agent import usage
+from dps.integrations.spring_tools import CircuitBreaker
 
 log = logging.getLogger(__name__)
 
@@ -209,7 +209,7 @@ class Gateway:
             raise AiBudgetExceeded(f"Job token budget of {budget.limit} used")
         breaker = self._breakers[route_name]
         if not breaker.allow():
-            from dps import observability as obs
+            from dps.ops import observability as obs
 
             obs.count("dps.ai.unavailable", 1, route=route_name)
         completion = self._completion(route)
@@ -299,8 +299,8 @@ def from_settings(settings, session_factory=None, env: dict | None = None) -> Ga
 
 
 def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cover - live wiring
-    from dps.advisor import crewai_completion
-    from dps.ai_guard import guarded
+    from dps.advisory.advisor import crewai_completion
+    from dps.agent.guard import guarded
 
     routes = Routes.load(getattr(settings, "ai_routes_file", "") or None, settings.ai_model)
 

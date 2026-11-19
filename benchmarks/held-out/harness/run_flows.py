@@ -23,18 +23,18 @@ AS_OF = date(2025, 3, 31)  # period end; only used for the borrower's earlier fi
 
 
 def deps_for(kind: str, database: Database, heavy: bool, ai: bool):
-    from dps.parsing import DoclingConverter, HeavyEngine, ParserEngine, RapidOcrBackend
+    from dps.parse.engine import DoclingConverter, HeavyEngine, ParserEngine, RapidOcrBackend
 
     settings = get_settings()
     ocr = RapidOcrBackend()
     parser = HeavyEngine(ParserEngine(ocr), DoclingConverter()) if heavy else ParserEngine(ocr)
     completion = None
     if ai:
-        from dps.advisor import crewai_completion
+        from dps.advisory.advisor import crewai_completion
 
         completion = crewai_completion(settings.ai_model, settings.ai_temperature, settings.ai_timeout_seconds)
     if kind == "agreement":
-        from dps.core_client import CoreClient
+        from dps.integrations.core import CoreClient
         from dps.extraction.agreement_ai import read as read_covenants
         from dps.flows.intake import AgreementIntakeFlow, IntakeDeps
 

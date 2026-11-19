@@ -218,7 +218,7 @@ The Phase 6 load test checks these numbers on the bank's real document mix. Wher
 | Identifier lookup (batch) | `POST /api/v1/dps-tools/lookups` | Credit-proposal / facility / borrower master data: facility id, loan account, CIN, PAN, GSTIN, LEI, name |
 | Covenant library | `GET /api/v1/dps-tools/covenant-library` (ETag) | Covenant master library |
 
-Rules for every tool call (built in `dps/src/dps/spring_tools.py`):
+Rules for every tool call (built in `dps/src/dps/integrations/spring_tools.py`):
 
 1. **Batched:** one call per document, up to 200 items.
 2. **Bounded:** 5 s timeout, two retries with back-off on timeout or 5xx.

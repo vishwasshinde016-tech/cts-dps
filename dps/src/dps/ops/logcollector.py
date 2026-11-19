@@ -10,7 +10,7 @@ and appends each line, with the time and the service, to the file of that day (U
 again on the way in. Files older than ``LOG_KEEP_DAYS`` (30) are deleted. After a restart it carries on from the
 last line it wrote, so no line is written twice. Standard library only.
 
-    python -m dps.logcollector
+    python -m dps.ops.logcollector
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ import urllib.parse
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from dps.observability import redact
+from dps.ops.observability import redact
 
 SOCKET = os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
 LOG_DIR = Path(os.environ.get("LOG_DIR", "/logs"))

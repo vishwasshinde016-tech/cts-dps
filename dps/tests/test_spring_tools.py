@@ -9,8 +9,8 @@ import httpx
 import pytest
 import yaml
 
-from dps.core_client import CoreClient
-from dps.spring_tools import MAX_BATCH, UNAVAILABLE, CircuitBreaker, SpringTools
+from dps.integrations.core import CoreClient
+from dps.integrations.spring_tools import MAX_BATCH, UNAVAILABLE, CircuitBreaker, SpringTools
 
 CONTRACT = Path(__file__).resolve().parents[2] / "contracts" / "spring-tools.yaml"
 

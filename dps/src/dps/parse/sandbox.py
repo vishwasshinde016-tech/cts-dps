@@ -97,21 +97,21 @@ def _apply_limits(limits: Limits) -> None:
 def parse_in_process(req: ParseRequest) -> dict:
     """Inspect, then build the page model. Runs inside the child (or directly in tests)."""
     from dps.ingest.inspect import inspect
+    from dps.parse.engine import ParserEngine
     from dps.parse.page_model import build
-    from dps.parsing import ParserEngine
 
     report = inspect(req.data, req.fmt)
     engine = None
     if req.fmt == "PDF":
         ocr = None
         if req.ocr:
-            from dps.parsing import RapidOcrBackend
+            from dps.parse.engine import RapidOcrBackend
 
             ocr = RapidOcrBackend()
         engine = ParserEngine(ocr)
         if req.heavy:  # pragma: no cover - Docling is only installed in the heavy image
             try:
-                from dps.parsing import DoclingConverter, HeavyEngine
+                from dps.parse.engine import DoclingConverter, HeavyEngine
 
                 engine = HeavyEngine(engine, DoclingConverter())
             except ImportError:  # no Docling on this host: OCR with the heavy pool's longer limits

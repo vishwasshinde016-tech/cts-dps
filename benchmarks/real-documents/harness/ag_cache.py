@@ -1,6 +1,6 @@
 """Cache ParserEngine pages (pypdf + RapidOCR) per agreement, as DPS Flow A reads them."""
 import json, os, sys
-from dps.parsing import ParserEngine, RapidOcrBackend
+from dps.parse.engine import ParserEngine, RapidOcrBackend
 eng = ParserEngine(RapidOcrBackend())
 out = json.load(open("ag_pages.json")) if os.path.exists("ag_pages.json") else {}
 for name in sorted(os.listdir("agreements")):

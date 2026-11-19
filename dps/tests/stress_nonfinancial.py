@@ -9,7 +9,7 @@ from __future__ import annotations
 import itertools
 
 from dps.extraction.agreement import extract_terms
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 SENTENCES: dict[str, list[str]] = {
     "REPORTING_COVENANT": [

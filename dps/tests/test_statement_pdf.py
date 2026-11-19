@@ -142,7 +142,7 @@ def test_golden_set_text_pdfs_read_exactly(doc_id):
 
 def test_golden_set_scan_reads_through_rapidocr():
     pytest.importorskip("rapidocr_onnxruntime")
-    from dps.parsing import RapidOcrBackend
+    from dps.parse.engine import RapidOcrBackend
 
     label = json.loads((GOLDEN / "labels" / "FS-023.json").read_text(encoding="utf-8"))
     table = read_pdf_statement((GOLDEN / "documents" / "FS-023.pdf").read_bytes(), RapidOcrBackend())
@@ -186,7 +186,7 @@ def test_flow_b_uses_the_table_reader_and_holds_poor_scans(database):
 
 
 def test_flow_b_falls_back_to_text_lines_when_the_table_reader_fails(database):
-    from dps.parsing import Page
+    from dps.parse.engine import Page
 
     def broken(data):
         raise ValueError("odd pdf")

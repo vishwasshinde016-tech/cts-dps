@@ -233,7 +233,7 @@ def test_a_covenant_job_reports_coverage_and_a_gap_warning():
 def test_the_older_agreement_flow_reads_with_the_covenants_skill():
     from dps.extraction.agreement import extract_terms
     from dps.extraction.agreement_ai import read_with_skill
-    from dps.parsing import Page
+    from dps.parse.engine import Page
 
     text = ("FINANCIAL COVENANTS\n"
             "The Borrower shall maintain a Debt Service Coverage Ratio of not less than 1.25 times.\n"
@@ -268,7 +268,7 @@ def test_the_older_agreement_flow_reads_with_the_covenants_skill():
 
 def test_skill_terms_apply_the_older_sense_checks():
     from dps.extraction.agreement_ai import skill_terms
-    from dps.parsing import Page
+    from dps.parse.engine import Page
 
     pages = [Page(1, "Cash Flow Coverage of not less than 125% and leverage of no greater than 70%.", "TEXT", 1.0)]
     items = [{"name": "Cash flow coverage", "page": 1, "quote": "Cash Flow Coverage of not less than 125%",
@@ -336,7 +336,7 @@ def test_pdf_slice_keeps_only_the_batch_pages():
     from pypdf import PdfReader
     from test_phase2_ingest import text_pdf
 
-    from dps.parsing import pdf_slice
+    from dps.parse.engine import pdf_slice
 
     data = text_pdf([f"Page number {n} of the agreement" for n in range(1, 13)])
     part = pdf_slice(data, 5, 8)
@@ -350,7 +350,7 @@ def test_ocr_opens_a_pdf_once_per_document_and_closes_it(monkeypatch):
     import pypdfium2 as pdfium
     from test_phase2_ingest import text_pdf
 
-    from dps.parsing import RapidOcrBackend
+    from dps.parse.engine import RapidOcrBackend
 
     opened, real = [], pdfium.PdfDocument
 

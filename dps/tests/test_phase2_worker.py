@@ -14,8 +14,8 @@ from dps.ingest.pipeline import Ingestor
 from dps.ingest.store import LocalStore
 from dps.models import Artifact, EventFeed, Job, utcnow
 from dps.parse import sandbox
+from dps.parse.engine import ParseError
 from dps.parse.page_model import to_pages
-from dps.parsing import ParseError
 from dps.worker import PageModelFirst, Worker
 
 SERVICE = h("cts-spring", "SERVICE")

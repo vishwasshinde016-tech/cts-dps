@@ -17,7 +17,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dps.extraction.agreement import extract_terms  # noqa: E402
-from dps.parsing import Page, ParserEngine, RapidOcrBackend, text_quality  # noqa: E402
+from dps.parse.engine import Page, ParserEngine, RapidOcrBackend, text_quality  # noqa: E402
 
 FAMILY = {"DSCR": "DSCR", "ICR": "ICR", "FIXED_CHARGE_COVERAGE_RATIO": "FCCR", "DEBT_TO_EBITDA": "LEVERAGE",
           "NET_LEVERAGE_RATIO": "LEVERAGE", "DEBT_TO_NET_WORTH": "DEBT_TO_NW", "DEBT_TO_EQUITY": "DEBT_TO_NW",
@@ -96,7 +96,7 @@ def s_old(data, texts):
 def s_doc(data, texts):
     from pypdf import PdfReader, PdfWriter
 
-    from dps.parsing import DoclingEngine
+    from dps.parse.engine import DoclingEngine
     sec = section(texts)
     if not sec:
         return [], {"section": sec}

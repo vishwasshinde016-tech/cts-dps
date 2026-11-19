@@ -8,7 +8,7 @@ from dps.extraction.agreement import extract_terms
 from dps.extraction.agreement_ai import covenant_pages, read
 from dps.extraction.coverage import possible_covenants
 from dps.extraction.verify import number_on_line, quote_on_page, threshold_in
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 COVENANTS = Page(7, "7.11 Financial Covenants.\n"
                     "(a) Consolidated Leverage Ratio. The Borrower will not permit the Consolidated Leverage Ratio as "

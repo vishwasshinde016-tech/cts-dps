@@ -10,7 +10,7 @@ from conftest import h
 from fastapi.testclient import TestClient
 from test_flows import FakeParser, add_document, doc_status, intake, values, xlsx_bytes
 
-from dps.ai_guard import (
+from dps.agent.guard import (
     DATA_NOT_INSTRUCTIONS,
     AiBudgetExhausted,
     budget_status,
@@ -24,7 +24,7 @@ from dps.extraction import agreement_ai, statement_ai
 from dps.flows.statement import StatementDeps, StatementProcessingFlow
 from dps.main import create_app
 from dps.models import AiCache, AiUsage, AuditEvent, Base
-from dps.parsing import Page
+from dps.parse.engine import Page
 from dps.settings import Settings
 
 NOW = datetime(2026, 11, 20, 10, 0, tzinfo=UTC)

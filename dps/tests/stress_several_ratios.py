@@ -11,7 +11,7 @@ from __future__ import annotations
 import itertools
 
 from dps.extraction.agreement import extract_terms
-from dps.parsing import Page
+from dps.parse.engine import Page
 
 RATIOS = [("DSCR", "Debt Service Coverage Ratio", ">=", "1.25"), ("ICR", "Interest Coverage Ratio", ">=", "2.00"),
           ("DEBT_TO_EBITDA", "Total Debt to EBITDA", "<=", "3.50"),
