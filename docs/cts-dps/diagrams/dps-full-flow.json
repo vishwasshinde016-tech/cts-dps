@@ -2,7 +2,7 @@
  "schema_version": 2,
  "diagram_type": "workflow",
  "meta": {
-  "title": "CTS DPS full flow: upload, extraction, type detection, skills, agent, checks, result",
+  "title": "CTS DPS full flow: schemas, upload, extraction, type detection, skills, agent, checks, result, DB",
   "output": "docs/cts-dps/diagrams/dps-full-flow.html",
   "locale": "en",
   "quality_profile": "showcase",
@@ -10,13 +10,19 @@
    "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
    "provider": "github",
    "link_mode": "web",
-   "revision": "0ef3af47ed04127870e3300baa9b07be72f8b9a4"
+   "revision": "bf5b68d03f381c8939d6a94d15099794b832562a"
   },
   "views": [
    {
     "id": "v1",
-    "label": "1-2 Submit and queue",
+    "label": "0-2 Schemas, submit, queue",
     "focus": [
+     "c_api",
+     "c_request",
+     "c_page",
+     "c_skill",
+     "c_result",
+     "c_event",
      "spring",
      "submit",
      "validate",
@@ -27,7 +33,7 @@
      "lease",
      "route"
     ],
-    "note": "1 · Spring sends the job (api/jobs.py) / 2 · Queue + Python worker (jobs.py, worker.py)"
+    "note": "0 · Contracts and schemas / 1 · Spring sends the job / 2 · Queue + Python worker"
    },
    {
     "id": "v2",
@@ -40,7 +46,7 @@
      "engine",
      "derived"
     ],
-    "note": "3 · Extraction: file to page model (ingest/, parse/)"
+    "note": "3 · Extraction: file to page model"
    },
    {
     "id": "v3",
@@ -57,7 +63,7 @@
      "prompt_md",
      "extract"
     ],
-    "note": "4 · Detect the document type (flows/, analyze/) / 5 · Pick the skill (skills/runner.py, pack.yaml)"
+    "note": "4 · Detect the document type / 5 · Pick the skill"
    },
    {
     "id": "v4",
@@ -74,11 +80,11 @@
      "gateway",
      "azure"
     ],
-    "note": "6 · Rules first, then the pages (skills/covenants/) / 7 · Document Agent, tools, gateway (agent/)"
+    "note": "6 · Rules first, then the pages / 7 · Document Agent, tools, gateway"
    },
    {
     "id": "v5",
-    "label": "8-9 Checks and result",
+    "label": "8-10 Checks, result, DB tables",
     "focus": [
      "schema",
      "grounded",
@@ -90,13 +96,23 @@
      "event",
      "pull",
      "review",
-     "decide"
+     "decide",
+     "t_job",
+     "t_doc",
+     "t_artifact",
+     "t_ai",
+     "t_run",
+     "t_review"
     ],
-    "note": "8 · Check every answer (skills/, ledger, Spring) / 9 · Result and review (runner.py, feed.py, api/)"
+    "note": "8 · Check every answer / 9 · Result and review / 10 · DB schema: SQL Server schema dps"
    }
   ]
  },
  "lanes": [
+  {
+   "id": "l0",
+   "label": "0 · Contracts and schemas (contracts/, skills/)"
+  },
   {
    "id": "l1",
    "label": "1 · Spring sends the job (api/jobs.py)"
@@ -132,9 +148,163 @@
   {
    "id": "l9",
    "label": "9 · Result and review (runner.py, feed.py, api/)"
+  },
+  {
+   "id": "l10",
+   "label": "10 · DB schema: SQL Server schema dps (models.py)"
   }
  ],
  "nodes": [
+  {
+   "id": "c_api",
+   "lane": "l0",
+   "col": 0,
+   "type": "external",
+   "label": "Job API contract",
+   "sublabel": "contracts/dps-jobs-api.yaml:32",
+   "sources": [
+    {
+     "path": "contracts/dps-jobs-api.yaml",
+     "line": 32,
+     "label": "POST /dps/v1/jobs",
+     "end_line": 98
+    },
+    {
+     "path": "contracts/dps-jobs-api.yaml",
+     "line": 99,
+     "label": "GET /dps/v1/jobs/{id}/result",
+     "end_line": 132
+    },
+    {
+     "path": "contracts/dps-jobs-api.yaml",
+     "line": 333,
+     "label": "GET /dps/v1/events",
+     "end_line": 360
+    }
+   ]
+  },
+  {
+   "id": "c_request",
+   "lane": "l0",
+   "col": 1,
+   "type": "backend",
+   "label": "Caller schema",
+   "sublabel": "contracts/schemas/job-request.json",
+   "sources": [
+    {
+     "path": "contracts/schemas/job-request.json",
+     "line": 1,
+     "label": "job request: jobType, document, context",
+     "end_line": 327
+    },
+    {
+     "path": "contracts/schemas/job-request.json",
+     "line": 91,
+     "label": "context: CP, borrower, facility IDs"
+    },
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 114,
+     "label": "JobRequest: the same, in Python",
+     "end_line": 119
+    }
+   ]
+  },
+  {
+   "id": "c_page",
+   "lane": "l0",
+   "col": 2,
+   "type": "backend",
+   "label": "Page model schema",
+   "sublabel": "contracts/schemas/page-model.json",
+   "sources": [
+    {
+     "path": "contracts/schemas/page-model.json",
+     "line": 1,
+     "label": "parsed document: pages, blocks, boxes",
+     "end_line": 338
+    },
+    {
+     "path": "contracts/schemas/page-model.json",
+     "line": 212,
+     "label": "pages"
+    }
+   ]
+  },
+  {
+   "id": "c_skill",
+   "lane": "l0",
+   "col": 3,
+   "type": "backend",
+   "label": "Skill answer schema",
+   "sublabel": "skills/covenants/schema.json",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/covenants/schema.json",
+     "line": 1,
+     "label": "what the agent must return",
+     "end_line": 8
+    },
+    {
+     "path": "dps/src/dps/skills/covenants/prompt.md",
+     "line": 1,
+     "label": "the skill's instructions",
+     "end_line": 16
+    },
+    {
+     "path": "dps/src/dps/skills/covenants/pack.yaml",
+     "line": 1,
+     "label": "tools, pages, limits",
+     "end_line": 17
+    }
+   ]
+  },
+  {
+   "id": "c_result",
+   "lane": "l0",
+   "col": 4,
+   "type": "backend",
+   "label": "Extraction (result) schema",
+   "sublabel": "contracts/schemas/result.json:82",
+   "sources": [
+    {
+     "path": "contracts/schemas/result.json",
+     "line": 82,
+     "label": "field: value, source, method, status"
+    },
+    {
+     "path": "contracts/schemas/result.json",
+     "line": 924,
+     "label": "classification"
+    },
+    {
+     "path": "contracts/schemas/result.json",
+     "line": 1040,
+     "label": "document: route, coverage, pages"
+    }
+   ]
+  },
+  {
+   "id": "c_event",
+   "lane": "l0",
+   "col": 5,
+   "type": "backend",
+   "label": "Event schema",
+   "sublabel": "contracts/schemas/event.json",
+   "sources": [
+    {
+     "path": "contracts/schemas/event.json",
+     "line": 1,
+     "label": "event Spring reads",
+     "end_line": 24
+    },
+    {
+     "path": "contracts/catalogues/errors.yaml",
+     "line": 1,
+     "label": "every issue code"
+    }
+   ]
+  },
   {
    "id": "spring",
    "lane": "l1",
@@ -169,6 +339,12 @@
      "line": 114,
      "label": "JobRequest: what Spring sends",
      "end_line": 119
+    },
+    {
+     "path": "contracts/schemas/job-request.json",
+     "line": 1,
+     "label": "caller schema",
+     "end_line": 327
     }
    ]
   },
@@ -419,6 +595,18 @@
      "line": 56,
      "label": "page_model: write once, reuse",
      "end_line": 84
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 245,
+     "label": "Artifact table (dps_artifact)",
+     "end_line": 264
+    },
+    {
+     "path": "contracts/schemas/page-model.json",
+     "line": 1,
+     "label": "page model schema",
+     "end_line": 338
     }
    ]
   },
@@ -841,6 +1029,12 @@
      "line": 293,
      "label": "read: schema + one repair",
      "end_line": 318
+    },
+    {
+     "path": "dps/src/dps/skills/covenants/schema.json",
+     "line": 1,
+     "label": "skill answer schema",
+     "end_line": 8
     }
    ]
   },
@@ -973,6 +1167,11 @@
      "line": 267,
      "label": "Run table (dps_run)",
      "end_line": 281
+    },
+    {
+     "path": "contracts/schemas/result.json",
+     "line": 82,
+     "label": "extraction (result) schema"
     }
    ]
   },
@@ -1036,6 +1235,156 @@
    "type": "external",
    "label": "Spring decides compliance",
    "sublabel": "never DPS"
+  },
+  {
+   "id": "t_job",
+   "lane": "l10",
+   "col": 0,
+   "type": "database",
+   "label": "dps_job",
+   "sublabel": "models.py:128 · the queue",
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 128,
+     "label": "Job: status, lease, request",
+     "end_line": 178
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 199,
+     "label": "JobAttempt: each try",
+     "end_line": 211
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 181,
+     "label": "Batch: bulk upload",
+     "end_line": 196
+    }
+   ]
+  },
+  {
+   "id": "t_doc",
+   "lane": "l10",
+   "col": 1,
+   "type": "database",
+   "label": "dps_document",
+   "sublabel": "models.py:78 · the file",
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 78,
+     "label": "Document: version, sha256, object key",
+     "end_line": 108
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 111,
+     "label": "DocumentCpLink: CP links",
+     "end_line": 125
+    }
+   ]
+  },
+  {
+   "id": "t_artifact",
+   "lane": "l10",
+   "col": 2,
+   "type": "database",
+   "label": "dps_artifact",
+   "sublabel": "models.py:245 · page models",
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 245,
+     "label": "Artifact: derived files",
+     "end_line": 264
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 555,
+     "label": "FlowState: CrewAI Flow state",
+     "end_line": 566
+    }
+   ]
+  },
+  {
+   "id": "t_ai",
+   "lane": "l10",
+   "col": 3,
+   "type": "database",
+   "label": "dps_ai_call",
+   "sublabel": "models.py:511 · model calls",
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 511,
+     "label": "AiCall: purpose, model, tokens",
+     "end_line": 535
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 491,
+     "label": "AiUsage: cost",
+     "end_line": 508
+    }
+   ]
+  },
+  {
+   "id": "t_run",
+   "lane": "l10",
+   "col": 4,
+   "type": "database",
+   "label": "dps_run",
+   "sublabel": "models.py:267 · results",
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 267,
+     "label": "Run: dps.result/1.0 JSON",
+     "end_line": 281
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 225,
+     "label": "EventFeed: events for Spring",
+     "end_line": 242
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 538,
+     "label": "TraceEvent: document history",
+     "end_line": 552
+    }
+   ]
+  },
+  {
+   "id": "t_review",
+   "lane": "l10",
+   "col": 5,
+   "type": "database",
+   "label": "dps_review_decision",
+   "sublabel": "models.py:284 · decisions",
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 284,
+     "label": "ReviewDecision: accept / edit / reject",
+     "end_line": 300
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 423,
+     "label": "StatementValue: figures",
+     "end_line": 448
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 465,
+     "label": "AuditEvent: audit trail",
+     "end_line": 474
+    }
+   ]
   }
  ],
  "edges": [
@@ -1373,6 +1722,17 @@
     ":145 page_text, :162 search_text, :182 find_definition: read this document",
     ":201 covenant_library, :224 validate_formula, :243 lookup_identifier: Spring Java rules",
     "Checks after the agent: ledger.py:228 review_items, runner.py:116 verify_with_spring"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Schemas: where each one is used",
+   "items": [
+    "Caller schema job-request.json: checked in step 1 (api/jobs.py:166 validate_job)",
+    "Page model schema: the output of step 3 (parse/page_model.py:30)",
+    "Skill answer schema: checked in step 8 (agent/document_agent.py:293)",
+    "Extraction schema result.json:82: saved in step 9 (skills/runner.py:557), pulled by Spring",
+    "DB schema models.py: 25 tables; row 10 shows the main ones; Alembic in dps/migrations/versions/"
    ]
   },
   {
