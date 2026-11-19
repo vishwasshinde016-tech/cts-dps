@@ -21,6 +21,8 @@ Code as you talk. Python code is under [`dps/src/dps/`](../../dps/src/dps). 19 N
 11. Logs and the live demo (§12, §13).
 12. Decisions and open items (§14).
 
+**The full flow in one diagram:** [`diagrams/dps-full-flow.html`](diagrams/dps-full-flow.html). It has 9 stages from upload to review, and every box shows its file:line. Use it when you explain the whole flow.
+
 **One page with everything:** [`diagrams/dps-complete.html`](diagrams/dps-complete.html). Open it in a browser. It holds all 4 diagrams, each with a step-through linked to its file and line. It also has every table in this guide and the real code excerpts, pinned to commit `ce996d3`. Use it on screen while you read this guide.
 
 The page has 4 diagrams. Click a box or a citation to see its source file and line on GitHub.
@@ -455,7 +457,7 @@ The size limit is 100 MB per file (`DPS_MAX_FILE_MB`). Encrypted, corrupt, macro
    ([`dps/src/dps/parse/page_model.py:30`](../../dps/src/dps/parse/page_model.py#L30), [`dps/src/dps/parse/sandbox.py:157`](../../dps/src/dps/parse/sandbox.py#L157))
 6. **Store the parse.** "The page model is saved once in `derived/` and listed in `dps_artifact`. If the same file comes again, it is reused, not parsed again. The original file is never changed."
 7. **Start the flow.** "The worker starts one CrewAI Flow for this job, which is the job's own context. The Flow saves its state after each step." ([`dps/src/dps/flows/skill_job.py:27`](../../dps/src/dps/flows/skill_job.py#L27))
-8. **Classify.** "Rules score the first pages for each document type: agreement, sanction letter, amendment, statement, certificate. If the rules are sure, that is the type. If not, the agent gives a second opinion and must quote the lines that prove it." ([`dps/src/dps/analyze/classify.py:291`](../../dps/src/dps/analyze/classify.py#L291))
+8. **Classify.** "Rules score the first pages for each document type: agreement, sanction letter, amendment, statement, certificate. If the rules are sure, that is the type. If not, the agent gives a second opinion and must quote the lines that prove it." ([`dps/src/dps/analyze/classify.py:294`](../../dps/src/dps/analyze/classify.py#L294))
 9. **Choose the skill.** "The type picks the skill pack: a loan agreement gets `covenants`, a sanction letter gets `sanction`, an amendment gets `amendment_diff`. That mapping is one line, `ONBOARD_PACKS`. For other job types, the job type picks the pack whose `pack.yaml` lists it." ([`dps/src/dps/skills/runner.py:608`](../../dps/src/dps/skills/runner.py#L608), [`dps/src/dps/skills/__init__.py:80`](../../dps/src/dps/skills/__init__.py#L80))
 10. **What the skill pack sets.** "The pack's `pack.yaml` sets the limits for this job:
     - which model route to use;
@@ -714,7 +716,7 @@ What a job does from submit to result. Open each file as you go.
 | 9 | Segment | Split a bundled PDF into its documents | [`dps/src/dps/parse/segment.py:46`](../../dps/src/dps/parse/segment.py#L46) `segment` |
 | 10 | Flow | The CrewAI Flow per job; state saved per step (resume after review) | [`dps/src/dps/flows/skill_job.py:27`](../../dps/src/dps/flows/skill_job.py#L27) `SkillJobFlow` ([`:41`](../../dps/src/dps/flows/skill_job.py#L41) `run_skills`, [`:46`](../../dps/src/dps/flows/skill_job.py#L46) `save_result`); [`dps/src/dps/flows/intake.py:70`](../../dps/src/dps/flows/intake.py#L70); [`dps/src/dps/flows/statement.py:133`](../../dps/src/dps/flows/statement.py#L133); [`dps/src/dps/flows/persistence.py:22`](../../dps/src/dps/flows/persistence.py#L22) |
 | 11 | Onboard entry | Classify, pick the pack, extract, identifiers, cycle checks | [`dps/src/dps/skills/runner.py:611`](../../dps/src/dps/skills/runner.py#L611) `run_onboard`, pack table [`:608`](../../dps/src/dps/skills/runner.py#L608) `ONBOARD_PACKS` |
-| 12 | Classify | Rules score each type; agent second opinion only when unsure | [`dps/src/dps/analyze/classify.py:291`](../../dps/src/dps/analyze/classify.py#L291) `classify` → [`:131`](../../dps/src/dps/analyze/classify.py#L131) `rule_scores` → [`:190`](../../dps/src/dps/analyze/classify.py#L190) `decide_rules` |
+| 12 | Classify | Rules score each type; agent second opinion only when unsure | [`dps/src/dps/analyze/classify.py:294`](../../dps/src/dps/analyze/classify.py#L294) `classify` → [`:134`](../../dps/src/dps/analyze/classify.py#L134) `rule_scores` → [`:193`](../../dps/src/dps/analyze/classify.py#L193) `decide_rules` |
 | 13 | Identify | Borrower, facility, account, period, currency, units, issuer; matched in Spring | [`dps/src/dps/analyze/identify.py:153`](../../dps/src/dps/analyze/identify.py#L153) `find_identifiers`, [`:271`](../../dps/src/dps/analyze/identify.py#L271) `match` |
 | 14 | Generic run | Budget, extract, codes, scoring, checks, result JSON | [`dps/src/dps/skills/runner.py:313`](../../dps/src/dps/skills/runner.py#L313) `run` |
 | 15 | Extraction order | The whole order in one function | [`dps/src/dps/skills/runner.py:391`](../../dps/src/dps/skills/runner.py#L391) `_extract` |
