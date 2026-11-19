@@ -67,6 +67,7 @@ def validate(pages: list[Page], proposals: list[Proposal], formula_errors: Calla
         if p.confidence < min_confidence and p.category != "CANDIDATE":  # a candidate already says why
             p.issues.append("LOW_CONFIDENCE")
     check_conflicts(proposals)
-    if not proposals:
-        return NEEDS_REVIEW  # text but nothing found: a person confirms the agreement has no covenants
-    return NEEDS_REVIEW if any(p.issues for p in proposals) else PUBLISH
+    # Covenant rules are never applied without a person (architect: "human-reviewed extraction governs covenant
+    # rules"; full review 19 Nov 2026, F5). Clean proposals wait for a decision too; a document is PUBLISHED only by
+    # finish_review, once every term was decided. Text with nothing found also waits: a person confirms it.
+    return NEEDS_REVIEW

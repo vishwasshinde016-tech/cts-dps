@@ -118,6 +118,8 @@ errors:
   - { code: SPRING_UNAVAILABLE, class: TRANSIENT, http: null, retry: true, message: "Still processing." }
   # --- degraded (continue without AI, every field to review) ---
   - { code: AI_UNAVAILABLE, class: DEGRADED, http: null, retry: false, message: "Read without the AI checker; please review." }
+  - { code: AI_NOT_USED, class: DEGRADED, http: null, retry: false, message: "The Document Agent is switched off: read by the rules only, with no second reading or residual check; review every field." }
+  - { code: FORMULA_TEMPLATE, class: QUALITY, http: null, retry: false, message: "The formula is DPS's standard template, not the agreement's own definition; confirm it against the defined terms." }
   - { code: AI_BUDGET_EXCEEDED, class: DEGRADED, http: null, retry: false, message: "Read without the AI checker; please review." }
   - { code: AI_UNGROUNDED, class: DEGRADED, http: null, retry: false, message: "The AI answer quoted text that is not on the page and was dropped; please review." }
   - { code: PAGES_NOT_SENT, class: DEGRADED, http: null, retry: false, message: "Some pages with duty sentences did not fit the agent's prompt (it could still open them with its tools); please check them." }

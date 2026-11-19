@@ -470,6 +470,9 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
             ledger.settle(entries, fields, decisions)
         ledger.attach(entries, fields)
         fields += ledger.review_items(entries, pages, pack.name)
+    if gateway is None and pack.routes:  # the switch is off or no model is configured (full review F12)
+        warnings.append(issue("AI_NOT_USED", "read by the rules only: the Document Agent is not switched on, so no "
+                                             "second reading and no residual check ran; review every field"))
     if gateway is not None:
         if proposals is None and not notes:
             notes.append(issue("AI_UNAVAILABLE", "read by the rules only"))

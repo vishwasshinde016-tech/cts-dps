@@ -106,6 +106,9 @@ class StatementState(BaseModel):
     net_interest_confirmed: bool = False  # this borrower's interest wording was confirmed by a person before
     issues: list[str] = Field(default_factory=list)
     route: str = ""
+    # A person pressed "Review done" and the statement was read again (FX rate added, borrower relinked ...): a clean
+    # re-read is reported at once instead of waiting for a second "Review done" (full review G21).
+    review_done: bool = False
     parse_issues: list[str] = Field(default_factory=list)
     # 12-month covenants: each page's period in months, and the comparative columns (last year's same period, the
     # last full year and the month it ended, "YYYY-MM") read beside this period's.
@@ -151,6 +154,7 @@ class StatementProcessingFlow(Flow[StatementState]):
         if self.state.outcome == "NEEDS_REVIEW" and any(i.startswith(REREAD) for i in self.state.issues):
             # "Review done" after adding the FX rate, relinking, or setting the borrower's currency or country:
             # read it again with them.
+            self.state.review_done = True
             return "parse"
         return "resume" if self.state.outcome == "NEEDS_REVIEW" else "parse"
 
@@ -449,10 +453,12 @@ class StatementProcessingFlow(Flow[StatementState]):
             return "heavy"
         if self.state.error or not self.state.rows:
             route = "failed"
-        elif self.state.issues:
-            route = "needs_review"
+        elif self.state.review_done and not self.state.issues:
+            route = "report"  # a person already pressed "Review done"; the re-read is clean
         else:
-            route = "report"
+            # Figures reach Core only after a person reviewed them (architect Flow 3: "Checker approves/rejects";
+            # full review 19 Nov 2026, G21). A clean statement waits too; "Review done" reports it (finish_review).
+            route = "needs_review"
         self.state.route = route
         if route != "failed":  # every catalogue line not found is listed, never dropped silently
             from dps.catalog import lines_not_found
@@ -540,6 +546,7 @@ class StatementProcessingFlow(Flow[StatementState]):
             # "Review done" on a statement in another currency with no rate: nothing is sent until it is retried.
             raise ValueError(f"The figures are in {self.state.currency}, the loan in {self.state.loan_currency}: "
                              "add the FX rate in Settings, then retry the statement")
+        loan_ccy = self.state.loan_currency or self._deps.default_currency  # G23: no silent INR
         net = any(i.startswith("INTEREST_IS_NET") for i in self.state.issues)
         interest = next((v for v in values if v.key == "INTEREST_PAID" and not v.derived), None)
         with self._deps.session_factory() as db:
@@ -564,7 +571,7 @@ class StatementProcessingFlow(Flow[StatementState]):
                     if v.key in corrected:
                         continue
                     db.add(StatementValue(cp_id=cp, key=v.key, value=v.value, unit=v.unit,
-                                          currency=currency_of(v.unit) or "INR",
+                                          currency=currency_of(v.unit) or loan_ccy,
                                           as_of_date=doc.as_of_date, period_months=v.months, derived=v.derived,
                                           source_type="DOCUMENT", document_id=doc.id, page=v.page, cell=v.cell))
                 db.flush()

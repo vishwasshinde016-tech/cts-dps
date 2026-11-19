@@ -76,6 +76,11 @@
             "string",
             "null"
           ]
+        },
+        "acknowledged": {
+          "type": "object",
+          "description": "A blocking warning a reviewer accepted with a reason (ACKNOWLEDGE decision)",
+          "properties": {"by": {"type": "string"}, "comment": {"type": "string"}}
         }
       }
     },
@@ -1053,6 +1058,7 @@
           "type": "string",
           "enum": [
             "AUTO_ACCEPTED",
+            "REVIEWED",
             "NEEDS_REVIEW",
             "MAPPING_REVIEW",
             "REJECTED",

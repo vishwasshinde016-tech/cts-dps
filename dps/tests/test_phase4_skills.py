@@ -122,7 +122,7 @@ def test_formula_rejected_or_spring_down_goes_to_review():
     result = skills.run(load("sanction"), fake_job("EXTRACT_SANCTION"), model_of(SANCTION), None, Tools(up=False))
     cov = next(f for f in result["fields"] if f["group"] == "FINANCIAL_COVENANT")
     assert {i["code"] for i in cov["issues"]} >= {"SPRING_UNAVAILABLE"} and result["status"] == "NEEDS_REVIEW"
-    assert result["warnings"][0]["code"] == "SPRING_UNAVAILABLE"
+    assert "SPRING_UNAVAILABLE" in {w["code"] for w in result["warnings"]}
 
 
 def test_certificate_pack():
@@ -133,7 +133,7 @@ def test_certificate_pack():
     assert by["ICR"]["figure"] == 1.8 and by["ICR"]["declaredCompliant"] is False
     assert by["DSCR"]["udin"] == "26123456ABCDEF1234" and by["DSCR"]["signatory"] == "Ravi Kumar"
     assert by["DSCR"]["designation"] == "Partner" and by["DSCR"]["signedOn"] == "2026-05-15"
-    assert result["warnings"] == []
+    assert [w["code"] for w in result["warnings"]] == ["AI_NOT_USED"]  # no model in this test (F12)
     empty = skills.run(load("certificate"), fake_job("EXTRACT_CERTIFICATE"), model_of("nothing here"), None, None)
     assert empty["status"] == "NEEDS_REVIEW" and "NOTHING_FOUND" in empty["document"]["reasons"]
 

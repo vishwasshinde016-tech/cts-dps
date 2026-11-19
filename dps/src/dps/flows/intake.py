@@ -319,7 +319,8 @@ class AgreementIntakeFlow(Flow[IntakeState]):
                     covenant_master_id=p["covenant_master_id"], expression=p["expression"],
                     operator=p["operator"], threshold=p["threshold"], unit=p["unit"], frequency=p["frequency"],
                     category=p["category"], confidence=p["confidence"], method=p["method"],
-                    status="NEEDS_REVIEW" if shadow or p["issues"] else "PUBLISHED",
+                    # a clean proposal waits for a person too (PROPOSED); only a review publishes (F5)
+                    status="NEEDS_REVIEW" if shadow or p["issues"] else "PROPOSED",
                     issues_json=json.dumps(p["issues"]), page=p["page"], quote=(p["quote"] or "")[:500],
                     schedule_json=json.dumps(p["schedule"]) if p.get("schedule") else None))
                 count += 1

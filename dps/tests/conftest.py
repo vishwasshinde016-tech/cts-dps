@@ -58,3 +58,18 @@ def client(app) -> TestClient:
 
 def h(user: str = "rm-anil", roles: str = "RM") -> dict[str, str]:
     return {"X-User": user, "X-Roles": roles}
+
+
+def review_done(flow):
+    """What "Review done" does for a statement held for review: the same flow resumes from its saved state and
+    reports. Since the full review (G21) a clean statement waits for this too; nothing reaches Core unreviewed."""
+    again = type(flow)(flow._deps)  # noqa: SLF001 - the test resumes with the flow's own dependencies
+    again.kickoff(inputs={"id": flow.state.id, "job_id": flow.state.job_id, "document_id": flow.state.document_id})
+    return again
+
+
+def reviewed_if_clean(flow):
+    """A statement with no issues, after a person pressed "Review done" (tests of what reporting does)."""
+    if flow.state.outcome == "NEEDS_REVIEW" and not flow.state.issues:
+        return review_done(flow)
+    return flow

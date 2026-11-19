@@ -7,6 +7,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from conftest import reviewed_if_clean
 from openpyxl import Workbook
 from sqlalchemy import select
 
@@ -96,20 +97,23 @@ def doc_status(database: Database, doc_id: str) -> str:
         return s.get(Document, doc_id).status
 
 
-def test_flow_a_publishes_clean_agreement(database):
+def test_flow_a_holds_a_clean_agreement_for_a_person(database):
+    """Full review F5: covenant rules are never applied without a person, however clean the read."""
     doc_id = add_document(database)
     flow = intake(database, AGREEMENT_PAGES)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
 
-    assert flow.state.outcome == "PUBLISHED"
+    assert flow.state.outcome == "NEEDS_REVIEW"
     stored = terms(database, doc_id)
     assert stored["DSCR"].covenant_master_id == "m1" and stored["DSCR"].expression == "DSCR >= 1.25"
     assert stored["ICR"].expression == "DPS_EBITDA_TTM / DPS_INTEREST_PAID_TTM >= 2"
-    assert {t.status for t in stored.values()} == {"PUBLISHED"}
-    assert doc_status(database, doc_id) == "PUBLISHED"
+    assert stored["DSCR"].status == "PROPOSED"  # clean: waits for a decision
+    assert "FORMULA_TEMPLATE" in stored["ICR"].issues_json  # DPS's template, not the agreement's definition
+    assert "PUBLISHED" not in {t.status for t in stored.values()}
+    assert doc_status(database, doc_id) == "NEEDS_REVIEW"
     with database.session_factory() as s:
         steps = [r.method_name for r in s.scalars(select(FlowState).order_by(FlowState.saved_at))]
-    assert steps == ["parse", "extract", "normalize", "validate", "publish"]
+    assert steps == ["parse", "extract", "normalize", "validate", "hold"]
 
 
 def test_flow_a_holds_for_review_then_finishes_after_decisions(database):
@@ -194,12 +198,12 @@ def xlsx_bytes(rows: list[tuple]) -> bytes:
 
 
 def statement(database: Database, data: bytes, name: str, heavy: bool = True, pages=None, cps=("CP-1",),
-              as_of=date(2026, 3, 31)):
+              as_of=date(2026, 3, 31), reviewed: bool = True):
     doc_id = add_document(database, "FINANCIAL_STATEMENT", name, as_of, cps)
     deps = StatementDeps(database.session_factory, lambda d: data, FakeParser(pages or []), "ds-dps", heavy)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    return flow, doc_id
+    return (reviewed_if_clean(flow) if reviewed else flow), doc_id
 
 
 def values(database: Database, cp: str = "CP-1", current: bool = True) -> dict[str, StatementValue]:
@@ -340,7 +344,7 @@ def test_worker_runs_flow_a_and_marks_job_done(database, tmp_path):
     w = Worker(settings(tmp_path), database.session_factory, FakeCore(), {"AGREEMENT_INTAKE": runner})
     assert w.run_once() is True
     j = job(database, job_id)
-    assert j.status == jobs.DONE and j.flow_state_id and j.locked_by is None
+    assert j.status == jobs.NEEDS_REVIEW and j.flow_state_id and j.locked_by is None  # a person decides (F5)
     steps = json.loads(j.steps_json)
     assert [s["step"] for s in steps] == ["START", "coverage", "END"]
     ledger = steps[1]["ledger"]  # every duty sentence of the agreement is accounted for

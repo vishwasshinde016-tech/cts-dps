@@ -202,6 +202,6 @@ def test_shadow_statement_preserves_preview_without_publishing(client, app, sett
     result = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
     assert result["fields"]
     with app.state.db.session_factory() as db:
-        assert db.get(Job, job_id).status == jobs.DONE  # would have published outside SHADOW
+        assert db.get(Job, job_id).status == jobs.NEEDS_REVIEW  # every statement waits for a person (G21)
         assert db.query(StatementValue).count() == 0
         assert db.query(EventOutbox).count() == 0

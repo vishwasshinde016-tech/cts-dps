@@ -102,7 +102,8 @@ def test_an_amount_in_another_currency_is_held_not_read_as_crore(amount, currenc
 def test_rupee_amounts_are_converted_to_crore():
     [p] = normalize(terms_of("7.1 Net Worth. The Borrower shall maintain a Tangible Net Worth of not less than "
                              "Rs. 500 million."), [])
-    assert (p.unit, p.threshold, p.issues) == ("INR_CR", 50.0, [])
+    assert (p.unit, p.threshold) == ("INR_CR", 50.0)
+    assert [i for i in p.issues if not i.startswith("FORMULA_TEMPLATE")] == []
 
 
 @pytest.mark.parametrize("quote, code", [

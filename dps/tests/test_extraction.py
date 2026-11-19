@@ -7,7 +7,7 @@ from pypdf import PdfWriter
 
 from dps.extraction.agreement import Term, _Doc, _quote, _threshold, extract_terms
 from dps.extraction.mapping import normalize
-from dps.extraction.validation import FAILED, NEEDS_REVIEW, PUBLISH, check_conflicts, validate
+from dps.extraction.validation import FAILED, NEEDS_REVIEW, check_conflicts, validate
 from dps.integrations.core import CoreMaster
 from dps.parse.engine import HeavyEngine, Page, ParseError, ParserEngine, needs_heavy, page_runs, text_quality
 
@@ -140,13 +140,20 @@ def test_validate_routes_and_flags_issues():
     assert route == NEEDS_REVIEW
     by = {p.metric_raw: p for p in props}
     assert by["DSCR"].issues == []
-    assert by["DEBT_TO_NET_WORTH"].issues == ["FORMULA_INVALID: unknown measure"]
+    assert real(by["DEBT_TO_NET_WORTH"].issues) == ["FORMULA_INVALID: unknown measure"]
     assert by["CURRENT_RATIO"].issues == ["LOW_CONFIDENCE"]
 
 
-def test_validate_publish_failed_and_empty():
+def real(issues: list[str]) -> list[str]:
+    """The issues besides FORMULA_TEMPLATE (every DPS-template formula carries it since the full review, F5)."""
+    return [i for i in issues if not i.startswith("FORMULA_TEMPLATE")]
+
+
+def test_validate_never_publishes_failed_and_empty():
     props = normalize([t for t in extract_terms(AGREEMENT) if t.metric == "DSCR"], MASTERS)
-    assert validate(AGREEMENT, props, lambda e: [], 0.8) == PUBLISH
+    # a clean proposal still waits for a person (F5): only a review publishes
+    assert validate(AGREEMENT, props, lambda e: [], 0.8) == NEEDS_REVIEW
+    assert all(not p.issues for p in props)
     assert validate([Page(1, " ", "NONE", 0.0)], [], lambda e: [], 0.8) == FAILED
     assert validate(AGREEMENT, [], lambda e: [], 0.8) == NEEDS_REVIEW
 
@@ -189,8 +196,8 @@ def test_operator_against_the_metric_direction_needs_review():
         Term("DSCR", "FINANCIAL", ">=", 1.25, None, None, 1, "Required threshold: >= 1.25x.", None, 0.95),
     ], MASTERS)
     assert validate(AGREEMENT, [floor, ceiling], lambda e: [], 0.8) == NEEDS_REVIEW
-    assert floor.issues == ["OPERATOR_UNEXPECTED: usually a minimum (>=)"]
-    assert ceiling.issues == ["OPERATOR_UNEXPECTED: usually a maximum (<=)"]
+    assert real(floor.issues) == ["OPERATOR_UNEXPECTED: usually a minimum (>=)"]
+    assert real(ceiling.issues) == ["OPERATOR_UNEXPECTED: usually a maximum (<=)"]
     validate(AGREEMENT, [fine], lambda e: [], 0.8)
     assert fine.issues == []
 
@@ -326,7 +333,7 @@ def test_golden_agreement_parses_to_publishable_proposals():
     pages = ParserEngine().parse((GOLDEN / "AGR-001.pdf").read_bytes())
     assert all(p.method == "TEXT" for p in pages[:-1])
     props = normalize(extract_terms(pages), MASTERS)
-    assert validate(pages, props, lambda e: [], 0.8) == PUBLISH
+    assert validate(pages, props, lambda e: [], 0.8) == NEEDS_REVIEW  # clean, and still for a person (F5)
     assert {p.metric_raw for p in props} >= {"DSCR", "ICR", "DEBT_TO_EBITDA", "EBITDA_TO_EMI", "NEGATIVE_PLEDGE"}
 
 
@@ -354,7 +361,8 @@ def test_info_facts_dates_cure_ltm_and_steps():
     props = {p.metric_raw: p for p in normalize(list(facts.values()), MASTERS)}
     assert props["MATURITY_DATE"].expression == "2028-10-30" and props["MATURITY_DATE"].name == "Maturity date"
     assert props["CURE_PERIOD_DAYS"].expression == "30 days"
-    assert validate(pages, list(props.values()), lambda e: ["never called for INFO"], 0.5) == PUBLISH
+    assert validate(pages, list(props.values()), lambda e: ["never called for INFO"], 0.5) == NEEDS_REVIEW
+    assert all(not p.issues for p in props.values())  # INFO terms: no formula checked
 
 
 def test_statement_units_and_debt_found_by_the_golden_set():
