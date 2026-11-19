@@ -70,6 +70,8 @@ The folders `storage\` (the uploaded files) and `derived\` (what DPS makes from 
 
 ## 2. The picture in one minute
 
+> **For you:** to explain the whole flow in one picture, open [`diagrams/dps-full-flow.html`](diagrams/dps-full-flow.html). It has 9 stages from upload to review, and every box shows its file:line. Use the view buttons to step through the stages.
+
 **Show:** browser tab 1, the architecture diagram at the top of `dps-complete.html`.
 
 **Say:**
@@ -206,7 +208,7 @@ Point at section 1 (the `dps_job` row with the type, status and context Spring s
 **Inside**, in order:
 1. **The Flow.** The worker starts one CrewAI Flow for this job: [`dps/src/dps/flows/skill_job.py:27`](../../dps/src/dps/flows/skill_job.py#L27) `SkillJobFlow`. This is the architect's "own context per job", and it saves its state after each step.
 2. **The entry point.** [`dps/src/dps/skills/runner.py:611`](../../dps/src/dps/skills/runner.py#L611) `run_onboard`.
-3. **Classify (AI 1 on the board).** [`dps/src/dps/analyze/classify.py:291`](../../dps/src/dps/analyze/classify.py#L291) scores the first pages for each document type with rules. Words like "Credit Agreement", "the Borrower" or "Events of Default" point to a loan agreement. If the score is clear, that is the type. If not, the Document Agent gives a second opinion and must quote the lines that prove it.
+3. **Classify (AI 1 on the board).** [`dps/src/dps/analyze/classify.py:294`](../../dps/src/dps/analyze/classify.py#L294) scores the first pages for each document type with rules. Words like "Credit Agreement", "the Borrower" or "Events of Default" point to a loan agreement. If the score is clear, that is the type. If not, the Document Agent gives a second opinion and must quote the lines that prove it.
 4. **Pick the skill.** [`dps/src/dps/skills/runner.py:608`](../../dps/src/dps/skills/runner.py#L608) `ONBOARD_PACKS` maps the type to a skill pack:
    - loan agreement → `covenants`;
    - sanction letter → `sanction`;

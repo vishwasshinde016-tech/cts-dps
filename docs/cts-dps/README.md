@@ -11,6 +11,7 @@ component inside the bank's Spring app.
 | [install-and-demo.md](install-and-demo.md) | **Start here on a new laptop:** install, check, one-command demo, run the service, what to read |
 | [demo-walkthrough.md](demo-walkthrough.md) | **Read this while you demo:** upload real documents and follow each one through every step: what to type, what DPS does inside, where the file and data are now, how to show it, what to say (onboarding, amendment, assessment) |
 | [presenter-guide.md](presenter-guide.md) | **Read while explaining the code:** boards to code, step-by-step flow with file:line, agent, skills, tools, Java wrap, DB, IDs, schemas, logs, demo, code excerpts |
+| [diagrams/dps-full-flow.html](diagrams/dps-full-flow.html) | **The full flow in one diagram (open in a browser):** upload, queue, extraction, type detection, skill choice, rules, agent and tools, checks, result. Every box shows its file:line and opens the code |
 | [diagrams/dps-complete.html](diagrams/dps-complete.html) | **The whole DPS on one page (open in a browser):** 4 diagrams with steps, every table, file:line references and real code excerpts |
 | [sample-run-AGR-001.txt](sample-run-AGR-001.txt) | A run log of the demo: every DPS function entered, with file and line, plus the log lines |
 | [CTS-DPS-overview-for-teams.md](CTS-DPS-overview-for-teams.md) | Short overview for the other teams |

@@ -1,0 +1,1388 @@
+{
+ "schema_version": 2,
+ "diagram_type": "workflow",
+ "meta": {
+  "title": "CTS DPS full flow: upload, extraction, type detection, skills, agent, checks, result",
+  "output": "docs/cts-dps/diagrams/dps-full-flow.html",
+  "locale": "en",
+  "quality_profile": "showcase",
+  "repository": {
+   "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
+   "provider": "github",
+   "link_mode": "web",
+   "revision": "0ef3af47ed04127870e3300baa9b07be72f8b9a4"
+  },
+  "views": [
+   {
+    "id": "v1",
+    "label": "1-2 Submit and queue",
+    "focus": [
+     "spring",
+     "submit",
+     "validate",
+     "dup",
+     "create",
+     "runonce",
+     "claim",
+     "lease",
+     "route"
+    ],
+    "note": "1 · Spring sends the job (api/jobs.py) / 2 · Queue + Python worker (jobs.py, worker.py)"
+   },
+   {
+    "id": "v2",
+    "label": "3 Extraction",
+    "focus": [
+     "read",
+     "inspect",
+     "sandbox",
+     "build",
+     "engine",
+     "derived"
+    ],
+    "note": "3 · Extraction: file to page model (ingest/, parse/)"
+   },
+   {
+    "id": "v3",
+    "label": "4-5 Detect type, pick skill",
+    "focus": [
+     "flow",
+     "signals",
+     "sure",
+     "aiclass",
+     "classify",
+     "identify",
+     "packs",
+     "pack",
+     "prompt_md",
+     "extract"
+    ],
+    "note": "4 · Detect the document type (flows/, analyze/) / 5 · Pick the skill (skills/runner.py, pack.yaml)"
+   },
+   {
+    "id": "v4",
+    "label": "6-7 Rules, pages, agent",
+    "focus": [
+     "rules",
+     "duty",
+     "batches",
+     "parts",
+     "promptfor",
+     "agent",
+     "tools",
+     "java",
+     "gateway",
+     "azure"
+    ],
+    "note": "6 · Rules first, then the pages (skills/covenants/) / 7 · Document Agent, tools, gateway (agent/)"
+   },
+   {
+    "id": "v5",
+    "label": "8-9 Checks and result",
+    "focus": [
+     "schema",
+     "grounded",
+     "numbers",
+     "vote",
+     "ledger",
+     "score",
+     "finish",
+     "event",
+     "pull",
+     "review",
+     "decide"
+    ],
+    "note": "8 · Check every answer (skills/, ledger, Spring) / 9 · Result and review (runner.py, feed.py, api/)"
+   }
+  ]
+ },
+ "lanes": [
+  {
+   "id": "l1",
+   "label": "1 · Spring sends the job (api/jobs.py)"
+  },
+  {
+   "id": "l2",
+   "label": "2 · Queue + Python worker (jobs.py, worker.py)"
+  },
+  {
+   "id": "l3",
+   "label": "3 · Extraction: file to page model (ingest/, parse/)"
+  },
+  {
+   "id": "l4",
+   "label": "4 · Detect the document type (flows/, analyze/)"
+  },
+  {
+   "id": "l5",
+   "label": "5 · Pick the skill (skills/runner.py, pack.yaml)"
+  },
+  {
+   "id": "l6",
+   "label": "6 · Rules first, then the pages (skills/covenants/)"
+  },
+  {
+   "id": "l7",
+   "label": "7 · Document Agent, tools, gateway (agent/)"
+  },
+  {
+   "id": "l8",
+   "label": "8 · Check every answer (skills/, ledger, Spring)"
+  },
+  {
+   "id": "l9",
+   "label": "9 · Result and review (runner.py, feed.py, api/)"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "spring",
+   "lane": "l1",
+   "col": 0,
+   "type": "external",
+   "label": "Spring app",
+   "sublabel": "POST /dps/v1/jobs",
+   "sources": [
+    {
+     "path": "contracts/dps-jobs-api.yaml",
+     "line": 32,
+     "label": "job API contract"
+    }
+   ]
+  },
+  {
+   "id": "submit",
+   "lane": "l1",
+   "col": 1,
+   "type": "backend",
+   "label": "submit_job",
+   "sublabel": "api/jobs.py:312",
+   "sources": [
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 311,
+     "label": "submit_job: POST /dps/v1/jobs",
+     "end_line": 348
+    },
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 114,
+     "label": "JobRequest: what Spring sends",
+     "end_line": 119
+    }
+   ]
+  },
+  {
+   "id": "validate",
+   "lane": "l1",
+   "col": 2,
+   "type": "security",
+   "label": "validate_job",
+   "sublabel": "api/jobs.py:166 · SHA-256",
+   "sources": [
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 166,
+     "label": "validate_job: fields + file SHA-256",
+     "end_line": 217
+    }
+   ]
+  },
+  {
+   "id": "dup",
+   "lane": "l1",
+   "col": 3,
+   "type": "backend",
+   "label": "Already in DPS?",
+   "sublabel": "_input_key · api/jobs.py:268",
+   "sources": [
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 268,
+     "label": "_input_key: duplicate key",
+     "end_line": 278
+    }
+   ]
+  },
+  {
+   "id": "create",
+   "lane": "l1",
+   "col": 4,
+   "type": "database",
+   "label": "create_job",
+   "sublabel": "api/jobs.py:240 · dps_job",
+   "sources": [
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 240,
+     "label": "create_job: dps_job row + event",
+     "end_line": 261
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 128,
+     "label": "Job table (dps_job)",
+     "end_line": 178
+    }
+   ]
+  },
+  {
+   "id": "runonce",
+   "lane": "l2",
+   "col": 4,
+   "type": "backend",
+   "label": "Worker.run_once",
+   "sublabel": "worker.py:131 · every 2 s",
+   "sources": [
+    {
+     "path": "dps/src/dps/worker.py",
+     "line": 131,
+     "label": "run_once: poll the queue",
+     "end_line": 147
+    }
+   ]
+  },
+  {
+   "id": "claim",
+   "lane": "l2",
+   "col": 3,
+   "type": "database",
+   "label": "claim (atomic)",
+   "sublabel": "jobs.py:85",
+   "sources": [
+    {
+     "path": "dps/src/dps/jobs.py",
+     "line": 85,
+     "label": "claim: compare-and-set",
+     "end_line": 129
+    }
+   ]
+  },
+  {
+   "id": "lease",
+   "lane": "l2",
+   "col": 2,
+   "type": "security",
+   "label": "lease + attempt fence",
+   "sublabel": "jobs.py:162 · :54",
+   "sources": [
+    {
+     "path": "dps/src/dps/jobs.py",
+     "line": 162,
+     "label": "renew_lease: heartbeat",
+     "end_line": 176
+    },
+    {
+     "path": "dps/src/dps/jobs.py",
+     "line": 54,
+     "label": "guard_attempt: stale worker blocked",
+     "end_line": 70
+    }
+   ]
+  },
+  {
+   "id": "route",
+   "lane": "l2",
+   "col": 1,
+   "type": "backend",
+   "label": "_run: route by flow",
+   "sublabel": "worker.py:211",
+   "sources": [
+    {
+     "path": "dps/src/dps/worker.py",
+     "line": 211,
+     "label": "_run: route by flow",
+     "end_line": 270
+    },
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 38,
+     "label": "JOB_TYPES: job type to flow",
+     "end_line": 49
+    }
+   ]
+  },
+  {
+   "id": "read",
+   "lane": "l3",
+   "col": 0,
+   "type": "backend",
+   "label": "read + SHA-256",
+   "sublabel": "ingest/pipeline.py:48",
+   "sources": [
+    {
+     "path": "dps/src/dps/worker.py",
+     "line": 330,
+     "label": "_ingest",
+     "end_line": 359
+    },
+    {
+     "path": "dps/src/dps/ingest/pipeline.py",
+     "line": 48,
+     "label": "read: DMS version + hash",
+     "end_line": 54
+    }
+   ]
+  },
+  {
+   "id": "inspect",
+   "lane": "l3",
+   "col": 1,
+   "type": "security",
+   "label": "inspect file",
+   "sublabel": "ingest/inspect.py:63",
+   "sources": [
+    {
+     "path": "dps/src/dps/ingest/inspect.py",
+     "line": 63,
+     "label": "inspect: real type, encrypted, macros, zip bombs",
+     "end_line": 69
+    }
+   ]
+  },
+  {
+   "id": "sandbox",
+   "lane": "l3",
+   "col": 2,
+   "type": "security",
+   "label": "sandbox parse",
+   "sublabel": "parse/sandbox.py:157",
+   "sources": [
+    {
+     "path": "dps/src/dps/parse/sandbox.py",
+     "line": 157,
+     "label": "run: child process, no network",
+     "end_line": 186
+    }
+   ]
+  },
+  {
+   "id": "build",
+   "lane": "l3",
+   "col": 3,
+   "type": "backend",
+   "label": "page_model.build",
+   "sublabel": "parse/page_model.py:30",
+   "sources": [
+    {
+     "path": "dps/src/dps/parse/page_model.py",
+     "line": 30,
+     "label": "build: PDF / Excel / Word / CSV",
+     "end_line": 48
+    },
+    {
+     "path": "dps/src/dps/parse/segment.py",
+     "line": 46,
+     "label": "segment: split bundles",
+     "end_line": 66
+    }
+   ]
+  },
+  {
+   "id": "engine",
+   "lane": "l3",
+   "col": 4,
+   "type": "backend",
+   "label": "pypdf, pdfplumber, RapidOCR",
+   "sublabel": "parse/engine.py:127 · :71",
+   "sources": [
+    {
+     "path": "dps/src/dps/parse/engine.py",
+     "line": 127,
+     "label": "ParserEngine: text + positions",
+     "end_line": 164
+    },
+    {
+     "path": "dps/src/dps/parse/engine.py",
+     "line": 71,
+     "label": "RapidOcrBackend: local OCR",
+     "end_line": 124
+    },
+    {
+     "path": "dps/src/dps/parse/engine.py",
+     "line": 207,
+     "label": "HeavyEngine: Docling",
+     "end_line": 231
+    }
+   ]
+  },
+  {
+   "id": "derived",
+   "lane": "l3",
+   "col": 5,
+   "type": "database",
+   "label": "page model saved",
+   "sublabel": "derived/ · dps_artifact",
+   "sources": [
+    {
+     "path": "dps/src/dps/ingest/pipeline.py",
+     "line": 56,
+     "label": "page_model: write once, reuse",
+     "end_line": 84
+    }
+   ]
+  },
+  {
+   "id": "flow",
+   "lane": "l4",
+   "col": 5,
+   "type": "backend",
+   "label": "SkillJobFlow (CrewAI)",
+   "sublabel": "flows/skill_job.py:27",
+   "sources": [
+    {
+     "path": "dps/src/dps/flows/skill_job.py",
+     "line": 27,
+     "label": "SkillJobFlow: one Flow per job",
+     "end_line": 49
+    }
+   ]
+  },
+  {
+   "id": "signals",
+   "lane": "l4",
+   "col": 4,
+   "type": "backend",
+   "label": "rule_scores",
+   "sublabel": "analyze/classify.py:134",
+   "sources": [
+    {
+     "path": "dps/src/dps/analyze/classify.py",
+     "line": 25,
+     "label": "SIGNALS: phrases per type",
+     "end_line": 90
+    },
+    {
+     "path": "dps/src/dps/analyze/classify.py",
+     "line": 134,
+     "label": "rule_scores: first 2 pages",
+     "end_line": 164
+    }
+   ]
+  },
+  {
+   "id": "sure",
+   "lane": "l4",
+   "col": 3,
+   "type": "backend",
+   "label": "Rules sure?",
+   "sublabel": "decide_rules · classify.py:193",
+   "sources": [
+    {
+     "path": "dps/src/dps/analyze/classify.py",
+     "line": 193,
+     "label": "decide_rules: score >= 0.8, lead >= 0.3",
+     "end_line": 198
+    },
+    {
+     "path": "dps/src/dps/analyze/classify.py",
+     "line": 20,
+     "label": "DECIDE_SCORE, DECIDE_LEAD"
+    }
+   ]
+  },
+  {
+   "id": "aiclass",
+   "lane": "l4",
+   "col": 2,
+   "type": "backend",
+   "label": "Agent second opinion",
+   "sublabel": "model_classify · classify.py:238",
+   "sources": [
+    {
+     "path": "dps/src/dps/analyze/classify.py",
+     "line": 238,
+     "label": "model_classify: agent with quotes",
+     "end_line": 259
+    },
+    {
+     "path": "dps/src/dps/analyze/classify.py",
+     "line": 229,
+     "label": "grounded: quotes on page",
+     "end_line": 235
+    }
+   ]
+  },
+  {
+   "id": "classify",
+   "lane": "l4",
+   "col": 1,
+   "type": "backend",
+   "label": "classify: type found",
+   "sublabel": "analyze/classify.py:294",
+   "sources": [
+    {
+     "path": "dps/src/dps/analyze/classify.py",
+     "line": 294,
+     "label": "classify: entry, TYPE_MISMATCH",
+     "end_line": 334
+    }
+   ]
+  },
+  {
+   "id": "identify",
+   "lane": "l4",
+   "col": 0,
+   "type": "backend",
+   "label": "identify + match IDs",
+   "sublabel": "analyze/identify.py:153",
+   "sources": [
+    {
+     "path": "dps/src/dps/analyze/identify.py",
+     "line": 153,
+     "label": "find_identifiers: PAN, CIN, account, period",
+     "end_line": 214
+    },
+    {
+     "path": "dps/src/dps/analyze/identify.py",
+     "line": 271,
+     "label": "match: check IDs in Spring",
+     "end_line": 290
+    }
+   ]
+  },
+  {
+   "id": "packs",
+   "lane": "l5",
+   "col": 0,
+   "type": "backend",
+   "label": "ONBOARD_PACKS",
+   "sublabel": "skills/runner.py:608",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 608,
+     "label": "type to skill pack"
+    },
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 611,
+     "label": "run_onboard",
+     "end_line": 661
+    },
+    {
+     "path": "dps/src/dps/skills/__init__.py",
+     "line": 80,
+     "label": "for_job_type: other job types",
+     "end_line": 85
+    }
+   ]
+  },
+  {
+   "id": "pack",
+   "lane": "l5",
+   "col": 1,
+   "type": "backend",
+   "label": "skill pack",
+   "sublabel": "skills/covenants/pack.yaml",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/covenants/pack.yaml",
+     "line": 1,
+     "label": "tools, pages, limits, risk",
+     "end_line": 17
+    }
+   ]
+  },
+  {
+   "id": "prompt_md",
+   "lane": "l5",
+   "col": 2,
+   "type": "backend",
+   "label": "prompt.md + schema.json",
+   "sublabel": "skills/covenants/",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/covenants/schema.json",
+     "line": 1,
+     "label": "answer schema the agent must return"
+    }
+   ]
+  },
+  {
+   "id": "extract",
+   "lane": "l5",
+   "col": 3,
+   "type": "backend",
+   "label": "_extract: the order",
+   "sublabel": "skills/runner.py:391",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 391,
+     "label": "_extract: whole extraction order",
+     "end_line": 520
+    },
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 313,
+     "label": "run: budget, score, checks",
+     "end_line": 382
+    }
+   ]
+  },
+  {
+   "id": "rules",
+   "lane": "l6",
+   "col": 3,
+   "type": "backend",
+   "label": "rules (no AI)",
+   "sublabel": "skills/covenants/rules.py:61",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/covenants/rules.py",
+     "line": 61,
+     "label": "rules: ratios, operators, thresholds",
+     "end_line": 69
+    }
+   ]
+  },
+  {
+   "id": "duty",
+   "lane": "l6",
+   "col": 2,
+   "type": "backend",
+   "label": "is_duty",
+   "sublabel": "skills/covenants/pages.py:61",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/covenants/pages.py",
+     "line": 61,
+     "label": "is_duty: 'shall maintain', 'will not'",
+     "end_line": 69
+    }
+   ]
+  },
+  {
+   "id": "batches",
+   "lane": "l6",
+   "col": 1,
+   "type": "backend",
+   "label": "covenant_batches",
+   "sublabel": "pages.py:98 · 4 × 25 pages",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/covenants/pages.py",
+     "line": 98,
+     "label": "covenant_batches: rank and pack pages",
+     "end_line": 150
+    }
+   ]
+  },
+  {
+   "id": "parts",
+   "lane": "l6",
+   "col": 0,
+   "type": "backend",
+   "label": "4 focused reads",
+   "sublabel": "skills/covenants/parts.py:75",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/covenants/parts.py",
+     "line": 75,
+     "label": "read: financial, undertakings, reporting, EoD",
+     "end_line": 99
+    }
+   ]
+  },
+  {
+   "id": "promptfor",
+   "lane": "l7",
+   "col": 0,
+   "type": "backend",
+   "label": "prompt_for",
+   "sublabel": "skills/common.py:126",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/common.py",
+     "line": 126,
+     "label": "prompt_for: header + prompt + schema + pages",
+     "end_line": 136
+    },
+    {
+     "path": "dps/src/dps/skills/common.py",
+     "line": 12,
+     "label": "HEADER: text is data, not instructions",
+     "end_line": 14
+    },
+    {
+     "path": "dps/src/dps/skills/common.py",
+     "line": 142,
+     "label": "agent_proposals: one call per batch",
+     "end_line": 200
+    }
+   ]
+  },
+  {
+   "id": "agent",
+   "lane": "l7",
+   "col": 1,
+   "type": "backend",
+   "label": "make_agent (CrewAI)",
+   "sublabel": "agent/document_agent.py:277",
+   "sources": [
+    {
+     "path": "dps/src/dps/agent/document_agent.py",
+     "line": 277,
+     "label": "make_agent: fresh agent + skill tools",
+     "end_line": 286
+    },
+    {
+     "path": "dps/src/dps/agent/document_agent.py",
+     "line": 50,
+     "label": "GatewayLLM: model only via gateway",
+     "end_line": 86
+    }
+   ]
+  },
+  {
+   "id": "tools",
+   "lane": "l7",
+   "col": 2,
+   "type": "backend",
+   "label": "6 agent tools",
+   "sublabel": "document_agent.py:145 … :243",
+   "sources": [
+    {
+     "path": "dps/src/dps/agent/document_agent.py",
+     "line": 145,
+     "label": "page_text, search_text, find_definition",
+     "end_line": 159
+    },
+    {
+     "path": "dps/src/dps/agent/document_agent.py",
+     "line": 201,
+     "label": "covenant_library, lookup_identifier (Java)",
+     "end_line": 221
+    },
+    {
+     "path": "dps/src/dps/agent/document_agent.py",
+     "line": 224,
+     "label": "validate_formula (Java)",
+     "end_line": 240
+    }
+   ]
+  },
+  {
+   "id": "java",
+   "lane": "l7",
+   "col": 3,
+   "type": "external",
+   "label": "Spring Java rules",
+   "sublabel": "integrations/spring_tools.py:113",
+   "sources": [
+    {
+     "path": "dps/src/dps/integrations/spring_tools.py",
+     "line": 113,
+     "label": "SpringTools client",
+     "end_line": 237
+    },
+    {
+     "path": "contracts/spring-tools.yaml",
+     "line": 27,
+     "label": "tools contract"
+    }
+   ]
+  },
+  {
+   "id": "gateway",
+   "lane": "l7",
+   "col": 4,
+   "type": "security",
+   "label": "Gateway.call_json",
+   "sublabel": "agent/gateway.py:242",
+   "sources": [
+    {
+     "path": "dps/src/dps/agent/gateway.py",
+     "line": 242,
+     "label": "call_json: route, retries, breaker",
+     "end_line": 257
+    },
+    {
+     "path": "dps/src/dps/agent/gateway.py",
+     "line": 126,
+     "label": "JobBudget: tokens",
+     "end_line": 130
+    },
+    {
+     "path": "dps/src/dps/agent/guard.py",
+     "line": 144,
+     "label": "guarded: hosts, masking, call log",
+     "end_line": 169
+    }
+   ]
+  },
+  {
+   "id": "azure",
+   "lane": "l7",
+   "col": 5,
+   "type": "cloud",
+   "label": "Bank Azure OpenAI",
+   "sublabel": "selected pages only",
+   "sources": [
+    {
+     "path": "dps/src/dps/agent/gateway.py",
+     "line": 150,
+     "label": "Gateway: routes small / strong / vision",
+     "end_line": 283
+    }
+   ]
+  },
+  {
+   "id": "schema",
+   "lane": "l8",
+   "col": 5,
+   "type": "security",
+   "label": "schema check, 1 repair",
+   "sublabel": "agent/document_agent.py:293",
+   "sources": [
+    {
+     "path": "dps/src/dps/agent/document_agent.py",
+     "line": 293,
+     "label": "read: schema + one repair",
+     "end_line": 318
+    }
+   ]
+  },
+  {
+   "id": "grounded",
+   "lane": "l8",
+   "col": 4,
+   "type": "security",
+   "label": "Quote on the page?",
+   "sublabel": "skills/common.py:53",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/common.py",
+     "line": 53,
+     "label": "grounded: drop if not on page",
+     "end_line": 69
+    }
+   ]
+  },
+  {
+   "id": "numbers",
+   "lane": "l8",
+   "col": 3,
+   "type": "security",
+   "label": "number in quote",
+   "sublabel": "skills/runner.py:64",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 64,
+     "label": "check_numbers",
+     "end_line": 83
+    }
+   ]
+  },
+  {
+   "id": "vote",
+   "lane": "l8",
+   "col": 2,
+   "type": "backend",
+   "label": "rules vs agent vote",
+   "sublabel": "skills/runner.py:223",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 223,
+     "label": "_vote_covenants",
+     "end_line": 249
+    },
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 163,
+     "label": "_agent_only: review",
+     "end_line": 194
+    }
+   ]
+  },
+  {
+   "id": "ledger",
+   "lane": "l8",
+   "col": 1,
+   "type": "backend",
+   "label": "ledger: every duty",
+   "sublabel": "covenants/ledger.py:146",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/covenants/ledger.py",
+     "line": 121,
+     "label": "candidates: every duty sentence",
+     "end_line": 143
+    },
+    {
+     "path": "dps/src/dps/skills/covenants/ledger.py",
+     "line": 146,
+     "label": "settle: one state each",
+     "end_line": 183
+    },
+    {
+     "path": "dps/src/dps/skills/covenants/omissions.py",
+     "line": 82,
+     "label": "second read of unresolved sentences",
+     "end_line": 139
+    }
+   ]
+  },
+  {
+   "id": "score",
+   "lane": "l8",
+   "col": 0,
+   "type": "backend",
+   "label": "Java check, code, score",
+   "sublabel": "codes.py:34 · scoring:211",
+   "sources": [
+    {
+     "path": "dps/src/dps/integrations/spring_tools.py",
+     "line": 151,
+     "label": "validate_formulas: batched (runner.py:116)",
+     "end_line": 161
+    },
+    {
+     "path": "dps/src/dps/skills/covenants/codes.py",
+     "line": 34,
+     "label": "stamp: taxonomy code",
+     "end_line": 75
+    },
+    {
+     "path": "dps/src/dps/scoring/__init__.py",
+     "line": 211,
+     "label": "Scorer: confidence + route",
+     "end_line": 236
+    }
+   ]
+  },
+  {
+   "id": "finish",
+   "lane": "l9",
+   "col": 0,
+   "type": "database",
+   "label": "finish: dps_run",
+   "sublabel": "skills/runner.py:557",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 557,
+     "label": "finish: save dps.result/1.0",
+     "end_line": 563
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 267,
+     "label": "Run table (dps_run)",
+     "end_line": 281
+    }
+   ]
+  },
+  {
+   "id": "event",
+   "lane": "l9",
+   "col": 1,
+   "type": "messagebus",
+   "label": "event needs_review",
+   "sublabel": "feed.py:39",
+   "sources": [
+    {
+     "path": "dps/src/dps/feed.py",
+     "line": 39,
+     "label": "emit_for_job: same transaction",
+     "end_line": 41
+    }
+   ]
+  },
+  {
+   "id": "pull",
+   "lane": "l9",
+   "col": 2,
+   "type": "external",
+   "label": "Spring pulls result",
+   "sublabel": "api/jobs.py:352",
+   "sources": [
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 351,
+     "label": "job_result: GET /jobs/{id}/result",
+     "end_line": 368
+    },
+    {
+     "path": "contracts/schemas/result.json",
+     "line": 82,
+     "label": "result field shape"
+    }
+   ]
+  },
+  {
+   "id": "review",
+   "lane": "l9",
+   "col": 3,
+   "type": "external",
+   "label": "Person reviews",
+   "sublabel": "api/review.py:141 · new run",
+   "sources": [
+    {
+     "path": "dps/src/dps/api/review.py",
+     "line": 140,
+     "label": "submit_review: accept / edit / reject",
+     "end_line": 195
+    }
+   ]
+  },
+  {
+   "id": "decide",
+   "lane": "l9",
+   "col": 4,
+   "type": "external",
+   "label": "Spring decides compliance",
+   "sublabel": "never DPS"
+  }
+ ],
+ "edges": [
+  {
+   "id": "spring-submit",
+   "from": "spring",
+   "to": "submit",
+   "variant": "emphasis"
+  },
+  {
+   "id": "submit-validate",
+   "from": "submit",
+   "to": "validate",
+   "variant": "emphasis"
+  },
+  {
+   "id": "validate-dup",
+   "from": "validate",
+   "to": "dup",
+   "variant": "emphasis"
+  },
+  {
+   "id": "dup-create",
+   "from": "dup",
+   "to": "create",
+   "variant": "emphasis",
+   "label": "no"
+  },
+  {
+   "id": "dup-spring",
+   "from": "dup",
+   "to": "spring",
+   "variant": "dashed",
+   "label": "yes: same job",
+   "role": "return"
+  },
+  {
+   "id": "create-runonce",
+   "from": "create",
+   "to": "runonce",
+   "variant": "emphasis",
+   "label": "QUEUED"
+  },
+  {
+   "id": "runonce-claim",
+   "from": "runonce",
+   "to": "claim",
+   "variant": "emphasis"
+  },
+  {
+   "id": "claim-lease",
+   "from": "claim",
+   "to": "lease",
+   "variant": "emphasis"
+  },
+  {
+   "id": "lease-route",
+   "from": "lease",
+   "to": "route",
+   "variant": "emphasis"
+  },
+  {
+   "id": "route-read",
+   "from": "route",
+   "to": "read",
+   "variant": "emphasis"
+  },
+  {
+   "id": "read-inspect",
+   "from": "read",
+   "to": "inspect",
+   "variant": "emphasis"
+  },
+  {
+   "id": "inspect-sandbox",
+   "from": "inspect",
+   "to": "sandbox",
+   "variant": "emphasis",
+   "label": "safe"
+  },
+  {
+   "id": "sandbox-build",
+   "from": "sandbox",
+   "to": "build",
+   "variant": "emphasis"
+  },
+  {
+   "id": "build-engine",
+   "from": "build",
+   "to": "engine",
+   "variant": "emphasis"
+  },
+  {
+   "id": "engine-derived",
+   "from": "engine",
+   "to": "derived",
+   "variant": "emphasis"
+  },
+  {
+   "id": "derived-flow",
+   "from": "derived",
+   "to": "flow",
+   "variant": "emphasis"
+  },
+  {
+   "id": "flow-signals",
+   "from": "flow",
+   "to": "signals",
+   "variant": "emphasis"
+  },
+  {
+   "id": "signals-sure",
+   "from": "signals",
+   "to": "sure",
+   "variant": "emphasis"
+  },
+  {
+   "id": "sure-aiclass",
+   "from": "sure",
+   "to": "aiclass",
+   "variant": "default",
+   "label": "no"
+  },
+  {
+   "id": "aiclass-classify",
+   "from": "aiclass",
+   "to": "classify",
+   "variant": "default"
+  },
+  {
+   "id": "sure-classify",
+   "from": "sure",
+   "to": "classify",
+   "variant": "emphasis",
+   "label": "yes",
+   "role": "branch"
+  },
+  {
+   "id": "classify-identify",
+   "from": "classify",
+   "to": "identify",
+   "variant": "emphasis"
+  },
+  {
+   "id": "identify-packs",
+   "from": "identify",
+   "to": "packs",
+   "variant": "emphasis"
+  },
+  {
+   "id": "packs-pack",
+   "from": "packs",
+   "to": "pack",
+   "variant": "emphasis"
+  },
+  {
+   "id": "pack-prompt_md",
+   "from": "pack",
+   "to": "prompt_md",
+   "variant": "emphasis"
+  },
+  {
+   "id": "prompt_md-extract",
+   "from": "prompt_md",
+   "to": "extract",
+   "variant": "emphasis"
+  },
+  {
+   "id": "extract-rules",
+   "from": "extract",
+   "to": "rules",
+   "variant": "emphasis"
+  },
+  {
+   "id": "rules-duty",
+   "from": "rules",
+   "to": "duty",
+   "variant": "emphasis"
+  },
+  {
+   "id": "duty-batches",
+   "from": "duty",
+   "to": "batches",
+   "variant": "emphasis"
+  },
+  {
+   "id": "batches-parts",
+   "from": "batches",
+   "to": "parts",
+   "variant": "emphasis"
+  },
+  {
+   "id": "parts-promptfor",
+   "from": "parts",
+   "to": "promptfor",
+   "variant": "emphasis"
+  },
+  {
+   "id": "promptfor-agent",
+   "from": "promptfor",
+   "to": "agent",
+   "variant": "emphasis"
+  },
+  {
+   "id": "agent-tools",
+   "from": "agent",
+   "to": "tools",
+   "variant": "default",
+   "label": "uses"
+  },
+  {
+   "id": "tools-java",
+   "from": "tools",
+   "to": "java",
+   "variant": "dashed",
+   "label": "HTTP batch"
+  },
+  {
+   "id": "agent-gateway",
+   "from": "agent",
+   "to": "gateway",
+   "variant": "emphasis",
+   "label": "model call",
+   "role": "branch"
+  },
+  {
+   "id": "gateway-azure",
+   "from": "gateway",
+   "to": "azure",
+   "variant": "security",
+   "label": "HTTPS"
+  },
+  {
+   "id": "azure-schema",
+   "from": "azure",
+   "to": "schema",
+   "variant": "emphasis",
+   "label": "answer"
+  },
+  {
+   "id": "schema-grounded",
+   "from": "schema",
+   "to": "grounded",
+   "variant": "emphasis"
+  },
+  {
+   "id": "grounded-numbers",
+   "from": "grounded",
+   "to": "numbers",
+   "variant": "emphasis",
+   "label": "yes"
+  },
+  {
+   "id": "numbers-vote",
+   "from": "numbers",
+   "to": "vote",
+   "variant": "emphasis"
+  },
+  {
+   "id": "vote-ledger",
+   "from": "vote",
+   "to": "ledger",
+   "variant": "emphasis"
+  },
+  {
+   "id": "ledger-score",
+   "from": "ledger",
+   "to": "score",
+   "variant": "emphasis"
+  },
+  {
+   "id": "score-finish",
+   "from": "score",
+   "to": "finish",
+   "variant": "emphasis"
+  },
+  {
+   "id": "finish-event",
+   "from": "finish",
+   "to": "event",
+   "variant": "emphasis"
+  },
+  {
+   "id": "event-pull",
+   "from": "event",
+   "to": "pull",
+   "variant": "emphasis"
+  },
+  {
+   "id": "pull-review",
+   "from": "pull",
+   "to": "review",
+   "variant": "emphasis"
+  },
+  {
+   "id": "review-decide",
+   "from": "review",
+   "to": "decide",
+   "variant": "emphasis"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "How the type is detected (analyze/classify.py)",
+   "items": [
+    "SIGNALS :25: 'Facility Agreement', 'the Borrower', 'Event of Default' = loan agreement",
+    "'has been sanctioned', 'Dear Sir' = sanction letter; 'Amendment to ... Agreement' = amendment",
+    "'Balance Sheet as at' = statement; 'Compliance Certificate', UDIN = certificate",
+    "rule_scores :134 scores pages 1-2; decide_rules :193 needs 0.8 and a 0.3 lead, else the agent (:238)"
+   ]
+  },
+  {
+   "dot": "violet",
+   "title": "Skill picked per type (skills/runner.py:608)",
+   "items": [
+    "LOAN_AGREEMENT -> covenants; SANCTION_LETTER -> sanction; AMENDMENT -> amendment_diff",
+    "Each pack: pack.yaml (tools, 4 x 25 pages, 8 tool calls, 400k tokens), prompt.md, schema.json, rules.py",
+    "Other job types: skills/__init__.py:80 for_job_type"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Other flows, same queue and extraction",
+   "items": [
+    "Amendment: skills/amendment_diff/rules.py:56 ADD / CHANGE / DELETE; :145 amended_set",
+    "Statement: flows/statement.py:133 lines + derived totals; catalog.py:65 lines not found",
+    "Agreement intake: flows/intake.py:70; certificate: skills/certificate/"
+   ]
+  },
+  {
+   "dot": "cyan",
+   "title": "The 6 agent tools (agent/document_agent.py)",
+   "items": [
+    ":145 page_text, :162 search_text, :182 find_definition: read this document",
+    ":201 covenant_library, :224 validate_formula, :243 lookup_identifier: Spring Java rules",
+    "Checks after the agent: ledger.py:228 review_items, runner.py:116 verify_with_spring"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Safety",
+   "items": [
+    "Parsing in a no-network sandbox; OCR local; only selected pages go to the bank's Azure",
+    "Every AI value must quote its page; the ledger accounts for every duty sentence",
+    "Spring down: SPRING_UNAVAILABLE, field to review, job continues; DPS never decides compliance"
+   ]
+  }
+ ]
+}
