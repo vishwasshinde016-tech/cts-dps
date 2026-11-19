@@ -6,6 +6,8 @@ CrewAI Flow; one Document Agent with several skills and tools; business rules in
 
 This folder holds DPS only. The Spring app and the DMS are built by other teams and are not here.
 
+**New here?** Install, check and demo in 20 minutes: [docs/cts-dps/install-and-demo.md](docs/cts-dps/install-and-demo.md).
+
 Copied on 18 Nov 2026 from `Vishwas2311/loan-covenant-platform`, branch `feat/dps-v2-phase1`, commit `55996cc`.
 
 ## Folders
@@ -30,7 +32,7 @@ Copied on 18 Nov 2026 from `Vishwas2311/loan-covenant-platform`, branch `feat/dp
 | Schema of the extraction tool | `contracts/schemas/page-model.json`, `contracts/schemas/result.json` |
 | PDF (text or image), Excel, Word | `dps/src/dps/parse/engine.py`, `dps/src/dps/parse/page_model.py` |
 | Data quality, confidence | `dps/src/dps/scoring/`, page `quality` in the page model |
-| Logging, exceptions | `dps/src/dps/ops/observability.py`, `dps/src/dps/contract/errors.yaml` |
+| Logging, exceptions | `dps/src/dps/ops/observability.py`, `dps/src/dps/contract/catalogues/errors.yaml` |
 | Model calls (Azure GPT) | `dps/src/dps/agent/gateway.py` (budget, masking, retries, call log) |
 
 ## Run the tests

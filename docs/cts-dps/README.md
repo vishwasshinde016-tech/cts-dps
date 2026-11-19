@@ -8,6 +8,10 @@ component inside the bank's Spring app.
 
 | File | What it is |
 | --- | --- |
+| [install-and-demo.md](install-and-demo.md) | **Start here on a new laptop:** install, check, one-command demo, run the service, what to read |
+| [presenter-guide.md](presenter-guide.md) | **Read while explaining the code:** boards to code, step-by-step flow with file:line, agent, skills, tools, Java wrap, DB, IDs, schemas, logs, demo, code excerpts |
+| [diagrams/dps-complete.html](diagrams/dps-complete.html) | **The whole DPS on one page (open in a browser):** 4 diagrams with steps, every table, file:line references and real code excerpts |
+| [sample-run-AGR-001.txt](sample-run-AGR-001.txt) | A run log of the demo: every DPS function entered, with file and line, plus the log lines |
 | [CTS-DPS-overview-for-teams.md](CTS-DPS-overview-for-teams.md) | Short overview for the other teams |
 | [CTS-DPS-schema-explained.md](CTS-DPS-schema-explained.md) | The result schema in simple words |
 | [end-to-end-explained.md](end-to-end-explained.md) | Upload to covenant result in one diagram: libraries, flows, agent, skills, tools, Java rules, with code paths |

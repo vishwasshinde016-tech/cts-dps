@@ -145,6 +145,27 @@ def test_rules_classify_each_class(cls):
             assert classify(model_of(SAMPLES[cls]), expected=other).mismatch  # swapped type is caught
 
 
+def test_an_lma_facilities_agreement_cover_page_is_a_loan_agreement():
+    # UK LMA agreements are titled "Facilities Agreement" (plural); the cover page names no borrower clause yet.
+    cover = ("EXECUTION VERSION\nFACILITIES AGREEMENT\nDated July 2023\nfor\nAQUILA MIDCO 2 LIMITED\nas Parent\n"
+             "arranged by\nICG ALTERNATIVE INVESTMENT LIMITED\nas Mandated Lead Arranger\n")
+    body = "The Borrower shall ensure that Leverage does not exceed 5.00:1. " * 40
+    c = classify({"pages": [{"no": 1, "text": cover}, {"no": 2, "text": "TABLE OF CONTENTS"}, {"no": 3, "text": body}]})
+    assert c.type == "LOAN_AGREEMENT", c.scores
+
+
+@pytest.mark.parametrize("cover", [
+    "FIRST AMENDMENT\nTO SECOND AMENDED AND RESTATED CREDIT AGREEMENT\nTHIS FIRST AMENDMENT TO SECOND AMENDED AND "
+    "RESTATED CREDIT AGREEMENT (this \"Amendment\") is dated as of May 6, 2010 among the Borrower and the Lenders.",
+    "SIXTH AMENDMENT TO\nTHIRD AMENDED AND RESTATED REVOLVING CREDIT AGREEMENT\nThis Sixth Amendment is entered "
+    "into among the Borrower, the Administrative Agent and the Lenders.",
+])
+def test_a_us_amendment_to_a_credit_agreement_is_an_amendment(cover):
+    body = "The Credit Agreement is amended by deleting Section 7.11 and replacing it. The Borrower shall comply. " * 20
+    c = classify({"pages": [{"no": 1, "text": cover}, {"no": 2, "text": body}]})
+    assert c.type == "AMENDMENT", c.scores
+
+
 def test_sub_attributes():
     c = classify(model_of("Consolidated Balance Sheet as at 31 March 2026\nStatement of Profit and Loss for the "
                           "quarter ended 31 March 2026\nRevenue from operations 10"))

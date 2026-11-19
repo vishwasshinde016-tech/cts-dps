@@ -509,3 +509,22 @@ def test_compat_schemas_keep_the_bank_app_enums():
 def test_packaged_contract_has_every_schema_the_api_serves():
     for name in SCHEMA_NAMES:
         assert (PACKAGED / "schemas" / f"{name}.json").is_file(), name
+
+
+def test_every_issue_code_a_result_can_carry_is_in_the_catalogue():
+    """Spring looks every warning and field issue up in errors.yaml; a code missing there is a code nobody can explain
+    (handover check, 19 Nov 2026: 41 were missing)."""
+    import re
+
+    codes = {e["code"] for e in yaml.safe_load((CONTRACTS / "catalogues" / "errors.yaml")
+                                               .read_text(encoding="utf-8"))["errors"]}
+    patterns = [re.compile(r'issue\(\s*"([A-Z][A-Z0-9_]+)"'), re.compile(r'_hold\(\w+, "([A-Z][A-Z0-9_]+)"'),
+                re.compile(r'(?:issues|problems)\.append\(\s*f?"([A-Z][A-Z0-9_]{3,}):'),
+                re.compile(r'(?:issues|problems)\s*\+?=\s*\[\s*f?"([A-Z][A-Z0-9_]{3,}):'),
+                re.compile(r'issues=\[\s*f?"([A-Z][A-Z0-9_]{3,}):')]
+    used = set()
+    for path in (ROOT / "dps" / "src" / "dps").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        for p in patterns:
+            used |= set(p.findall(text))
+    assert used and used <= codes, sorted(used - codes)

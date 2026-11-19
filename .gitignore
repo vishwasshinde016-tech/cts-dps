@@ -26,3 +26,6 @@ Thumbs.db
 desktop.ini
 .idea/
 .vscode/
+
+# Third-party demo documents (scripts/fetch_public_samples.py), never committed
+dps/samples/

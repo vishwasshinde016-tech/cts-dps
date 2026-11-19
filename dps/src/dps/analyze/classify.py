@@ -32,7 +32,7 @@ SIGNALS: dict[str, list[tuple[re.Pattern, float]]] = {
         (re.compile(r"\bdear\s+(sir|madam|sirs)\b", re.I), 0.15),
     ],
     "LOAN_AGREEMENT": [
-        (re.compile(r"\b(facility|loan|term\s+loan|credit|working\s+capital|rupee\s+term\s+loan)\s+agreement\b",
+        (re.compile(r"\b(facilit(?:y|ies)|loan|term\s+loan|credit|working\s+capital|rupee\s+term\s+loan)\s+agreement\b",
                     re.I), 0.5),
         (re.compile(r"\bbetween\b.{0,400}\(.{0,40}\bborrower\b.{0,10}\).{0,600}\band\b.{0,400}"
                     r"\(.{0,40}\b(lender|bank|agent)s?\b", re.I | re.S), 0.4),
@@ -48,6 +48,9 @@ SIGNALS: dict[str, list[tuple[re.Pattern, float]]] = {
         (re.compile(r"\bamends?\s+(the\s+)?.{0,80}agreement\s+dated\b", re.I | re.S), 0.4),
         (re.compile(r"\bshall\s+be\s+(deleted|substituted)\s+(and\s+replaced\s+)?(with|by)\b", re.I), 0.3),
         (re.compile(r"\b(stand|shall\s+stand)\s+amended\b", re.I), 0.3),
+        # US style: "FIRST AMENDMENT TO SECOND AMENDED AND RESTATED CREDIT AGREEMENT (this "Amendment")"
+        (re.compile(r"\bamendment\s+(?:no\.?\s*\d+\s+)?to\s+(?:the\s+)?(?:[\w-]+\s+){0,6}agreement\b", re.I), 0.6),
+        (re.compile(r"\(\s*this\s+[\"“]?amendment[\"”]?\s*\)", re.I), 0.3),
     ],
     "FINANCIAL_STATEMENT": [
         (re.compile(r"\bbalance\s+sheet\s+as\s+(at|on)\b", re.I), 0.5),

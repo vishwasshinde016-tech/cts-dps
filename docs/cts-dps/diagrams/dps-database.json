@@ -1,0 +1,1704 @@
+{
+ "schema_version": 1,
+ "diagram_type": "erd",
+ "meta": {
+  "title": "CTS DPS database (SQL Server schema dps): every table and column",
+  "locale": "en",
+  "output": "docs/cts-dps/diagrams/dps-database.html",
+  "quality_profile": "standard",
+  "repository": {
+   "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
+   "provider": "github",
+   "link_mode": "web",
+   "revision": "ce996d3d33d461c19d0071b3df8aa5b63a77def8"
+  }
+ },
+ "layout": {
+  "mode": "grid",
+  "gapY": 38,
+  "gapX": 72
+ },
+ "entities": [
+  {
+   "id": "dps_document",
+   "label": "dps_document",
+   "sublabel": "Document",
+   "tag": "documents",
+   "row": 0,
+   "col": 0,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "type",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "file_name",
+     "type": "nvarchar(255)"
+    },
+    {
+     "name": "file_id",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "storage_path",
+     "type": "varchar(500)"
+    },
+    {
+     "name": "sha256",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "size_bytes",
+     "type": "integer"
+    },
+    {
+     "name": "page_count",
+     "type": "integer"
+    },
+    {
+     "name": "as_of_date",
+     "type": "datetime"
+    },
+    {
+     "name": "status",
+     "type": "varchar(24)"
+    },
+    {
+     "name": "uploaded_by",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "uploaded_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "latest_job_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "amends_document_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "tenant_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "external_version_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "object_key",
+     "type": "varchar(500)"
+    },
+    {
+     "name": "review_json",
+     "type": "text"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 78,
+     "end_line": 108,
+     "label": "class Document"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_document_cp_link",
+   "label": "dps_document_cp_link",
+   "sublabel": "DocumentCpLink",
+   "tag": "documents",
+   "row": 1,
+   "col": 0,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "document_id",
+     "type": "varchar(36)",
+     "key": "fk",
+     "references": "dps_document.id"
+    },
+    {
+     "name": "cp_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "linked_by",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "linked_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "unlinked_by",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "unlinked_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 111,
+     "end_line": 125,
+     "label": "class DocumentCpLink"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_extracted_term",
+   "label": "dps_extracted_term",
+   "sublabel": "ExtractedTerm",
+   "tag": "documents",
+   "row": 2,
+   "col": 0,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "document_id",
+     "type": "varchar(36)",
+     "key": "fk",
+     "references": "dps_document.id"
+    },
+    {
+     "name": "metric_raw",
+     "type": "nvarchar(128)"
+    },
+    {
+     "name": "name",
+     "type": "nvarchar(200)"
+    },
+    {
+     "name": "covenant_master_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "expression",
+     "type": "nvarchar(2000)"
+    },
+    {
+     "name": "operator",
+     "type": "varchar(4)"
+    },
+    {
+     "name": "threshold",
+     "type": "float"
+    },
+    {
+     "name": "unit",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "frequency",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "category",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "confidence",
+     "type": "float"
+    },
+    {
+     "name": "method",
+     "type": "varchar(8)"
+    },
+    {
+     "name": "status",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "issues_json",
+     "type": "text"
+    },
+    {
+     "name": "page",
+     "type": "integer"
+    },
+    {
+     "name": "quote",
+     "type": "nvarchar(500)"
+    },
+    {
+     "name": "schedule_json",
+     "type": "ntext"
+    },
+    {
+     "name": "reviewed_by",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "review_note",
+     "type": "nvarchar(2000)"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 352,
+     "end_line": 376,
+     "label": "class ExtractedTerm"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_statement_value",
+   "label": "dps_statement_value",
+   "sublabel": "StatementValue",
+   "tag": "documents",
+   "row": 3,
+   "col": 0,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "cp_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "key",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "value",
+     "type": "float"
+    },
+    {
+     "name": "unit",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "currency",
+     "type": "varchar(3)"
+    },
+    {
+     "name": "as_of_date",
+     "type": "datetime"
+    },
+    {
+     "name": "period_months",
+     "type": "integer"
+    },
+    {
+     "name": "derived",
+     "type": "bit"
+    },
+    {
+     "name": "source_type",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "document_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "page",
+     "type": "integer"
+    },
+    {
+     "name": "cell",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "note",
+     "type": "nvarchar(2000)"
+    },
+    {
+     "name": "entered_by",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "superseded",
+     "type": "bit"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 423,
+     "end_line": 448,
+     "label": "class StatementValue"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_job",
+   "label": "dps_job",
+   "sublabel": "Job",
+   "tag": "job queue",
+   "row": 0,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "document_id",
+     "type": "varchar(36)",
+     "key": "fk",
+     "references": "dps_document.id"
+    },
+    {
+     "name": "flow",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "status",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "pool",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "attempts",
+     "type": "integer"
+    },
+    {
+     "name": "current_step",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "error",
+     "type": "text"
+    },
+    {
+     "name": "steps_json",
+     "type": "text"
+    },
+    {
+     "name": "flow_state_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "locked_by",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "locked_until",
+     "type": "datetime2"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "updated_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "job_type",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "tenant_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "priority",
+     "type": "integer"
+    },
+    {
+     "name": "due_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "idempotency_key",
+     "type": "varchar(128)"
+    },
+    {
+     "name": "request_hash",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "input_key",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "request_json",
+     "type": "ntext"
+    },
+    {
+     "name": "batch_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "client_file_reference",
+     "type": "nvarchar(128)"
+    },
+    {
+     "name": "correlation_id",
+     "type": "varchar(128)"
+    },
+    {
+     "name": "cancel_requested",
+     "type": "bit"
+    },
+    {
+     "name": "started_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "finished_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "error_code",
+     "type": "varchar(48)"
+    },
+    {
+     "name": "pipeline_version",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "rollout",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "document_version_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "sha256",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "crash_count",
+     "type": "integer"
+    },
+    {
+     "name": "requested_by",
+     "type": "varchar(255)"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 128,
+     "end_line": 178,
+     "label": "class Job"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_batch",
+   "label": "dps_batch",
+   "sublabel": "Batch",
+   "tag": "job queue",
+   "row": 1,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "tenant_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "batch_ref",
+     "type": "nvarchar(128)"
+    },
+    {
+     "name": "idempotency_key",
+     "type": "varchar(128)"
+    },
+    {
+     "name": "request_hash",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "status",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "item_count",
+     "type": "integer"
+    },
+    {
+     "name": "created_by",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "finished_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 181,
+     "end_line": 196,
+     "label": "class Batch"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_job_attempt",
+   "label": "dps_job_attempt",
+   "sublabel": "JobAttempt",
+   "tag": "job queue",
+   "row": 2,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "job_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "attempt_no",
+     "type": "integer"
+    },
+    {
+     "name": "worker_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "started_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "ended_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "outcome",
+     "type": "varchar(24)"
+    },
+    {
+     "name": "error_code",
+     "type": "varchar(48)"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 199,
+     "end_line": 211,
+     "label": "class JobAttempt"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_tenant_limit",
+   "label": "dps_tenant_limit",
+   "sublabel": "TenantLimit",
+   "tag": "job queue",
+   "row": 3,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "tenant_id",
+     "type": "varchar(64)",
+     "key": "pk"
+    },
+    {
+     "name": "max_queued",
+     "type": "integer"
+    },
+    {
+     "name": "max_running",
+     "type": "integer"
+    },
+    {
+     "name": "max_running_per_batch",
+     "type": "integer"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 214,
+     "end_line": 222,
+     "label": "class TenantLimit"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_flow_state",
+   "label": "dps_flow_state",
+   "sublabel": "FlowState",
+   "tag": "job queue",
+   "row": 4,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "flow_uuid",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "method_name",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "state_json",
+     "type": "text"
+    },
+    {
+     "name": "pending_feedback_json",
+     "type": "text"
+    },
+    {
+     "name": "saved_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 555,
+     "end_line": 566,
+     "label": "class FlowState"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_run",
+   "label": "dps_run",
+   "sublabel": "Run",
+   "tag": "results + events",
+   "row": 5,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "job_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "run_no",
+     "type": "integer"
+    },
+    {
+     "name": "status",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "trigger",
+     "type": "varchar(24)"
+    },
+    {
+     "name": "result_json",
+     "type": "ntext"
+    },
+    {
+     "name": "superseded_by",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 267,
+     "end_line": 281,
+     "label": "class Run"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_artifact",
+   "label": "dps_artifact",
+   "sublabel": "Artifact",
+   "tag": "results + events",
+   "row": 6,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "tenant_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "version_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "kind",
+     "type": "varchar(24)"
+    },
+    {
+     "name": "path",
+     "type": "varchar(400)",
+     "key": "uk"
+    },
+    {
+     "name": "sha256",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "bytes",
+     "type": "integer"
+    },
+    {
+     "name": "source_sha256",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "pipeline_version",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 245,
+     "end_line": 264,
+     "label": "class Artifact"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_event_feed",
+   "label": "dps_event_feed",
+   "sublabel": "EventFeed",
+   "tag": "results + events",
+   "row": 7,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "seq",
+     "type": "integer",
+     "key": "pk"
+    },
+    {
+     "name": "event_id",
+     "type": "varchar(36)",
+     "key": "uk"
+    },
+    {
+     "name": "type",
+     "type": "varchar(48)"
+    },
+    {
+     "name": "tenant_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "job_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "document_version_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "correlation_id",
+     "type": "varchar(128)"
+    },
+    {
+     "name": "occurred_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "payload_json",
+     "type": "ntext"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 225,
+     "end_line": 242,
+     "label": "class EventFeed"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_event_outbox",
+   "label": "dps_event_outbox",
+   "sublabel": "EventOutbox",
+   "tag": "results + events",
+   "row": 8,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "type",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "payload_json",
+     "type": "text"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "sent_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "attempts",
+     "type": "integer"
+    },
+    {
+     "name": "last_error",
+     "type": "text"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 451,
+     "end_line": 462,
+     "label": "class EventOutbox"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_push_cursor",
+   "label": "dps_push_cursor",
+   "sublabel": "PushCursor",
+   "tag": "results + events",
+   "row": 9,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "name",
+     "type": "varchar(32)",
+     "key": "pk"
+    },
+    {
+     "name": "seq",
+     "type": "integer"
+    },
+    {
+     "name": "updated_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 319,
+     "end_line": 326,
+     "label": "class PushCursor"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_leader",
+   "label": "dps_leader",
+   "sublabel": "Leader",
+   "tag": "results + events",
+   "row": 10,
+   "col": 1,
+   "attributes": [
+    {
+     "name": "name",
+     "type": "varchar(32)",
+     "key": "pk"
+    },
+    {
+     "name": "holder",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "until",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 329,
+     "end_line": 336,
+     "label": "class Leader"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_review_decision",
+   "label": "dps_review_decision",
+   "sublabel": "ReviewDecision",
+   "tag": "review + learning",
+   "row": 4,
+   "col": 0,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "job_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "run_no",
+     "type": "integer"
+    },
+    {
+     "name": "field_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "reviewer",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "action",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "old_value_json",
+     "type": "ntext"
+    },
+    {
+     "name": "new_value_json",
+     "type": "ntext"
+    },
+    {
+     "name": "reason_code",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "comment",
+     "type": "nvarchar(2000)"
+    },
+    {
+     "name": "sampled",
+     "type": "bit"
+    },
+    {
+     "name": "at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 284,
+     "end_line": 300,
+     "label": "class ReviewDecision"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_golden_candidate",
+   "label": "dps_golden_candidate",
+   "sublabel": "GoldenCandidate",
+   "tag": "review + learning",
+   "row": 5,
+   "col": 0,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "job_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "field_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "job_type",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "payload_json",
+     "type": "ntext"
+    },
+    {
+     "name": "status",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "decided_by",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "decided_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 303,
+     "end_line": 316,
+     "label": "class GoldenCandidate"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_label_memory",
+   "label": "dps_label_memory",
+   "sublabel": "LabelMemory",
+   "tag": "review + learning",
+   "row": 6,
+   "col": 0,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "cp_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "label",
+     "type": "nvarchar(300)"
+    },
+    {
+     "name": "key",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "source_label",
+     "type": "nvarchar(300)"
+    },
+    {
+     "name": "document_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "confirmed_by",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 379,
+     "end_line": 397,
+     "label": "class LabelMemory"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_learned_wording",
+   "label": "dps_learned_wording",
+   "sublabel": "LearnedWording",
+   "tag": "review + learning",
+   "row": 7,
+   "col": 0,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "kind",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "phrase",
+     "type": "nvarchar(300)"
+    },
+    {
+     "name": "key",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "evidence",
+     "type": "integer"
+    },
+    {
+     "name": "active",
+     "type": "bit"
+    },
+    {
+     "name": "added_by",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "added_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "retired_by",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "retired_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 400,
+     "end_line": 420,
+     "label": "class LearnedWording"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_ai_call",
+   "label": "dps_ai_call",
+   "sublabel": "AiCall",
+   "tag": "AI + audit",
+   "row": 0,
+   "col": 2,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "at",
+     "type": "datetime2"
+    },
+    {
+     "name": "purpose",
+     "type": "varchar(24)"
+    },
+    {
+     "name": "user",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "cp_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "document_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "job_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "request_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "model",
+     "type": "varchar(128)"
+    },
+    {
+     "name": "prompt_version",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "status",
+     "type": "varchar(8)"
+    },
+    {
+     "name": "error",
+     "type": "nvarchar(500)"
+    },
+    {
+     "name": "seconds",
+     "type": "float"
+    },
+    {
+     "name": "prompt_tokens",
+     "type": "integer"
+    },
+    {
+     "name": "completion_tokens",
+     "type": "integer"
+    },
+    {
+     "name": "cost",
+     "type": "float"
+    },
+    {
+     "name": "request_text",
+     "type": "ntext"
+    },
+    {
+     "name": "response_text",
+     "type": "ntext"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 511,
+     "end_line": 535,
+     "label": "class AiCall"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_ai_usage",
+   "label": "dps_ai_usage",
+   "sublabel": "AiUsage",
+   "tag": "AI + audit",
+   "row": 1,
+   "col": 2,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "at",
+     "type": "datetime2"
+    },
+    {
+     "name": "purpose",
+     "type": "varchar(24)"
+    },
+    {
+     "name": "user",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "cp_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "document_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "job_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "model",
+     "type": "varchar(128)"
+    },
+    {
+     "name": "calls",
+     "type": "integer"
+    },
+    {
+     "name": "prompt_tokens",
+     "type": "integer"
+    },
+    {
+     "name": "completion_tokens",
+     "type": "integer"
+    },
+    {
+     "name": "cost",
+     "type": "float"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 491,
+     "end_line": 508,
+     "label": "class AiUsage"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_ai_cache",
+   "label": "dps_ai_cache",
+   "sublabel": "AiCache",
+   "tag": "AI + audit",
+   "row": 2,
+   "col": 2,
+   "attributes": [
+    {
+     "name": "key",
+     "type": "varchar(64)",
+     "key": "pk"
+    },
+    {
+     "name": "model",
+     "type": "varchar(128)"
+    },
+    {
+     "name": "answer",
+     "type": "ntext"
+    },
+    {
+     "name": "hits",
+     "type": "integer"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    },
+    {
+     "name": "last_used_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 477,
+     "end_line": 488,
+     "label": "class AiCache"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_trace_event",
+   "label": "dps_trace_event",
+   "sublabel": "TraceEvent",
+   "tag": "AI + audit",
+   "row": 3,
+   "col": 2,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "document_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "job_id",
+     "type": "varchar(36)"
+    },
+    {
+     "name": "at",
+     "type": "datetime2"
+    },
+    {
+     "name": "step",
+     "type": "varchar(16)"
+    },
+    {
+     "name": "actor",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "summary",
+     "type": "nvarchar(1000)"
+    },
+    {
+     "name": "detail_json",
+     "type": "ntext"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 538,
+     "end_line": 552,
+     "label": "class TraceEvent"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_audit_event",
+   "label": "dps_audit_event",
+   "sublabel": "AuditEvent",
+   "tag": "AI + audit",
+   "row": 4,
+   "col": 2,
+   "attributes": [
+    {
+     "name": "id",
+     "type": "varchar(36)",
+     "key": "pk"
+    },
+    {
+     "name": "actor",
+     "type": "varchar(255)"
+    },
+    {
+     "name": "action",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "target_type",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "target_id",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "detail_json",
+     "type": "text"
+    },
+    {
+     "name": "at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 465,
+     "end_line": 474,
+     "label": "class AuditEvent"
+    }
+   ],
+   "width": 290
+  },
+  {
+   "id": "dps_audit_seal",
+   "label": "dps_audit_seal",
+   "sublabel": "AuditSeal",
+   "tag": "AI + audit",
+   "row": 5,
+   "col": 2,
+   "attributes": [
+    {
+     "name": "day",
+     "type": "datetime",
+     "key": "pk"
+    },
+    {
+     "name": "rows",
+     "type": "integer"
+    },
+    {
+     "name": "prev_hash",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "head_hash",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "file_sha256",
+     "type": "varchar(64)"
+    },
+    {
+     "name": "created_at",
+     "type": "datetime2"
+    }
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 339,
+     "end_line": 349,
+     "label": "class AuditSeal"
+    }
+   ],
+   "width": 290
+  }
+ ],
+ "relationships": [
+  {
+   "from": "dps_document",
+   "to": "dps_job",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "label": "document_id FK"
+  },
+  {
+   "from": "dps_document",
+   "to": "dps_document_cp_link",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "label": "document_id FK"
+  },
+  {
+   "from": "dps_document",
+   "to": "dps_extracted_term",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "label": "document_id FK"
+  },
+  {
+   "from": "dps_job",
+   "to": "dps_run",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "toOptional": true,
+   "variant": "dashed",
+   "label": "job_id"
+  },
+  {
+   "from": "dps_job",
+   "to": "dps_job_attempt",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "toOptional": true,
+   "variant": "dashed",
+   "label": "job_id"
+  },
+  {
+   "from": "dps_batch",
+   "to": "dps_job",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "toOptional": true,
+   "variant": "dashed",
+   "label": "batch_id",
+   "labelDx": -26
+  },
+  {
+   "from": "dps_job",
+   "to": "dps_review_decision",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "toOptional": true,
+   "variant": "dashed",
+   "label": "job_id"
+  },
+  {
+   "from": "dps_job",
+   "to": "dps_golden_candidate",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "toOptional": true,
+   "variant": "dashed",
+   "label": "job_id"
+  },
+  {
+   "from": "dps_job",
+   "to": "dps_event_feed",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "toOptional": true,
+   "variant": "dashed",
+   "label": "job_id"
+  },
+  {
+   "from": "dps_job",
+   "to": "dps_ai_call",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "toOptional": true,
+   "variant": "dashed",
+   "label": "job_id"
+  },
+  {
+   "from": "dps_document",
+   "to": "dps_statement_value",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "toOptional": true,
+   "variant": "dashed",
+   "label": "document_id"
+  },
+  {
+   "from": "dps_document",
+   "to": "dps_label_memory",
+   "fromCardinality": "one",
+   "toCardinality": "many",
+   "toOptional": true,
+   "variant": "dashed",
+   "label": "document_id"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "How to read it",
+   "items": [
+    "Solid lines are real foreign keys; dashed lines join by id with no FK (the queue tables stay independent so rows can be purged or archived alone)",
+    "Spring's IDs (facility, borrower, covenant, CP) arrive in dps_job.request_json and go back in dps_run.result_json; DPS keeps cp_id only where it learns per counterparty",
+    "Created by Alembic migrations in dps/migrations/versions; models in dps/src/dps/models.py"
+   ]
+  },
+  {
+   "dot": "violet",
+   "title": "Main path",
+   "items": [
+    "POST /dps/v1/jobs writes dps_job (+ dps_document) and a dps_event_feed row",
+    "The worker claims dps_job, logs dps_job_attempt, writes page models to dps_artifact",
+    "The result is saved as dps_run.result_json (dps.result/1.0) with its event; reviewer actions go to dps_review_decision"
+   ]
+  }
+ ]
+}

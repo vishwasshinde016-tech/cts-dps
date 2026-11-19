@@ -63,7 +63,7 @@ The page writes `labels/AGR-nnn.json` and `manifest.csv` and applies the rules i
 
 | Field | Rule |
 |---|---|
-| `metric` | Our metric key (see `docs/integration/04-api-contracts.md` §6.1), e.g. `DSCR`, `DEBT_TO_EBITDA`, `NEGATIVE_PLEDGE` |
+| `metric` | Our metric key (see `contracts/dps-api.yaml` and the taxonomy in `dps/src/dps/skills/covenants/taxonomy/`), e.g. `DSCR`, `DEBT_TO_EBITDA`, `NEGATIVE_PLEDGE` |
 | `category` | `FINANCIAL` (numeric test) or `NON_FINANCIAL` (obligation) |
 | `operator`, `threshold` | As written, e.g. "not less than 1.25x" → `>=`, `1.25`. `null` for non-financial |
 | `unit` | `x`, `%`, `AED mn`, `INR cr`… as written; `null` for plain ratios |
