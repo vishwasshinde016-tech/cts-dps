@@ -3,6 +3,8 @@
 *Read this while you present. Every path is from the repository root (`cts-dps/`), so you can open each file in VS
 Code as you talk. Python code is under [`dps/src/dps/`](../../dps/src/dps). 19 Nov 2026.*
 
+**For the live demo, read [`demo-walkthrough.md`](demo-walkthrough.md)**. It uploads real documents and follows each one, step by step: what to type, what happens inside, where the data is now, and what to say.
+
 **Start with §0, the talk track.** It is the script: what to show, what to click and what to say, in order, with timings, likely questions and a glossary. The sections after it hold the detail.
 
 **Order of the detail sections:**

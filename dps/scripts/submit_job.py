@@ -118,12 +118,20 @@ def main() -> int:
         if f["group"] in ("FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "EVENT_OF_DEFAULT", "AMENDMENT_CHANGE",
                           "STATEMENT_LINE"):
             v = f["value"]
-            level = f"{v.get('operator') or ''} {'' if v.get('threshold') is None else v['threshold']}".strip()
+            if f["group"] == "STATEMENT_LINE":
+                if v.get("amount") is None:
+                    continue  # a derived line (annualised, trailing) that this statement does not give
+                level = f"{v['amount']} {v.get('unit') or ''}".strip()
+            else:
+                level = f"{v.get('operator') or ''} {'' if v.get('threshold') is None else v['threshold']}".strip()
             print(f"   p{f['source'].get('page')!s:>3}  {f['group'][:22]:<22} "
                   f"{str(v.get('code') or v.get('metric') or v.get('key') or f.get('name'))[:30]:<30} {level}")
     led = ((result.get("document") or {}).get("coverage") or {}).get("ledger")
     if led:
         print(f"   coverage: {led['candidates']} duty sentences, {led.get('unresolved', 0)} for a person to check")
+    warnings = sorted({w["code"] for w in result.get("warnings") or []})
+    if warnings:
+        print(f"   warnings: {', '.join(warnings)}")
     print(f"   open in the browser: {args.api}/dps/v1/jobs/{job_id}/result  (needs the dev headers)")
     if args.json:
         args.json.write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")

@@ -2,7 +2,7 @@
 
 This is the CTS DPS (Document Processing Service), a Python 3.12 service. The Python package is in `dps/`
 (source `dps/src/dps/`, tests `dps/tests/`). The contracts Spring uses are in `contracts/`. Documentation is in
-`docs/cts-dps/`; start with `docs/cts-dps/presenter-guide.md` and `docs/cts-dps/diagrams/dps-complete.html`.
+`docs/cts-dps/`; start with `docs/cts-dps/demo-walkthrough.md`, `docs/cts-dps/presenter-guide.md` and `docs/cts-dps/diagrams/dps-complete.html`.
 
 ## Installing on a Windows laptop
 

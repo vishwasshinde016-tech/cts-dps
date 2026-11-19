@@ -377,6 +377,8 @@ Four links on the list failed on 19 Nov 2026: three return "not found" (Workspac
 
 ## How do I show the logs and the live demo? {#demo}
 
+Follow the demo step by step with `docs/cts-dps/demo-walkthrough.md`: upload with `scripts\submit_job.py`, then show where everything is with `scripts\show_job.py` (add `--page N` for a page's parsed text).
+
 | Log | What it shows | How to see it |
 | --- | --- | --- |
 | Run log | every DPS function a document enters, with file and line | `demo_onboard.py <file> --trace run.log`; sample [`docs/cts-dps/sample-run-AGR-001.txt`](https://github.com/vishwasshinde016-tech/cts-dps/blob/main/docs/cts-dps/sample-run-AGR-001.txt) |

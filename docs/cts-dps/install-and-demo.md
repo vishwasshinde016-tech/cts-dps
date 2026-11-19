@@ -166,10 +166,11 @@ Calls in dev mode use the headers `X-User: rm-anil` and `X-Roles: SERVICE`. The 
 
 ## 6. What to read when explaining the code
 
-1. **The presenter guide (read it while explaining):** `docs/cts-dps/presenter-guide.md`. It covers the boards mapped to the code, each step with file and line, the agent, the Java wrap, the database, IDs, schemas, logs and code excerpts. Show `docs/cts-dps/diagrams/dps-complete.html` on screen beside it: the whole DPS on one page (open it in a browser).
-2. **The whole flow in one diagram, with file paths:** `docs/cts-dps/end-to-end-explained.md`.
-3. **Where each package lives:** `dps/README.md`, section "Code layout".
-4. **How each architect requirement and Miro step is met:** `docs/cts-dps/CTS-DPS-check-vs-architect.md`.
-5. **The latest review:** `docs/cts-dps/dps-review-2026-11-19.md`. It covers the requirements matrix, measurements, what changed and the open gaps.
-6. **The contract Spring calls:** `contracts/dps-jobs-api.yaml`. The result schema is explained in `docs/cts-dps/CTS-DPS-schema-explained.md`.
-7. **Next step for the Spring team:** `docs/cts-dps/document-set-proposal.md`.
+1. **The demo walkthrough (read it while you demo):** `docs/cts-dps/demo-walkthrough.md`. It covers uploading, where each file and table is, and what to say, flow by flow.
+2. **The presenter guide (read it while explaining):** `docs/cts-dps/presenter-guide.md`. It covers the boards mapped to the code, each step with file and line, the agent, the Java wrap, the database, IDs, schemas, logs and code excerpts. Show `docs/cts-dps/diagrams/dps-complete.html` on screen beside it: the whole DPS on one page (open it in a browser).
+3. **The whole flow in one diagram, with file paths:** `docs/cts-dps/end-to-end-explained.md`.
+4. **Where each package lives:** `dps/README.md`, section "Code layout".
+5. **How each architect requirement and Miro step is met:** `docs/cts-dps/CTS-DPS-check-vs-architect.md`.
+6. **The latest review:** `docs/cts-dps/dps-review-2026-11-19.md`. It covers the requirements matrix, measurements, what changed and the open gaps.
+7. **The contract Spring calls:** `contracts/dps-jobs-api.yaml`. The result schema is explained in `docs/cts-dps/CTS-DPS-schema-explained.md`.
+8. **Next step for the Spring team:** `docs/cts-dps/document-set-proposal.md`.
