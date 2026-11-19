@@ -40,6 +40,10 @@ def stamp(fields: list[dict], defaults: bool = True) -> None:
             continue
         v = f["value"]
         code = code_for_field(f)
+        narrower = tax.more_specific((f.get("source") or {}).get("quote"), code)
+        if narrower:  # "First Lien Leverage Ratio" is not total leverage: the quote names the narrower test
+            code = narrower
+            v["metric"] = tax.dps_key(code) or code
         if tax.category_of(code) not in RESULT_CATEGORIES:
             code = None  # richer obligation roles have no representation in the v1 covenant field schema
         v["code"] = code

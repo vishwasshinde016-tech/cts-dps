@@ -1060,7 +1060,7 @@
         },
         "coverage": {
           "type": "object",
-          "description": "Covenant jobs: duty sentences on the covenant pages and how many an extracted field explains; the rest are listed for the reviewer",
+          "description": "Covenant jobs: every covenant-shaped sentence of the whole document and how it was settled (found by a field, covered by a covenant of the same kind, not a covenant with a reason, or unresolved and listed as a review item)",
           "properties": {
             "dutySentences": { "type": "integer" },
             "explained": { "type": "integer" },
@@ -1071,6 +1071,57 @@
             "unexplained": {
               "type": "array",
               "items": { "type": "object", "properties": { "page": { "type": "integer" }, "text": { "type": "string" }, "kind": { "type": ["string", "null"] } } }
+            },
+            "ledger": {
+              "type": "object",
+              "description": "The candidate ledger: every candidate has exactly one state, so accounted equals candidates",
+              "properties": {
+                "scope": { "type": "string", "enum": ["WHOLE_DOCUMENT"] },
+                "pages": { "type": "integer" },
+                "candidates": { "type": "integer" },
+                "accounted": { "type": "integer" },
+                "finding": { "type": "integer" },
+                "covered": { "type": "integer" },
+                "notCovenant": { "type": "integer" },
+                "unresolved": { "type": "integer" },
+                "percentExplained": { "type": "number" },
+                "entries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "page", "state"],
+                    "properties": {
+                      "id": { "type": "string" },
+                      "page": { "type": "integer" },
+                      "route": { "type": "string", "enum": ["DUTY", "CUE"] },
+                      "kind": { "type": ["string", "null"] },
+                      "state": { "type": "string", "enum": ["FINDING", "COVERED", "NOT_A_COVENANT", "UNRESOLVED"] },
+                      "reason": { "type": ["string", "null"] },
+                      "fieldId": { "type": ["string", "null"] },
+                      "text": { "type": "string" },
+                      "qualifiers": { "type": "array", "items": { "type": "string" } },
+                      "references": { "type": "array", "items": { "type": "object", "properties": { "ref": { "type": "string" }, "page": { "type": ["integer", "null"] } } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "pages": {
+          "type": "object",
+          "description": "Every page's outcome: parsed from text, read by OCR, blank, or unreadable (not trusted)",
+          "properties": {
+            "total": { "type": "integer" },
+            "accounted": { "type": "integer" },
+            "readable": { "type": "integer" },
+            "parsed": { "type": "integer" },
+            "ocr": { "type": "integer" },
+            "blank": { "type": "integer" },
+            "unreadable": { "type": "integer" },
+            "notParsed": {
+              "type": "array",
+              "items": { "type": "object", "properties": { "no": { "type": "integer" }, "state": { "type": "string", "enum": ["OCR", "BLANK", "UNREADABLE"] }, "quality": { "type": "number" } } }
             }
           }
         }

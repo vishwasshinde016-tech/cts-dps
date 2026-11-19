@@ -205,7 +205,14 @@ def validate_job(store, body: JobRequest, settings: Settings) -> dict:
         raise ApiError(400, "INVALID_INPUT", "document.objectKey is not a valid key.") from ex
     if not path.is_file():
         raise ApiError(400, "INVALID_INPUT", "No file is stored under document.objectKey.")
-    if hashlib.sha256(path.read_bytes()).hexdigest() != body.document.sha256:
+    # Streamed, with the observed size checked first: a submit never holds a whole file in memory (audit F07).
+    if path.stat().st_size > settings.max_upload_mb * 1024 * 1024:
+        raise ApiError(400, "INVALID_INPUT", f"The stored file is larger than {settings.max_upload_mb} MB.")
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    if digest.hexdigest() != body.document.sha256:
         raise ApiError(400, "INTEGRITY_MISMATCH", "The stored file does not match document.sha256.")
     return spec
 

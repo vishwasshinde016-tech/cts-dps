@@ -45,6 +45,53 @@ BLOCKING = frozenset({"NOTHING_FOUND", "NOT_GROUNDED", "VERDICT_NOT_IN_RESULTS",
 COVENANT_GROUPS = ("FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "INFO_COVENANT", "POSSIBLE_COVENANT")
 
 
+RATIO_UNITS = {"TIMES", "PERCENT", "RATIO", "MULTIPLE", "X", "%"}
+
+
+def check_numbers(fields: list[dict]) -> None:
+    """A covenant's threshold must be written in its own quote (outside the agent: the model cannot vouch for its own
+    number). Ratios and percentages only; amounts may be written in words or scaled ("Rs. 50 crore")."""
+    from dps.extraction.verify import threshold_in
+
+    for f in fields:
+        value = f.get("value") or {}
+        threshold, quote = value.get("threshold"), (f.get("source") or {}).get("quote")
+        if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or not quote:
+            continue
+        unit = str(value.get("unit") or "").upper()
+        if not (unit in RATIO_UNITS or (not unit and abs(threshold) < 100)):
+            continue
+        if threshold_in(quote, float(threshold)):
+            continue
+        if any(i.get("code") == "NUMBER_NOT_IN_QUOTE" for i in f.get("issues") or []):
+            continue
+        f.setdefault("issues", []).append(issue("NUMBER_NOT_IN_QUOTE", f"the threshold {threshold:g} is not "
+                                                                       "written in the quoted text; check the source"))
+        f["status"] = "NEEDS_REVIEW"
+
+
+def page_accounting(pages: list[dict]) -> dict:
+    """Every page's outcome: read from its text, read by OCR, blank, or unreadable (so not trusted), with the pages
+    that were not read well listed."""
+    counts = {"PARSED": 0, "OCR": 0, "BLANK": 0, "UNREADABLE": 0}
+    listed = []
+    for p in pages:
+        method = str(p.get("sourceMethod") or p.get("method") or "TEXT").upper()
+        if method == "BLANK":
+            state = "BLANK"
+        elif float(p.get("quality", 1.0)) < UNREADABLE_QUALITY:
+            state = "UNREADABLE"
+        elif method == "OCR":
+            state = "OCR"
+        else:
+            state = "PARSED"
+        counts[state] += 1
+        if state != "PARSED":
+            listed.append({"no": p.get("no"), "state": state, "quality": round(float(p.get("quality", 0.0)), 2)})
+    return {"total": len(pages), **{k.lower(): v for k, v in counts.items()},
+            "readable": counts["PARSED"] + counts["OCR"], "accounted": len(pages), "notParsed": listed[:200]}
+
+
 def _expression(value: dict) -> str | None:
     metric, op, threshold = value.get("metric"), value.get("operator"), value.get("threshold")
     if not metric or not op or threshold is None:
@@ -122,7 +169,8 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
             value = {**value, "metric": value.get("metric") or p.get("_written") or p["name"]}
         f = make_field(pack.name, pages, group, p.get("_written") or p["name"], value, p["page"], p["quote"],
                        method=method,
-                       confidence=0.6 if method == "AI_VISION" else 0.7, key=method.lower())
+                       confidence=0.6 if method == "AI_VISION" else 0.7,
+                       key=method.lower() + (f"-{p['_residual']}" if p.get("_residual") else ""))
         if method == "AI_VISION":
             f["status"] = "NEEDS_REVIEW"
             f["issues"].append(issue("READ_FROM_IMAGE", f"page {p['page']} was read from its image; confirm it"))
@@ -279,6 +327,15 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         quality = {p["no"]: (float(p.get("quality", 1.0)), p.get("method", "NATIVE"))
                    for p in (model or {}).get("pages", [])}
         Scorer(scorer_dir).apply(fields, pack.name, pack.risk, pack.thresholds, quality)
+    check_numbers(fields)  # after scoring: a number not in its own quote always goes to a person
+    if pack.name != "commentary":
+        extra["_pages"] = page_accounting((model or {}).get("pages", []))
+        if not [f for f in fields if f.get("group") != "SCHEDULE_TERM"] \
+                and not any(w["code"] == "NOTHING_FOUND" for w in warnings):
+            readable = extra["_pages"]["readable"]
+            warnings.append(issue("NOTHING_FOUND", "nothing was found in a readable document; a person confirms "
+                                                   "it really has none" if readable else
+                                  "no readable text was recovered, so nothing could be found; a person reads it"))
     if getattr(job, "rollout", "NORMAL") == "ASSISTED":  # phase 7 pilot: analysts review every field
         for f in fields:
             if f["status"] == "AUTO_ACCEPTED":
@@ -299,7 +356,8 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
                      "models": dict(budget.models) if budget and budget.models else None},
         "classification": None, "identifiers": [], "fields": fields,
         "document": {"confidence": None, "route": route, "reasons": reasons,
-                     **({"coverage": extra.pop("_coverage")} if "_coverage" in extra else {})},
+                     **({"coverage": extra.pop("_coverage")} if "_coverage" in extra else {}),
+                     **({"pages": extra.pop("_pages")} if "_pages" in extra else {})},
         "warnings": warnings, "timingMs": {"total": round((time.monotonic() - started) * 1000, 1)},
         "usage": {"model_calls": budget.calls, "tokens": budget.used} if budget else None,
         "rollout": getattr(job, "rollout", None) or "NORMAL",
@@ -365,7 +423,9 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
         fields += _agent_only(pack, pages, fields, seen, method="AI_VISION")
         warnings.append(issue("UNREADABLE_PAGES", "pages a person must read: " + ", ".join(map(str, unreadable[:30]))
                               + ("; read from their images by the vision model" if seen else "")))
-    if pack.name in ("sanction", "covenants"):  # the calendar clauses of a sanction letter or an agreement
+    # the calendar clauses of a sanction letter, an agreement or an amendment (an amendment may change only the
+    # schedule: a new test date or reporting deadline is a change too; architecture review P1 #8)
+    if pack.name in ("sanction", "covenants", "amendment_diff"):
         sched = load("schedule_terms")
         amount = next((f["value"].get("amount") for f in fields if f["name"] == "SANCTIONED_AMOUNT"), None)
         sched_fields = sched.rules(pages, {**ctx, "sanctionedAmount": amount})
@@ -378,6 +438,22 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
             sched_fields += _agent_only(sched, pages, sched_fields, sched_proposals)
         warnings += sched.checks(sched_fields, {**ctx, "sanctionedAmount": amount})
         fields += sched_fields
+    entries = None
+    if pack.name == "covenants":  # every covenant-shaped sentence of the whole document ends with an outcome
+        from dps.skills.covenants import ledger, omissions
+
+        entries = ledger.settle(ledger.candidates(pages), fields)
+        still_open = ledger.unresolved(entries)
+        if gateway is not None and still_open:  # the Document Agent looks again at what nothing explains
+            residual, decisions = omissions.read(gateway, still_open, pages, notes,
+                                                 pack.routes.get("extract", "strong"))
+            from dps.skills.covenants import names
+
+            residual = names.clean(residual, drop_mechanics=True, collapse=False) or []
+            fields += _agent_only(pack, pages, fields, residual, method="AI_RESIDUAL")
+            ledger.settle(entries, fields, decisions)
+        ledger.attach(entries, fields)
+        fields += ledger.review_items(entries, pages, pack.name)
     if gateway is not None:
         if proposals is None and not notes:
             notes.append(issue("AI_UNAVAILABLE", "read by the rules only"))
@@ -392,7 +468,23 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     warnings += verify_with_spring(fields, tools, job.correlation_id)
     warnings += pack.checks(fields, ctx)
     extra = {}
-    if page_note:  # every duty sentence on the covenant pages is explained by a field, or listed for the reviewer
+    if entries is not None:
+        from dps.skills.covenants import ledger
+
+        led = ledger.summary(entries, pages)
+        still = [e for e in led["entries"] if e["state"] == ledger.UNRESOLVED]
+        # the older coverage keys stay, now counted over the whole document
+        extra["_coverage"] = {"dutySentences": led["candidates"], "explained": led["candidates"] - led["unresolved"],
+                              "byQuote": led["finding"], "byKind": led["covered"], "percent": led["percentExplained"],
+                              "unexplained": [{"page": e["page"], "text": e["text"][:200], "kind": e["kind"]}
+                                              for e in still[:10]],
+                              "unexplainedCount": led["unresolved"], "ledger": led}
+        if led["unresolved"]:
+            at = sorted({e["page"] for e in still})
+            warnings.append(issue("COVERAGE_GAP", f"{led['unresolved']} duty sentence(s) not explained by any "
+                                                  f"covenant ({led['percentExplained']}% explained, 100% accounted); "
+                                                  "each is a review item on pages " + ", ".join(map(str, at[:30]))))
+    elif page_note:  # every duty sentence on the covenant pages is explained by a field, or listed for the reviewer
         from dps.skills.covenants import coverage
 
         duty_pages = {s["page"] for s in page_note["sent"] if s["why"] in ("RULES", "SECTION", "DUTY")}
@@ -518,7 +610,7 @@ def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | N
                                     f"the document reads as {c.type}; onboarding reads agreements, sanction "
                                     "letters and amendments")]
         result["document"] = {"confidence": c.confidence, "route": "NEEDS_REVIEW",
-                              "reasons": ["TYPE_NOT_ONBOARDING"]}
+                              "reasons": ["TYPE_NOT_ONBOARDING"], "pages": page_accounting(model.get("pages", []))}
     else:
         result = run(load(pack_name), job, model, gateway, tools, db, pipeline_version, scorer_dir=scorer_dir)
     found = find_identifiers(model)

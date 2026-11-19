@@ -125,6 +125,24 @@ class Taxonomy:
                 return code
         return None
 
+    def more_specific(self, text: str | None, code: str | None) -> str | None:
+        """A type of the same category named in ``text`` by a longer phrase that contains one of ``code``'s phrases
+        ("first lien leverage ratio" beside "leverage ratio"): the clause's own narrower test, which must not be read
+        as the broader one. None when there is none."""
+        if not text or not code:
+            return None
+        spaced = f" {_norm(text)} "
+        own = [p for p, c in self._phrases if c == code and f" {p} " in spaced]
+        if not own:
+            return None
+        category = self.category_of(code)
+        for phrase, other in self._phrases:  # longest first
+            if other == code or f" {phrase} " not in spaced or self.category_of(other) != category:
+                continue
+            if any(len(phrase) > len(o) and f" {o} " in f" {phrase} " for o in own):
+                return other
+        return None
+
     def dps_key(self, code: str | None) -> str | None:
         """The rules' own metric name for a code (the first of its dps_keys), when it has one."""
         t = self.get(code)
