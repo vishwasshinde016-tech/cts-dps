@@ -61,7 +61,7 @@ def checks_for(fields: list[dict]) -> list[dict]:
 def rules(pages: list[dict], ctx: dict) -> list[dict]:
     """The agreement extractor, plus the safety net: covenant-shaped sentences no rule explained go to a person as
     POSSIBLE_COVENANT (so nothing is silently missed without an LLM)."""
-    from dps.extraction.coverage import possible_covenants
+    from dps.extraction.safety_net import possible_covenants
 
     read = as_pages(pages)
     terms = extract_terms(read)

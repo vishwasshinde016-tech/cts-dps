@@ -6,8 +6,8 @@ import pytest
 from test_statement_pdf import amounts, header, line
 
 from dps.extraction.agreement import _threshold, extract_terms
-from dps.extraction.coverage import looks_like_covenant
 from dps.extraction.mapping import foreign_currency, normalize
+from dps.extraction.safety_net import looks_like_covenant
 from dps.extraction.statement import extract_values, match_key, parse_number, rows_from_csv
 from dps.extraction.statement_pdf import rows_from_words
 from dps.parse.engine import Page

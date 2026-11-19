@@ -453,7 +453,7 @@ def list_terms(document_id: str, db: DB, user: User, checker: Checker) -> list[d
 
 @router.get("/dps/v1/documents/{document_id}/history")
 def document_history(document_id: str, db: DB, user: User, checker: Checker) -> dict:
-    """What DPS read and found, what the AI said and what people decided, in order (docs/observability.md). The
+    """What DPS read and found, what the AI said and what people decided, in order (see dps.history). The
     text sent to the model and its answer are shown to administrators, auditors and support only."""
     doc = load_document(db, document_id)
     require_document_access(checker, user, doc, read_only=True)

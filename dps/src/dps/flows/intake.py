@@ -20,8 +20,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from dps import history, jobs, services
 from dps.agent.guard import injection_signs
 from dps.extraction.agreement import extract_terms
-from dps.extraction.coverage import possible_covenants
 from dps.extraction.mapping import Proposal, normalize
+from dps.extraction.safety_net import possible_covenants
 from dps.extraction.terms_info import extract_info
 from dps.extraction.validation import FAILED, NEEDS_REVIEW, PUBLISH, validate
 from dps.flows.persistence import SqlFlowPersistence

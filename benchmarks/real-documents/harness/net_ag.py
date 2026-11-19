@@ -5,7 +5,7 @@ import statistics
 import sys
 
 from dps.extraction.agreement import extract_terms
-from dps.extraction.coverage import possible_covenants
+from dps.extraction.safety_net import possible_covenants
 from dps.parse.engine import Page
 
 FAMILY = {"DSCR": "DSCR", "ICR": "ICR", "FIXED_CHARGE_COVERAGE_RATIO": "FCCR", "DEBT_TO_EBITDA": "LEVERAGE",
