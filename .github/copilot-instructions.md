@@ -42,16 +42,16 @@ Every step is described by hand in `docs/cts-dps/install-and-demo.md`.
 
 ```powershell
 .venv\Scripts\python scripts\demo_onboard.py ..\golden-set\documents\AGR-001.pdf
-.venv\Scripts\python scripts\fetch_public_samples.py           # the architect's list of real public agreements -> samples\
-.venv\Scripts\python scripts\demo_onboard.py samples\uk_dwf_senior_facilities_agreement.pdf --trace run.txt
-.venv\Scripts\python scripts\submit_job.py samples\us_ex10_1_credit_agreement_2020.pdf   # a real job through the running API and worker
+.venv\Scripts\python scripts\fetch_public_samples.py           # the architect's list of real public agreements -> architect-documents\
+.venv\Scripts\python scripts\demo_onboard.py ..\architect-documents\uk_dwf_senior_facilities_agreement.pdf --trace run.txt
+.venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf   # a real job through the running API and worker
 ```
 
 ## Rules
 
 - **Never commit `.env`** and never write keys, passwords or tokens into any file. The Azure keys come from the
   bank's vault and go only into `dps/.env`, which Git ignores.
-- `dps/samples/` holds third-party documents. It is ignored by Git; never commit them.
+- `architect-documents/` holds the architect's public demo documents (PDF), committed so the demo works offline. Add new third-party documents only when the owner asks.
 - The AI part (`DPS_LLM_ENABLED=true`) needs the VPN to the bank's Azure OpenAI endpoint. Everything else runs
   without it.
 - Keep line length 120 (ruff). Tests must keep coverage at 90% or more.

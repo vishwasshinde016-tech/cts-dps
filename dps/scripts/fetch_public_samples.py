@@ -1,12 +1,12 @@
 """Download the architect's list of real, public loan and credit agreements for the demo (needs internet).
 
-    python scripts/fetch_public_samples.py              # -> samples/ (next to this dps/ folder's scripts)
+    python scripts/fetch_public_samples.py              # -> ../architect-documents/ (the repository folder)
     python scripts/fetch_public_samples.py D:\\demo     # another folder
-    python scripts/demo_onboard.py samples/uk_workspace_facility_agreement_2022.pdf
+    python scripts/demo_onboard.py ../architect-documents/us_ex10_1_credit_agreement_2020.pdf
 
 The list is the one the architect gave (United States SEC EDGAR, United Kingdom LMA-style facility agreements,
 Indian banks' standard loan agreement forms). Documents are for evaluation only: check each source's terms. They are
-third-party documents, so ``samples/`` is ignored by Git and never committed.
+kept in ``architect-documents/`` (committed, so the demo needs no internet); this script fetches them again.
 
 SEC EDGAR asks automated clients to send a descriptive User-Agent with a contact address. Set DPS_SEC_USER_AGENT
 (or COVX_SEC_USER_AGENT), for example "MyBank Covenant Research ops@mybank.example".
@@ -104,7 +104,7 @@ def html_to_pdf(browser: str, html: Path, pdf: Path) -> bool:
 
 
 def main(out_dir: str | None = None) -> int:
-    out = Path(out_dir) if out_dir else Path(__file__).resolve().parents[1] / "samples"
+    out = Path(out_dir) if out_dir else Path(__file__).resolve().parents[2] / "architect-documents"
     out.mkdir(parents=True, exist_ok=True)
     ua = os.environ.get("DPS_SEC_USER_AGENT") or os.environ.get("COVX_SEC_USER_AGENT") or \
         "CTS-DPS-evaluation research@cts-dps.local"

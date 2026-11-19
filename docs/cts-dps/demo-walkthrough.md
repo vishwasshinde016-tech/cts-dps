@@ -10,12 +10,18 @@
 |---|---|---|---|
 | 1 | Get ready (once, before the session) | none | 15, before |
 | 2 | The picture in one minute | none | 2 |
-| 3 | **Onboarding** (architect's onboarding board) | `samples\us_ex10_1_credit_agreement_2020.pdf` | 20 |
-| 4 | **Amendment** (architect's amendment board) | `samples\us_southcross_amendment_2018.pdf` | 8 |
-| 5 | **Assessment** (statement) | `..\golden-set\documents\FS-012.pdf` | 8 |
+| 3 | **Onboarding** (architect's onboarding board) | [`architect-documents\us_ex10_1_credit_agreement_2020.pdf`](../../architect-documents/us_ex10_1_credit_agreement_2020.pdf) (architect's list) | 20 |
+| 4 | **Amendment** (architect's amendment board) | [`architect-documents\us_southcross_amendment_2018.pdf`](../../architect-documents/us_southcross_amendment_2018.pdf) (architect's list) | 8 |
+| 5 | **Assessment** (statement) | [`golden-set\documents\FS-012.pdf`](../../golden-set/documents/FS-012.pdf) (ours: the architect's list has no statement) | 8 |
 | 6 | When things go wrong | the same files | 5 |
 | 7 | Where everything is: one table | none | 2 |
 | 8 | Reset for a fresh demo | none | 1 |
+
+**The documents you upload** are in the repository, so the demo needs no internet.
+- **The architect's documents** are in [`architect-documents\`](../../architect-documents/README.md). Its README lists every file with its source link and the flow it shows.
+- **Our own documents** are in `golden-set\documents\`. They are used only where the architect's list has nothing, which is the assessment flow.
+
+In the commands, the path starts with `..\` because you run them from `C:\cts-dps\dps`.
 
 ---
 
@@ -28,7 +34,7 @@
 ```powershell
 git clone https://github.com/vishwasshinde016-tech/cts-dps.git C:\cts-dps
 cd C:\cts-dps\dps
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1 -Samples
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 ```
 
 **What setup created**, and where:
@@ -38,7 +44,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1 -Samples
 | Python environment | `C:\cts-dps\dps\.venv\` | all libraries: FastAPI, CrewAI, pypdf, pdfplumber, RapidOCR … |
 | Settings | `C:\cts-dps\dps\.env` | local settings: SQLite database, local folders, dev sign-in, AI off |
 | Database | `C:\cts-dps\dps\dps.db` | SQLite file with all 25 DPS tables (in the bank this is SQL Server schema `dps`) |
-| Demo files | `C:\cts-dps\dps\samples\` | the architect's list of public agreements (from `scripts\fetch_public_samples.py`) |
+| Demo files (already in the clone) | `C:\cts-dps\architect-documents\` | the architect's list of public agreements, as PDF |
 
 The folders `storage\` (the uploaded files) and `derived\` (what DPS makes from them) appear at the first upload.
 
@@ -75,7 +81,7 @@ The folders `storage\` (the uploaded files) and `derived\` (what DPS makes from 
 
 ## 3. Flow 1: Onboarding (the architect's onboarding board)
 
-**Document:** `samples\us_ex10_1_credit_agreement_2020.pdf`. It is a real 100-page US credit agreement from the architect's list.
+**Document:** [`architect-documents\us_ex10_1_credit_agreement_2020.pdf`](../../architect-documents/us_ex10_1_credit_agreement_2020.pdf). It is a real 100-page US credit agreement from the architect's list (SEC EDGAR, 2020).
 
 ### 3.1 Start the DPS API
 
@@ -119,8 +125,10 @@ Wait for `DPS worker … started (pool=STANDARD)`.
 **Do** (Terminal C):
 
 ```powershell
-.venv\Scripts\python scripts\submit_job.py samples\us_ex10_1_credit_agreement_2020.pdf --type LOAN_AGREEMENT
+.venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf --type LOAN_AGREEMENT
 ```
+
+> **For you:** if DPS has already read this file (for example in a rehearsal), it returns that earlier job at once, marked `duplicate`, and you do not see the stages. Reset before the session (part 8) so the audience sees the full run.
 
 It prints 4 numbered lines. Stop after line 2 and explain it.
 
@@ -244,7 +252,7 @@ Point at section 1 (the `dps_job` row with the type, status and context Spring s
 >
 > On this laptop the AI is off, so you see the rules-only result. With the VPN, I add `--agent` and the agent's answers join in."
 
-> **For you:** to show the agent, the laptop needs the VPN and the Azure settings in `.env` (see `install-and-demo.md`, section 5). Then run `.venv\Scripts\python scripts\demo_onboard.py samples\us_ex10_1_credit_agreement_2020.pdf --agent`.
+> **For you:** to show the agent, the laptop needs the VPN and the Azure settings in `.env` (see `install-and-demo.md`, section 5). Then run `.venv\Scripts\python scripts\demo_onboard.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf --agent`.
 
 ### 3.8 Every answer is checked, and nothing is missed
 
@@ -308,13 +316,13 @@ In `result.json`, find the field `FIN_TOTAL_LEVERAGE` and show `value` (operator
 **Do** (Terminal C): run the same upload twice, quickly, one after the other:
 
 ```powershell
-.venv\Scripts\python scripts\submit_job.py samples\us_ex10_1_credit_agreement_2020.pdf --wait 5
-.venv\Scripts\python scripts\submit_job.py samples\us_ex10_1_credit_agreement_2020.pdf --wait 5
+.venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf --wait 5
+.venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf --wait 5
 ```
 
-The second run prints the **same job ID** with `(duplicate: this file is already queued)`.
+The second run prints the **same job ID** with `(duplicate: DPS already has a job for this document and context …)`.
 
-**Inside:** [`dps/src/dps/api/jobs.py:268`](../../dps/src/dps/api/jobs.py#L268) `_input_key` sees the same document and context already queued, so it returns that job instead of making a second one.
+**Inside:** [`dps/src/dps/api/jobs.py:268`](../../dps/src/dps/api/jobs.py#L268) `_input_key` builds a key from the document, its context and the pipeline version. If a job with that key already exists, queued, running or finished, DPS returns it instead of making a second one ([`dps/src/dps/api/jobs.py:284`](../../dps/src/dps/api/jobs.py#L284)).
 
 **Say:** "This is the box on the architect's board, 'check if a job is present: covenant extraction is in progress'. The same document is never read twice at the same time."
 
@@ -322,12 +330,12 @@ The second run prints the **same job ID** with `(duplicate: this file is already
 
 ## 4. Flow 2: Amendment (the architect's amendment board)
 
-**Document:** `samples\us_southcross_amendment_2018.pdf`, the Sixth Amendment to a US revolving credit agreement.
+**Document:** [`architect-documents\us_southcross_amendment_2018.pdf`](../../architect-documents/us_southcross_amendment_2018.pdf), from the architect's list: the Sixth Amendment to a US revolving credit agreement (SEC EDGAR, 2018). A second amendment from the list, [`us_holly_amendment_2010.pdf`](../../architect-documents/us_holly_amendment_2010.pdf), works the same way.
 
 **Do** (Terminal C):
 
 ```powershell
-.venv\Scripts\python scripts\submit_job.py samples\us_southcross_amendment_2018.pdf --job EXTRACT_AMENDMENT
+.venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_southcross_amendment_2018.pdf --job EXTRACT_AMENDMENT
 .venv\Scripts\python scripts\show_job.py
 ```
 
@@ -357,7 +365,7 @@ The second run prints the **same job ID** with `(duplicate: this file is already
 
 ## 5. Flow 3: Assessment (a financial statement)
 
-**Document:** `..\golden-set\documents\FS-012.pdf`, a balance sheet from our labelled test set. The architect's list has no statements, so this one is ours.
+**Document:** [`golden-set\documents\FS-012.pdf`](../../golden-set/documents/FS-012.pdf), a balance sheet from our labelled test set. **The architect's list has no financial statements, so this one is ours.** Say so when you show it.
 
 **Do** (Terminal C):
 
@@ -382,6 +390,20 @@ The second run prints the **same job ID** with `(duplicate: this file is already
 > "For assessment, DPS reads the borrower's statements into named lines with their values, and works out the totals the covenants need, like total and net debt. It lists every line it could not find, so nothing is silently zero. It also flags figures that changed from an earlier statement.
 >
 > Spring then uses these confirmed numbers to test the covenants. DPS gives the numbers; it does not decide compliance."
+
+### More documents from the architect's list
+
+You can upload any of these the same way with `submit_job.py`:
+
+| File | What it shows |
+|---|---|
+| [`uk_dwf_senior_facilities_agreement.pdf`](../../architect-documents/uk_dwf_senior_facilities_agreement.pdf) | a 396-page UK LMA agreement: ICR and minimum EBITDA, and 375 duty sentences for the ledger |
+| [`us_core_labs_credit_agreement_2022.pdf`](../../architect-documents/us_core_labs_credit_agreement_2022.pdf) | leverage ≤ 2.75 on page 102 |
+| [`us_meet_group_credit_agreement_2019.pdf`](../../architect-documents/us_meet_group_credit_agreement_2019.pdf) | leverage thresholds and a pricing grid |
+| [`in_au_emerging_enterprises_facility.pdf`](../../architect-documents/in_au_emerging_enterprises_facility.pdf) | an Indian bank's form: minimum net worth, negative covenants |
+| [`in_idfc_first_bbg_term_loan_agreement.pdf`](../../architect-documents/in_idfc_first_bbg_term_loan_agreement.pdf) | an Indian standard form with blanks: undertakings only |
+
+Four links on the architect's list could not be downloaded (Workspace, Gresham House, DCB, South Indian Bank). The list also has no sanction letter or compliance certificate, so those two flows have no demo file yet.
 
 ---
 
@@ -423,6 +445,8 @@ The full database (25 tables, every column) is in the database panel of `dps-com
 
 ## 8. Reset for a fresh demo
 
+Do this after a rehearsal, so every upload runs in full instead of returning the earlier job as a duplicate.
+
 Stop the API and the worker with Ctrl+C. Then:
 
 ```powershell
@@ -430,7 +454,7 @@ Remove-Item dps.db, storage, derived -Recurse -Force
 .venv\Scripts\alembic upgrade head
 ```
 
-This deletes only local demo data (the database and the two folders). Your settings (`.env`) and the `samples\` folder stay.
+This deletes only local demo data (the database and the two folders). Your settings (`.env`) and the `architect-documents\` folder stay.
 
 ---
 

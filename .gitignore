@@ -29,3 +29,5 @@ desktop.ini
 
 # Third-party demo documents (scripts/fetch_public_samples.py), never committed
 dps/samples/
+# fetch_public_samples.py keeps the SEC HTML next to the PDF it prints; only the PDFs are committed
+architect-documents/*.htm

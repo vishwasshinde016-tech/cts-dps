@@ -62,7 +62,7 @@ Spring sends a job. A Python worker claims it, and a CrewAI Flow reads the docum
 @diagram sequence id=onboarding-flow source=dps-onboarding-sequence.json title="Onboarding job (ONBOARD): submit to review"
 
 @steps id=onboarding-steps
-| o1 | DPS job API | Spring posts an `ONBOARD` job. The same input already queued returns that job, which Spring shows as extraction in progress. | onboarding-flow | api |
+| o1 | DPS job API | Spring posts an `ONBOARD` job. The same document and context already in DPS returns that job, which Spring shows as extraction in progress. | onboarding-flow | api |
 | o2 | Worker | The worker claims the job and runs ingest and the sandbox parse to build the page model. | onboarding-flow | worker |
 | o3 | Flow + runner | AI 1 classifies with rules first. The agent gives a second opinion only when the rules are unsure. | onboarding-flow | runner |
 | o4 | Document Agent | AI 2 reads covenants in 4 focused parts: financial, undertakings, reporting and events of default. | onboarding-flow | agent |
@@ -357,7 +357,7 @@ In the bank, Spring and the DMS do the upload. On a laptop, two scripts play the
 
 ## Which real files from the architect's list do I demo, and what do they show? {#real-files}
 
-`scripts\fetch_public_samples.py` downloads the architect's list into `dps\samples\`. Results below were measured on 19 Nov 2026, rules only.
+The architect's documents are in the repository folder `architect-documents\` (its README lists each source link). Results below were measured on 19 Nov 2026, rules only.
 
 | File | Flow | Measured result |
 | --- | --- | --- |
@@ -472,7 +472,7 @@ The real Spring and DMS connection. Document sets that read an agreement with it
 ## Checklist before the handover session {#checklist}
 
 - [ ] Install on the laptop with [`docs/cts-dps/install-and-demo.md`](https://github.com/vishwasshinde016-tech/cts-dps/blob/main/docs/cts-dps/install-and-demo.md), then run `pytest -q` and the golden gate.
-- [ ] Run `scripts\fetch_public_samples.py`, then the AGR-001 demo and the run log.
+- [ ] Run the AGR-001 demo and the run log.
 - [ ] Start the API and the worker, and run `scripts\submit_job.py` on `us_ex10_1_credit_agreement_2020.pdf`.
 - [ ] Walk the architecture panel step by step.
 - [ ] Walk the onboarding and amendment panels against the two Miro boards.
