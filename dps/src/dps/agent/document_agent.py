@@ -44,6 +44,8 @@ BACKSTORY = ("You work inside a covenant tracking system. You propose values; ru
 FINAL = ("Use the tools when you need a page, a definition, the covenant library or a formula check. When you are "
          "done, give the Final Answer as the JSON object only, matching the schema above.")
 PAGE_LIMIT = 12_000
+DEFINITION_LIMIT = 6_000
+NEXT_DEFINITION = re.compile(r"[\"“'][^\"”'\n]{2,80}[\"”']\s+(?:means|shall\s+mean|has\s+the\s+meaning)", re.I)
 SEARCH_HITS = 15
 
 
@@ -193,8 +195,16 @@ class FindDefinitionTool(_DpsTool):
             text = p.get("text") or ""
             m = pattern.search(text)
             if m:
-                end = text.find("\n\n", m.end())
-                return f"page {p.get('no')}: {text[m.start(): end if end != -1 else m.start() + 800][:800]}"
+                # To the next defined term (EBITDA definitions run for pages of add-backs), at most DEFINITION_LIMIT
+                # characters, and say so when it is cut (full review F11).
+                rest = "\n".join(str(q.get("text") or "") for q in self._ctx.pages
+                                 if int(q.get("no") or 0) > int(p.get("no") or 0))[:DEFINITION_LIMIT]
+                body = text[m.start():] + "\n" + rest
+                nxt = NEXT_DEFINITION.search(body, m.end() - m.start())
+                piece = body[: nxt.start() if nxt else len(body)]
+                cut = len(piece) > DEFINITION_LIMIT
+                return (f"page {p.get('no')}: {piece[:DEFINITION_LIMIT].strip()}"
+                        + (" [cut: the definition goes on; open the next page with page_text]" if cut else ""))
         return f"No definition of {term!r} in the document."
 
 

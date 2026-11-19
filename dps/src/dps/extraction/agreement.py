@@ -110,7 +110,8 @@ NON_FINANCIAL_RULES: list[tuple[str, list[str], list[str]]] = [
     # (metric, body patterns, heading-only patterns)
     ("COMPLIANCE_CERTIFICATE",
      [r"\bcompliance\s+certificate\b", r"\bofficer\s+certificate\b", r"\bcertificate\s+of\s+compliance\b",
-      r"\bcertificate\s+signed\s+by\b", r"\bchief\s+financial\s+officer\b"],
+      r"\bcertificate\s+signed\s+by\b",
+      r"\bcertif\w*\b[^.;]{0,80}\bchief\s+financial\s+officer\b|\bchief\s+financial\s+officer\b[^.;]{0,80}\bcertif"],
      [r"\bcompliance\s+certificate\b", r"\bofficer\s+certificate\b", r"\bcertificate\s+of\s+compliance\b"]),
     ("REPORTING_COVENANT",
      [r"\binformation\s+covenant\b", r"\bfinancial\s+statements?\s+and\s+information\b",

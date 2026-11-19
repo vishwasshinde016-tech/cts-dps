@@ -81,7 +81,13 @@ def read(pack, gateway, batches: list[list[dict]], notes: list | None = None, **
     ran = False
     for part in parts_of(pack) or [ALL]:
         pat = pattern(part)
-        part_batches = [kept for kept in ([p for p in b if pat.search(p.get("text") or "")] for b in batches) if kept]
+        if pack.page_selection.get("same_batch_for_parts"):
+            # Same pages for every part, pages first in the prompt: parts 2-4 reuse part 1's cached prefix (G32).
+            # A part with no word on a batch still skips it.
+            part_batches = [b for b in batches if any(pat.search(p.get("text") or "") for p in b)]
+        else:
+            part_batches = [kept for kept in ([p for p in b if pat.search(p.get("text") or "")] for b in batches)
+                            if kept]
         if not part_batches:
             continue
         ran = True

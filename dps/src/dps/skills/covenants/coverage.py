@@ -146,12 +146,19 @@ def field_kind(f: dict) -> str | None:
     return family(canonical(value.get("code") or value.get("metric"), f.get("name")))
 
 
+NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
+
+
 def _explains(quote: str, sentence: str) -> bool:
+    """The quote holds the sentence, or shares most of its words and every number in it (full review F7: "within
+    120 days" must never explain "within 10 days", a different duty that only shares words)."""
     q, s = _flat(quote), _flat(sentence)
     if len(q) >= 12 and (q in s or s in q):
         return True
     qw, sw = _words(q), _words(s)
-    return bool(sw) and len(qw & sw) / len(sw) >= 0.6
+    if not sw or len(qw & sw) / len(sw) < 0.6:
+        return False
+    return set(NUMBER.findall(s)) <= set(NUMBER.findall(q))
 
 
 def check(pages: list[dict], fields: list[dict]) -> dict:

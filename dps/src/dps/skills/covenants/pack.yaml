@@ -8,10 +8,14 @@ routes: {extract: strong, images: vision}
 tools: [page_text, search_text, find_definition, covenant_library, validate_formula]
 # Long agreements: up to 4 reads of 25 pages each (one prompt cannot hold every covenant page).
 # Phase 2 (18 Nov 2026): four focused parts, each with its own slice of the covenant taxonomy (parts.py).
-page_selection: {max_pages: 25, rules: covenant_section, max_batches: 4,
+# Long agreements: as many reads of 25 pages as it takes to send every duty page, up to 12 (full review G31: the
+# 4-read cap left 53-148 duty pages of the longest architect agreements out of every prompt).
+page_selection: {max_pages: 25, rules: covenant_section, max_batches: 12, same_batch_for_parts: true,
                  parts: [financial, undertakings, reporting, events_of_default]}
-limits: {max_tool_calls: 8, max_model_turns: 3, max_seconds: 240, token_budget: 400000}
+limits: {max_tool_calls: 8, max_model_turns: 3, max_seconds: 240, token_budget: 700000}
 prompt: prompt.md
 schema: schema.json
-field_risk: {threshold: HIGH, operator: HIGH, frequency: MEDIUM, cure_days: MEDIUM, name: LOW, "*": HIGH}
+# Every covenant field is HIGH risk: always reviewed (risk is looked up by field name, and covenants are named by
+# what they are, so per-attribute keys never matched; full review G28).
+field_risk: {"*": HIGH}
 thresholds: {MEDIUM: 0.95, LOW: 0.90}

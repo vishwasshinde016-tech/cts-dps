@@ -329,7 +329,12 @@
           "TRACKED_CHANGES",
           "FORMULA_TEXT",
           "IMAGES",
-          "POOR_TEXT"
+          "POOR_TEXT",
+          "HIDDEN_ROWS_OR_COLUMNS",
+          "NO_CACHED_VALUE",
+          "CONTENT_CONTROLS",
+          "COMMENTS",
+          "IMAGE_REGIONS"
         ]
       },
       "description": "What inspection and parsing noticed but did not refuse"

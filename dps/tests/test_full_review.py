@@ -246,3 +246,217 @@ def test_g15_g20_file_flags_and_pack_versions_reach_the_result():
     packs = result["pipeline"]["packs"]
     assert packs["covenants"]["version"] and len(packs["covenants"]["promptSha"]) == 16
     assert "schedule_terms" in packs
+
+
+# ---------- WP4: finding every covenant (probes P1 and P2 of the review, now tests) ----------
+
+import pytest  # noqa: E402
+
+OBLIGATIONS = [
+    "The Borrower shall ensure that its Chief Financial Officer is at all times a person acceptable to the Lender.",
+    "The Borrower shall cause the Vessel to remain classed with a member of the International Association of "
+    "Classification Societies.",
+    "The Borrower shall not change its accounting reference date or its auditors without the consent of the Agent.",
+    "The Borrower will procure that the Project achieves Commercial Operation on or before 31 March 2028.",
+    "The Borrower shall hedge not less than 50 per cent. of its interest rate exposure under the Facility.",
+    "No member of the Group may declare, make or pay any dividend, charge, fee or other distribution.",
+    "The Parent shall ensure that no Subsidiary creates or permits to subsist any Security over any of its assets.",
+    "Each Restricted Subsidiary shall deliver to the Agent its annual audited accounts within 120 days.",
+    "Capital Expenditure in any Financial Year is not to exceed USD 5,000,000.",
+    "It is a condition of this Agreement that the Sponsor holds at least 51 per cent. of the voting share capital "
+    "of the Borrower.",
+    "Leverage: as at each Quarter Date, Total Net Debt to EBITDA of 3.50:1 or lower.",
+    "Any Financial Indebtedness of any member of the Group is not paid when due nor within any originally "
+    "applicable grace period.",
+    "If Excess Availability is less than USD 10,000,000 on any day, the Borrower shall maintain a Fixed Charge "
+    "Coverage Ratio of at least 1.10:1.",
+    "The aggregate Revolving Loans shall not at any time exceed the lesser of the Commitments and the Borrowing Base.",
+    "Eligible Receivables shall exclude any receivable outstanding for more than 90 days after its invoice date.",
+]
+NOT_OBLIGATIONS = [
+    "For example, if the Leverage Ratio were 4.00:1, the Applicable Margin would be 3.25 per cent. per annum.",
+    "The Borrower may pay dividends out of Excess Cash Flow so long as no Default is continuing.",
+    "The Lender may at any time inspect the books of the Borrower.",
+    "\"Leverage Ratio\" means the ratio of Total Net Debt to EBITDA in respect of any Relevant Period.",
+]
+
+
+@pytest.mark.parametrize("sentence", OBLIGATIONS)
+def test_f1_every_obligation_shape_is_found_by_the_rules_or_the_ledger(sentence):
+    from dps.skills.covenants import ledger
+    from dps.skills.covenants.rules import rules
+
+    page = [{"no": 1, "text": sentence}]
+    assert ledger.candidates(page) or rules(page, {}), sentence
+
+
+@pytest.mark.parametrize("sentence", NOT_OBLIGATIONS)
+def test_f1_illustrations_permissions_and_definitions_are_not_candidates(sentence):
+    from dps.skills.covenants import ledger
+    from dps.skills.covenants.rules import rules
+
+    page = [{"no": 1, "text": sentence}]
+    assert not ledger.candidates(page) and not rules(page, {})
+
+
+def _onboard_fields(text):
+    from dps.skills.covenants import ledger
+    from dps.skills.covenants.rules import rules
+
+    pages = [{"no": 1, "text": text}]
+    fields = rules(pages, {})
+    entries = ledger.settle(ledger.candidates(pages), fields)
+    ledger.attach(entries, fields)
+    return fields + ledger.review_items(entries, pages, "covenants"), entries
+
+
+def test_f2_a_table_of_levels_is_one_covenant_with_its_schedule():
+    fields, _ = _onboard_fields(
+        "The Borrower shall ensure that Leverage in respect of any Relevant Period ending on a date set out below "
+        "does not exceed the ratio set out opposite that date:\n\n31 March 2027 4.00:1\n\n31 March 2028 3.50:1\n\n"
+        "31 March 2029 and thereafter 3.00:1")
+    [table] = [f for f in fields if any(i["code"] == "STEP_TABLE" for i in f["issues"])]
+    assert table["value"]["operator"] == "<="
+    assert [s["threshold"] for s in table["value"]["schedule"]] == [4.0, 3.5, 3.0]
+    assert table["status"] == "NEEDS_REVIEW"
+
+
+def test_f3_a_springing_condition_stays_with_its_covenant():
+    fields, _ = _onboard_fields(
+        "If Excess Availability is less than USD 10,000,000 on any day, the Borrower shall maintain a Fixed Charge "
+        "Coverage Ratio of at least 1.10:1.")
+    fccr = next(f for f in fields if f["group"] == "FINANCIAL_COVENANT")
+    assert fccr["status"] == "NEEDS_REVIEW"
+    assert any("Excess Availability" in q for q in fccr["value"].get("qualifiers", []))
+    assert "QUALIFIED" in {i["code"] for i in fccr["issues"]}
+
+
+def test_f7_two_reporting_duties_are_never_one():
+    _, entries = _onboard_fields(
+        "The Borrower shall deliver its audited annual financial statements within 120 days. The Borrower shall "
+        "deliver a copy of each environmental permit renewal within 10 days of receipt.")
+    second = next(e for e in entries if "permit" in e["text"])
+    assert second["state"] != "FINDING"  # covered and listed on the field, or for review: never silently explained
+
+
+def test_f8_a_sample_of_dismissed_sentences_goes_to_a_person():
+    from dps.skills.covenants import ledger
+
+    pages = [{"no": 1, "text": " ".join(f"The Borrower shall deliver report number {n} to the Lender within {n} days."
+                                        for n in range(1, 41))}]
+    entries = ledger.candidates(pages)
+    for e in entries:
+        e["state"], e["reason"] = ledger.NOT_A_COVENANT, "test"
+    sampled = [f for f in ledger.review_items(entries, pages, "covenants")
+               if any(i["code"] == "DISMISSED_SAMPLE" for i in f["issues"])]
+    assert 1 <= len(sampled) < len(entries)
+
+
+def test_f11_a_long_definition_is_read_to_its_end():
+    from dps.agent.document_agent import FindDefinitionTool, ToolContext
+
+    body = "\"EBITDA\" means operating profit " + "plus an add-back, " * 120 + "less taxes.\n\"Next Term\" means x."
+    tool = FindDefinitionTool(ToolContext([{"no": 1, "text": body}], None, None, None, 5))
+    out = tool._run("EBITDA")
+    assert "less taxes" in out and "Next Term" not in out
+
+
+def test_f14_a_chief_financial_officer_is_not_a_compliance_certificate():
+    from dps.skills.covenants.rules import rules
+
+    fields = rules([{"no": 1, "text": OBLIGATIONS[0]}], {})
+    assert "COMPLIANCE_CERTIFICATE" not in {f["name"] for f in fields}
+
+
+def test_g26_g32_prompt_has_pages_first_and_one_item_per_duty():
+    from dps.skills import load
+    from dps.skills.common import prompt_for
+
+    pack = load("covenants")
+    assert "One item per duty" in pack.prompt
+    content = prompt_for(pack, [{"no": 3, "text": "page text"}])[0]["content"]
+    assert content.index("<<<page 3>>>") < content.index("Task:")
+
+
+# ---------- WP5: reading Word, Excel and mixed PDFs ----------
+
+def _docx_bytes():
+    import io
+
+    import docx
+    from docx.oxml import parse_xml
+
+    w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+    d = docx.Document()
+    d.add_heading("1. Definitions", level=1)
+    for i in range(60):
+        d.add_paragraph(f"{i}.1 Notices under this Agreement shall be in writing and in English. " * 3)
+    d.add_heading("21. Financial Covenants", level=1)
+    d.add_paragraph("21.1 The Borrower shall ensure that the Leverage Ratio does not exceed 3.25:1 on each Test Date.")
+    d.element.body.append(parse_xml(
+        f'<w:sdt {w}><w:sdtContent><w:p><w:r><w:t>21.2 The Borrower shall maintain Minimum Liquidity of not less '
+        f'than USD 25,000,000 at all times.</w:t></w:r></w:p></w:sdtContent></w:sdt>'))
+    d.element.body.append(parse_xml(
+        f'<w:p {w}><w:del w:id="1" w:author="x" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>21.3 The Borrower '
+        f'shall maintain a DSCR of not less than 1.30:1.</w:delText></w:r></w:del></w:p>'))
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def test_f6_a_long_word_file_is_read_in_logical_pages_with_form_fields_and_revisions():
+    from dps.agent.document_agent import PAGE_LIMIT
+    from dps.parse.page_model import DOCX_PAGE_CHARS, build_docx
+    from dps.skills.common import fit_pages
+
+    model = build_docx(_docx_bytes(), "s", None, [])
+    assert model["pageCount"] > 1
+    assert all(len(p["text"]) <= DOCX_PAGE_CHARS + 600 for p in model["pages"])  # every page fits the agent
+    assert all(len(p["text"]) < PAGE_LIMIT for p in model["pages"])
+    text = "\n".join(p["text"] for p in model["pages"])
+    assert "3.25:1" in text and "25,000,000" in text  # the content-control covenant is read
+    assert "1.30:1" not in text  # a deleted covenant is not read as text ...
+    deleted = [b["deleted"] for p in model["pages"] for b in p["blocks"] if b.get("deleted")]
+    assert deleted and "1.30:1" in deleted[0]  # ... but kept for the reviewer
+    assert {"TRACKED_CHANGES", "CONTENT_CONTROLS"} <= set(model["flags"])
+    covenant_page = next(p for p in model["pages"] if "3.25:1" in p["text"])
+    assert covenant_page["blocks"][0]["kind"] == "HEADING"  # a heading starts a page
+    assert any(b["ref"].startswith("docx:para:") for b in covenant_page["blocks"])
+    _, left_out = fit_pages([{"no": covenant_page["no"], "text": covenant_page["text"]}])
+    assert left_out == []
+
+
+def test_f13_excel_formulas_without_values_and_hidden_rows_are_flagged():
+    import io
+
+    from openpyxl import Workbook
+
+    from dps.parse.page_model import build_xlsx
+
+    wb = Workbook()
+    ws = wb.active
+    ws["A1"], ws["B1"], ws["A2"], ws["B2"] = "EBITDA", 100, "Total", "=B1*2"
+    ws.row_dimensions[3].hidden = True
+    ws["A3"] = "hidden line"
+    buf = io.BytesIO()
+    wb.save(buf)  # openpyxl saves formulas without cached values
+    model = build_xlsx(buf.getvalue(), "s", None, [])
+    assert {"NO_CACHED_VALUE", "HIDDEN_ROWS_OR_COLUMNS"} <= set(model["flags"])
+
+
+def test_f9_a_text_page_mostly_covered_by_a_picture_is_also_ocr_read():
+    from dps.parse.engine import Page
+    from dps.parse.page_model import _read_picture_text
+
+    class Ocr:
+        def ocr_page(self, data, index):
+            return "Header line\nThe Borrower shall maintain a DSCR of not less than 1.40x.", 0.9
+
+    class Engine:
+        _ocr = Ocr()
+
+    model = {"flags": []}
+    pages = [Page(1, "Header line\nSchedule 4 (as scanned)", "TEXT", 0.9), Page(2, "plain text page", "TEXT", 0.9)]
+    out = _read_picture_text(b"", pages, {1: {"imageShare": 0.7}, 2: {"imageShare": 0.05}}, Engine(), model)
+    assert "1.40x" in out[0].text and out[0].text.count("Header line") == 1
+    assert out[1].text == "plain text page" and model["flags"] == ["IMAGE_REGIONS"]

@@ -144,7 +144,7 @@ class PerPart(Salvage):
         return answer
 
 
-def test_each_part_reads_only_the_pages_with_its_words_and_events_come_back_on_their_own():
+def test_each_part_reads_the_shared_batch_with_its_words_and_events_come_back_on_their_own():
     pack = load("covenants")
     assert [p.name for p in parts.parts_of(pack)] == ["financial", "undertakings", "reporting", "events_of_default"]
     dscr = {"name": "DSCR", "page": 1, "quote": "Debt Service Coverage Ratio of not less than 1.20",
@@ -153,8 +153,9 @@ def test_each_part_reads_only_the_pages_with_its_words_and_events_come_back_on_t
            "value": {"metric": "EOD_NON_PAYMENT"}}
     gw = PerPart({"financial": [dscr], "events_of_default": [eod]})
     covenants, events = parts.read(pack, gw, [PAGES], all_pages=PAGES)
-    assert 3 in gw.seen["events_of_default"] and 4 not in gw.seen["events_of_default"]
-    assert 2 in gw.seen["reporting"] and 4 not in gw.seen["financial"]
+    # Full review G32: every part reads the same batch (pages first), so parts 2-4 reuse part 1's cached prefix;
+    # a part reads a batch only when the batch holds its words.
+    assert gw.seen["events_of_default"] == gw.seen["financial"] == gw.seen["reporting"] == [1, 2, 3, 4]
     assert [c["value"]["metric"] for c in covenants] == ["FIN_DSCR"] and covenants[0]["_part"] == "financial"
     assert [e["value"]["metric"] for e in events] == ["EOD_NON_PAYMENT"]
 
