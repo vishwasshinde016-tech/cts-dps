@@ -371,6 +371,30 @@ def job_result(job_id: str, request: Request, db: DB, user: User) -> Response:
     return Response(raw, media_type="application/json", headers={"ETag": etag})
 
 
+@router.get("/dps/v1/jobs/{job_id}")
+def get_job_status(job_id: str, db: DB, user: User) -> dict:
+    """Job status for Spring (contract getJob). With DPS_LEGACY_API on, the older route of the same path answers
+    first, with its per-CP access check; in CTS (legacy off) this one does (found in the local end-to-end run)."""
+    require_roles(user, SERVICE, ADMIN, SUPPORT)
+    return job_view(_job_or_404(db, job_id))
+
+
+@router.post("/dps/v1/jobs/{job_id}/retry", status_code=202)
+def retry_failed_job(job_id: str, db: DB, user: User) -> dict:
+    """Support puts a FAILED or DEAD job back in the queue with fresh attempts (contract retryJob); audited."""
+    require_roles(user, SUPPORT, ADMIN)
+    job = _job_or_404(db, job_id)
+    if job.status not in (jobs.FAILED, jobs.DEAD):
+        raise ApiError(409, "JOB_NOT_RETRYABLE", f"Job is {job.status}, not FAILED or DEAD")
+    now = utcnow()
+    job.status, job.attempts, job.error, job.error_code = jobs.QUEUED, 0, None, None
+    job.crash_count, job.due_at, job.finished_at, job.updated_at = 0, now, None, now
+    job.cancel_requested = False
+    services.audit(db, user.user, "JOB_RETRY", "job", job.id)
+    db.commit()
+    return job_view(job)
+
+
 @router.post("/dps/v1/jobs/{job_id}/cancel", status_code=202)
 def cancel_job(job_id: str, db: DB, user: User,
                x_user: Annotated[str | None, Header(alias="X-User")] = None) -> dict:

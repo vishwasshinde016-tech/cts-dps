@@ -517,3 +517,24 @@ def test_g2_another_tenants_job_does_not_exist_here(client, app, settings, tmp_p
     assert client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).status_code == 404
     assert client.get(f"/dps/v1/jobs/{job_id}/review", headers=SERVICE).status_code == 404
     assert client.get("/dps/v1/versions/cv-g2/runs", headers=SERVICE).status_code == 404
+
+
+def test_cts_without_legacy_routes_still_has_job_status_and_retry(settings, tmp_path):
+    """Found in the local end-to-end run: status and retry lived only in the old routes."""
+    from fastapi.testclient import TestClient
+    from test_phase2_ingest import text_pdf
+    from test_phase4_skills import CERTIFICATE, make_worker, submit
+
+    from dps.main import create_app
+
+    app = create_app(settings.model_copy(update={"legacy_api": False}), create_schema=True)
+    client = TestClient(app)
+    r = submit(client, app, "EXTRACT_CERTIFICATE", text_pdf([CERTIFICATE]), ".pdf", "application/pdf", "cv-st",
+               "key-status-1")
+    job_id = r.json()["jobId"]
+    service = {"X-User": "cts-spring", "X-Roles": "SERVICE"}
+    assert client.get(f"/dps/v1/jobs/{job_id}", headers=service).json()["status"] == "QUEUED"
+    assert make_worker(app, settings, tmp_path).run_once()
+    assert client.get(f"/dps/v1/jobs/{job_id}", headers=service).json()["status"] in ("DONE", "NEEDS_REVIEW")
+    support = {"X-User": "ops-1", "X-Roles": "SUPPORT"}
+    assert client.post(f"/dps/v1/jobs/{job_id}/retry", headers=support).status_code == 409  # not failed
