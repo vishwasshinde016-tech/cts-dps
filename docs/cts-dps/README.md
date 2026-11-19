@@ -11,6 +11,7 @@ component inside the bank's Spring app.
 | [CTS-DPS-overview-for-teams.md](CTS-DPS-overview-for-teams.md) | Short overview for the other teams |
 | [CTS-DPS-schema-explained.md](CTS-DPS-schema-explained.md) | The result schema in simple words |
 | [end-to-end-explained.md](end-to-end-explained.md) | Upload to covenant result in one diagram: libraries, flows, agent, skills, tools, Java rules, with code paths |
+| [dps-review-2026-11-19.md](dps-review-2026-11-19.md) | Review against every requirement source and the Codex DPS: inventory, comparison, measurements, changes, open gaps |
 | [design.md](design.md) | End-to-end design, v0.6 (17 Nov 2026), including the scaling decision and the Java tools boundary |
 | [../../contracts/dps-jobs-api.yaml](../../contracts/dps-jobs-api.yaml) | The job API the Spring app calls |
 | [../../contracts/spring-tools.yaml](../../contracts/spring-tools.yaml) | The Java business-rule tools the DPS calls in Spring |

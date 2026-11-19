@@ -244,6 +244,25 @@ def test_statement_result_lists_values_with_cells(client, app):
     assert result["fields"][0]["source"]["cellRef"] == "BS!C14" and result["fields"][0]["confidence"] is None
 
 
+def test_statement_lines_not_found_are_listed_never_dropped(client, app):
+    from dps.catalog import lines_not_found
+
+    job_id = submit(client, request_body(app, job_type="EXTRACT_STATEMENT")).json()["jobId"]
+    with app.state.db.session_factory() as s:
+        job = s.get(Job, job_id)
+        s.add(StatementValue(cp_id="CP-1", key="EBITDA", value=50.0, unit="INR_CR", as_of_date=date(2026, 3, 31),
+                             source_type="DOCUMENT", document_id=job.document_id, cell="BS!C14"))
+        jobs.record_step(s, job, "coverage", lines=lines_not_found(["EBITDA", "TOTAL_DEBT", "NET_WORTH"]))
+        jobs.finish(s, job, jobs.DONE)
+    result = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
+    check("result", result)
+    lines = result["document"]["lines"]
+    assert lines["found"] == 3 and "CAPEX" in lines["notFound"] and "CFO" in lines["notFound"]
+    assert not any(k.endswith(("_TTM", "_ANN")) for k in lines["notFound"])
+    warning = next(w for w in result["warnings"] if w["code"] == "LINES_NOT_FOUND")
+    assert "CAPEX" in warning["message"] and result["document"]["route"] == "AUTO_ACCEPTED"  # visible, not blocking
+
+
 # ---------- cancel ----------
 
 def test_cancel_a_waiting_job_at_once_and_a_finished_one_never(client, app):

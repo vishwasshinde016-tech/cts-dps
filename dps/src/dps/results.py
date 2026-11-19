@@ -125,6 +125,23 @@ def held_statement_fields(db: Session, job: Job, doc: Document) -> list[dict]:
     return out
 
 
+def coverage_of(job: Job) -> dict:
+    """The agreement flow's candidate ledger and page outcomes, from its ``coverage`` job step (latest attempt)."""
+    step = next((s for s in reversed(json.loads(job.steps_json or "[]")) if s.get("step") == "coverage"), None)
+    if step is None:
+        return {}
+    if step.get("lines") is not None:  # a statement: the catalogue lines it did not yield
+        return {"lines": step["lines"]}
+    led = step.get("ledger") or {}
+    out = {"coverage": {"dutySentences": led.get("candidates", 0), "explained": led.get("candidates", 0)
+                        - led.get("unresolved", 0), "byQuote": led.get("finding", 0), "byKind": led.get("covered", 0),
+                        "percent": led.get("percentExplained", 100.0), "unexplained": step.get("unresolved") or [],
+                        "unexplainedCount": led.get("unresolved", 0), "ledger": led}}
+    if step.get("pages"):
+        out["pages"] = step["pages"]
+    return out
+
+
 def build(db: Session, job: Job, pipeline_version: str, store=None) -> dict:
     saved = latest_run(db, job)
     if saved is not None:  # phase 3+: the run stored its own dps.result/1.0
@@ -156,6 +173,11 @@ def build(db: Session, job: Job, pipeline_version: str, store=None) -> dict:
         for f in fields:
             if f["status"] == "AUTO_ACCEPTED":
                 f["status"] = "NEEDS_REVIEW"
+    covered = coverage_of(job)
+    not_found = (covered.get("lines") or {}).get("notFound") or []
+    if not_found:  # visible, not blocking: a person sees which lines the statement did not give
+        warnings.append({"code": "LINES_NOT_FOUND", "message": f"{len(not_found)} statement line(s) not found: "
+                                                               + ", ".join(not_found[:40])})
     to_review = sum(1 for f in fields if f["status"] == "NEEDS_REVIEW")
     if job.status == "NEEDS_REVIEW" or to_review:
         route, reasons = "NEEDS_REVIEW", [f"{to_review} field(s) need review"] if to_review else ["held for review"]
@@ -175,7 +197,7 @@ def build(db: Session, job: Job, pipeline_version: str, store=None) -> dict:
         "classification": None,
         "identifiers": [],
         "fields": fields,
-        "document": {"confidence": None, "route": route, "reasons": reasons},
+        "document": {"confidence": None, "route": route, "reasons": reasons, **covered},
         "warnings": warnings,
         "rollout": job.rollout,
         "timingMs": None,

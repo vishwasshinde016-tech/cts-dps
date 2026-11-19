@@ -386,6 +386,9 @@
         "expression"
       ],
       "properties": {
+        "covers": { "type": "array", "items": { "type": "string" }, "description": "Other duty sentences of the same kind near this covenant that it is taken to cover (candidate ledger); shown so a person sees each one" },
+        "qualifiers": { "type": "array", "items": { "type": "string" }, "description": "Conditions and exceptions found with the covenant (subject to, unless, provided that ...)" },
+        "references": { "type": "array", "items": { "type": "object", "properties": { "ref": { "type": "string" }, "page": { "type": ["integer", "null"] } } } },
         "metric": {
           "type": "string",
           "description": "Metric key as read (DSCR, ICR, DEBT_TO_EBITDA ...)"
@@ -1107,6 +1110,11 @@
               }
             }
           }
+        },
+        "lines": {
+          "type": "object",
+          "description": "Statements: the catalogue period lines expected, found and not found (LINES_NOT_FOUND lists them)",
+          "properties": { "expected": { "type": "integer" }, "found": { "type": "integer" }, "notFound": { "type": "array", "items": { "type": "string" } } }
         },
         "pages": {
           "type": "object",
