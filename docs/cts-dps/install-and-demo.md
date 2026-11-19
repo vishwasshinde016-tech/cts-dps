@@ -118,16 +118,15 @@ Other documents to show:
 
 ### Real agreements from the architect's list
 
-`scripts\fetch_public_samples.py` downloads the architect's list of public agreements into `dps\samples\`. The list has 13 files:
+The architect's list of public agreements is in the repository, in `C:\cts-dps\architect-documents\`. The list has 13 files, of which 9 could be downloaded:
 - US SEC EDGAR credit agreements and amendments;
 - UK LMA-style facility agreements;
 - Indian banks' standard loan forms.
 
-SEC pages are printed to PDF with Edge or Chrome. The files are third-party documents, so Git ignores `samples\`.
+Its README lists each file with its source link. To fetch them again, run `scripts\fetch_public_samples.py` (it prints SEC pages to PDF with Edge or Chrome).
 
 ```powershell
-.venv\Scripts\python scripts\fetch_public_samples.py
-.venv\Scripts\python scripts\demo_onboard.py samples\uk_dwf_senior_facilities_agreement.pdf --trace run.txt
+.venv\Scripts\python scripts\demo_onboard.py ..\architect-documents\uk_dwf_senior_facilities_agreement.pdf --trace run.txt
 ```
 
 What each file shows, with measured results, is in the demo panel of `docs/cts-dps/diagrams/dps-complete.html`.
@@ -152,8 +151,8 @@ Use two terminals, both in `cts-dps\dps`.
 3. In a third terminal, upload a file and run a real job, the way Spring and the DMS do. The script stores the file under its SHA-256 in `storage\`, posts the job, prints each worker stage, then prints the result:
 
    ```powershell
-   .venv\Scripts\python scripts\submit_job.py samples\us_ex10_1_credit_agreement_2020.pdf --type LOAN_AGREEMENT
-   .venv\Scripts\python scripts\submit_job.py samples\us_holly_amendment_2010.pdf --job EXTRACT_AMENDMENT
+   .venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf --type LOAN_AGREEMENT
+   .venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_holly_amendment_2010.pdf --job EXTRACT_AMENDMENT
    ```
 
 Calls in dev mode use the headers `X-User: rm-anil` and `X-Roles: SERVICE`. The job API Spring calls is in `contracts/dps-jobs-api.yaml`.

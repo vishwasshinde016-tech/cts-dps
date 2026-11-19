@@ -3,7 +3,7 @@
 #   cd C:\cts-dps\dps
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1            # install + smoke demo
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1 -Tests     # also run the full test suite
-#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1 -Samples   # also download the demo files
+#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1 -Samples   # also re-download the architect's demo files
 #
 # What it does, in order: checks Python (3.12 preferred, 3.11-3.13 accepted), creates .venv, installs the package with
 # the worker and dev extras, creates .env from .env.example (only if .env is missing), creates the SQLite tables with

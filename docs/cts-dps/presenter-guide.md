@@ -98,9 +98,9 @@ The sections after this one (§1 to §16) hold the detail behind each stop, if s
 2. *DPS job API.* "This is [`api/jobs.py`](../../dps/src/dps/api/jobs.py), function `submit_job`. It checks three things:
    - the request is valid;
    - the file's SHA-256 matches what the DMS stored;
-   - the same document is not already queued.
+   - the same document has no job yet.
 
-   If it is already queued, it returns that job, and Spring shows 'extraction in progress'. That is the box on the architect's board."
+   If it already has one, queued, running or finished, it returns that job, and Spring shows 'extraction in progress'. That is the box on the architect's board."
 3. *SQL Server schema dps.* "The job is one row in the table `dps_job`. This table is the queue. There is no separate message broker."
 4. *Python worker.* "The worker polls the table. It claims one job with compare-and-set, which means one update that only succeeds if the row is still free. Two workers can never take the same job. The worker holds a lease and renews it with a heartbeat. If it crashes, the lease runs out and another worker picks the job up."
 5. *Ingest and sandbox parse.* "The worker reads the exact file version from the DMS and checks the hash. It inspects the file for encryption, macros and zip bombs. Then it parses the file in a separate child process, with CPU, memory and time limits and no network. The output is a page model: the text of every page with its position."
@@ -313,16 +313,10 @@ code run.txt
 
 **Step 3. Real agreements from the architect's list.**
 
-Download them once, where the internet is allowed:
+They are already in the clone, in [`architect-documents\`](../../architect-documents/README.md). Run the best real example:
 
 ```powershell
-.venv\Scripts\python scripts\fetch_public_samples.py
-```
-
-Then run the best real example:
-
-```powershell
-.venv\Scripts\python scripts\demo_onboard.py samples\us_ex10_1_credit_agreement_2020.pdf
+.venv\Scripts\python scripts\demo_onboard.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf
 ```
 
 **Say:**
@@ -337,7 +331,7 @@ Then run the best real example:
 **Step 4 (only with VPN and `.env` Azure settings):**
 
 ```powershell
-.venv\Scripts\python scripts\demo_onboard.py samples\us_ex10_1_credit_agreement_2020.pdf --agent
+.venv\Scripts\python scripts\demo_onboard.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf --agent
 ```
 
 **Step 5. The real service:** start the API and the worker (`install-and-demo.md` §5), then open `http://localhost:9400/docs` and show `POST /dps/v1/jobs`.
@@ -371,8 +365,8 @@ Then run the best real example:
 **Way A: what to type and what to say.**
 
 ```powershell
-.venv\Scripts\python scripts\demo_onboard.py samples\us_ex10_1_credit_agreement_2020.pdf
-.venv\Scripts\python scripts\demo_onboard.py samples\us_southcross_amendment_2018.pdf --type AMENDMENT
+.venv\Scripts\python scripts\demo_onboard.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf
+.venv\Scripts\python scripts\demo_onboard.py ..\architect-documents\us_southcross_amendment_2018.pdf --type AMENDMENT
 .venv\Scripts\python scripts\demo_onboard.py ..\golden-set\documents\AGR-001.pdf --trace run.txt --json result.json
 ```
 
@@ -387,8 +381,8 @@ The options:
 **Way B: what to type and what to say.**
 
 ```powershell
-.venv\Scripts\python scripts\submit_job.py samples\us_ex10_1_credit_agreement_2020.pdf --type LOAN_AGREEMENT
-.venv\Scripts\python scripts\submit_job.py samples\us_holly_amendment_2010.pdf --job EXTRACT_AMENDMENT
+.venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf --type LOAN_AGREEMENT
+.venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_holly_amendment_2010.pdf --job EXTRACT_AMENDMENT
 ```
 
 It prints four steps.
@@ -412,7 +406,7 @@ It prints four steps.
 | The uploaded file | `storage\<2 letters>\<sha256>.pdf` |
 | The parsed page model | `derived\default\<version>\page-model\…` |
 | Jobs, results, events | the SQLite file `dps.db` (tables `dps_job`, `dps_run`, `dps_event_feed` and the rest) |
-| Demo files from the architect's list | `samples\` |
+| Demo files from the architect's list | `architect-documents\` |
 
 **Supported files:**
 
@@ -485,9 +479,9 @@ The size limit is 100 MB per file (`DPS_MAX_FILE_MB`). Encrypted, corrupt, macro
 
 ### 0.15 Demo files: the architect's list, and what each one shows
 
-> **For you:** these are the public documents from the architect's list. `scripts\fetch_public_samples.py` downloads them (internet needed). The results below were measured on 19 Nov 2026, rules only, no VPN. Use the ones marked **show**.
+> **For you:** these are the public documents from the architect's list. They are in the repository, in [`architect-documents\`](../../architect-documents/README.md); `scripts\fetch_public_samples.py` can fetch them again. The results below were measured on 19 Nov 2026, rules only, no VPN. Use the ones marked **show**.
 
-| File in `samples\` | Flow it shows | Measured result (rules only) |
+| File in `architect-documents\` | Flow it shows | Measured result (rules only) |
 |---|---|---|
 | `us_ex10_1_credit_agreement_2020.pdf` | Onboarding (**show**) | 100 pages, LOAN_AGREEMENT. Leverage ≤ 3.5 and ICR ≥ 2.5 on page 63, plus liens and indebtedness covenants |
 | `us_southcross_amendment_2018.pdf` | Amendment (**show**) | 29 pages, AMENDMENT (0.9), skill `amendment_diff`. ICR ≥ 1.5 as an ADD change |
@@ -498,7 +492,7 @@ The size limit is 100 MB per file (`DPS_MAX_FILE_MB`). Encrypted, corrupt, macro
 | `in_au_emerging_enterprises_facility.pdf` | Onboarding, an Indian bank's form | 74 pages, minimum net worth, negative covenants, insurance |
 | `in_idfc_first_bbg_term_loan_agreement.pdf`, `in_idfc_first_composite_business_loan.pdf` | Onboarding, standard forms | Forms with blanks: undertakings found, no filled-in ratios |
 
-Four files on the list could not be downloaded on 19 Nov 2026: three links return "not found" (Workspace, Gresham House, DCB) and one site's certificate fails (South Indian Bank). Open those links in a browser and save them into `samples\` by hand if they are needed.
+Four files on the list could not be downloaded on 19 Nov 2026: three links return "not found" (Workspace, Gresham House, DCB) and one site's certificate fails (South Indian Bank). Open those links in a browser and save them into `architect-documents\` by hand if they are needed.
 
 **Assessment flow:** the architect's list has no statements or certificates. Show the assessment flow with our labelled statements in `golden-set\documents\` (FS-001 to FS-034, synthetic), through the golden gate (commands in `install-and-demo.md` §3).
 

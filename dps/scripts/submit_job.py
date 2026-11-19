@@ -7,8 +7,8 @@ Start the API and the worker first (two terminals, in dps/):
 
 Then, in a third terminal:
 
-    python scripts/submit_job.py samples/us_ex10_1_credit_agreement_2020.pdf                       # ONBOARD
-    python scripts/submit_job.py samples/us_holly_amendment_2010.pdf --job EXTRACT_AMENDMENT
+    python scripts/submit_job.py ../architect-documents/us_ex10_1_credit_agreement_2020.pdf        # ONBOARD
+    python scripts/submit_job.py ../architect-documents/us_holly_amendment_2010.pdf --job EXTRACT_AMENDMENT
     python scripts/submit_job.py ../golden-set/documents/FS-011.pdf --job EXTRACT_STATEMENT --as-of 2026-03-31
 
 What it does, step by step (each step prints a line):
@@ -90,7 +90,8 @@ def main() -> int:
             return 1
         job = r.json()
         job_id = job["jobId"]
-        dup = " (duplicate: this file is already queued)" if job.get("duplicate") else ""
+        dup = (" (duplicate: DPS already has a job for this document and context, so it returns that one)"
+               if job.get("duplicate") else "")
         print(f"2. Spring  POST /dps/v1/jobs {args.job} -> 202 jobId {job_id}{dup}")
 
         seen, start, status = None, time.time(), {}
