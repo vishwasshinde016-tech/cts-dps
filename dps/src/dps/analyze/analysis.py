@@ -105,6 +105,7 @@ def event_payload(result: dict) -> dict:
 
 
 def save_run(db: Session, job: Job, result: dict, trigger: str = "SUBMIT") -> Run:
+    jobs.guard_attempt(db)
     last = db.scalar(select(func.max(Run.run_no)).where(Run.job_id == job.id)) or 0
     run = Run(job_id=job.id, run_no=last + 1, status=result["status"], trigger=trigger,
               result_json=json.dumps(result, default=str, separators=(",", ":")))

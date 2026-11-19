@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from sqlalchemy import false, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from dps import history, services
+from dps import history, jobs, services
 from dps.ai_guard import injection_signs
 from dps.extraction.statement import (
     FLOW_KEYS,
@@ -46,7 +46,7 @@ from dps.extraction.statement_pdf import PdfStatement
 from dps.flows.persistence import SqlFlowPersistence
 from dps.language import detect as detect_language
 from dps.language import name as language_name
-from dps.models import Document, EventOutbox, StatementValue, utcnow
+from dps.models import Document, EventOutbox, Job, StatementValue, utcnow
 from dps.money import currency_of, detect_currency, money_unit, to_money_unit
 from dps.parsing import ParseError, needs_heavy
 from dps.profiles import LoanProfile
@@ -294,8 +294,6 @@ class StatementProcessingFlow(Flow[StatementState]):
         from dps.analyze import obligations
         from dps.analyze.classify import sub_attributes
         from dps.analyze.identify import find_identifiers
-        from dps.models import Job
-
         with self._deps.session_factory() as db:
             job = db.get(Job, self.state.job_id) if self.state.job_id else None
             ctx = (json.loads(job.request_json or "{}").get("context") or {}) if job is not None else {}
@@ -468,6 +466,7 @@ class StatementProcessingFlow(Flow[StatementState]):
     @listen("needs_review")
     def hold(self) -> None:
         with self._deps.session_factory() as db:
+            jobs.guard_attempt(db)
             doc = db.get(Document, self.state.document_id)
             doc.status = "NEEDS_REVIEW"
             doc.review_json = self._review_json()
@@ -488,6 +487,7 @@ class StatementProcessingFlow(Flow[StatementState]):
     def fail(self) -> None:
         self.state.error = self.state.error or "No line items found in the statement"
         with self._deps.session_factory() as db:
+            jobs.guard_attempt(db)
             db.get(Document, self.state.document_id).status = "FAILED"
             history.result(db, self.state.document_id, self.state.job_id, "FAILED", self.state.error)
             db.commit()
@@ -497,6 +497,7 @@ class StatementProcessingFlow(Flow[StatementState]):
     @listen("heavy")
     def hand_to_heavy_pool(self) -> None:
         with self._deps.session_factory() as db:
+            jobs.guard_attempt(db)
             history.result(db, self.state.document_id, self.state.job_id, "SENT TO DOCLING READER",
                            "too many pages the standard reader could not read")
             db.commit()
@@ -521,6 +522,11 @@ class StatementProcessingFlow(Flow[StatementState]):
 
     def _report(self, reviewed: bool = False) -> None:
         """Idempotent: re-running for the same document replaces its own values, never duplicates them."""
+        with self._deps.session_factory() as db:
+            job = db.get(Job, self.state.job_id)
+            if job is not None and job.rollout == "SHADOW":
+                # The checkpoint retains extracted values for comparison. Never affect the active series.
+                return
         values = [LineValue(**v) for v in self.state.values]
         loan = money_unit(self.state.loan_currency) if self.state.loan_currency else None
         if loan and any(v.unit != loan for v in values):
@@ -530,6 +536,7 @@ class StatementProcessingFlow(Flow[StatementState]):
         net = any(i.startswith("INTEREST_IS_NET") for i in self.state.issues)
         interest = next((v for v in values if v.key == "INTEREST_PAID" and not v.derived), None)
         with self._deps.session_factory() as db:
+            jobs.guard_attempt(db)
             doc = db.get(Document, self.state.document_id)
             cp_ids = doc.active_cp_ids()
             for cp in cp_ids:

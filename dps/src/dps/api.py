@@ -196,6 +196,17 @@ def load_document(db: Session, document_id: str) -> Document:
     return doc
 
 
+def refuse_in_shadow(db: Session, doc: Document) -> None:
+    """SHADOW results are kept for comparison only: the older review and correction routes may not publish them or
+    change the values Core uses (the job API's routes already check this; audit finding F02, 19 Nov 2026)."""
+    job = db.get(Job, doc.latest_job_id) if doc.latest_job_id else None
+    if job is None:
+        job = db.scalars(select(Job).where(Job.document_id == doc.id).order_by(Job.created_at.desc())).first()
+    if job is not None and getattr(job, "rollout", None) == "SHADOW":
+        raise ApiError(409, "SHADOW_MODE", "This document was processed in shadow mode: its results are kept for "
+                                           "comparison and cannot be published or used.")
+
+
 def require_document_access(checker: CpAccessChecker, principal: Principal, doc: Document,
                             read_only: bool) -> None:
     """Allowed when the caller may access at least one CP the document is linked to."""
@@ -325,9 +336,12 @@ def upload_document(
 def _record_upload(db: Session, type: str, name: str, rel: str, digest: str, size: int,  # noqa: A002
                    pages: int | None, as_of: date | None, amends: str | None, cp_ids: list[str],
                    user: str) -> tuple[Document, bool]:
-    # A removed document does not count: uploading the same file again starts it afresh.
-    existing = db.scalar(select(Document).where(Document.sha256 == digest, Document.type == type,
-                                                Document.status != "REMOVED"))
+    # A removed document does not count: uploading the same file again starts it afresh. The same bytes for another
+    # period or another amended agreement are a different business record (audit finding F03, 19 Nov 2026).
+    existing = db.scalar(select(Document).where(
+        Document.sha256 == digest, Document.type == type, Document.status != "REMOVED",
+        Document.as_of_date.is_(None) if as_of is None else Document.as_of_date == as_of,
+        Document.amends_document_id.is_(None) if not amends else Document.amends_document_id == amends))
     if existing is not None:  # idempotent re-upload: just add any new links
         _add_links(db, existing, cp_ids, user)
         db.commit()
@@ -491,6 +505,8 @@ def review_term(term_id: str, body: TermReview, db: DB, user: User, checker: Che
     if term is None:
         raise not_found("Term")
     require_document_access(checker, user, load_document(db, term.document_id), read_only=False)
+    if body.action == "APPROVE":
+        refuse_in_shadow(db, load_document(db, term.document_id))
     before = term.expression or f"{term.metric_raw} {term.operator or ''} {term.threshold}".strip()
     if body.action == "EDIT":
         if body.expression is not None:
@@ -558,6 +574,7 @@ def correct_spread(document_id: str, body: SpreadRequest, request: Request, db: 
     require_document_access(checker, user, doc, read_only=False)
     if doc.type != "FINANCIAL_STATEMENT" or doc.as_of_date is None or doc.status == "REMOVED":
         raise ApiError(400, "NOT_A_STATEMENT", "Only a statement in use can be corrected")
+    refuse_in_shadow(db, doc)
     unknown = sorted({c.standardKey for c in body.lines} - set(line_item_catalog_keys()))
     if unknown:
         raise ApiError(400, "UNKNOWN_LINE", "Not a spread line: " + ", ".join(unknown))

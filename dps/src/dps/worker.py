@@ -193,12 +193,19 @@ class Worker:
 
     def _process(self, db: Session, job: Job) -> None:
         doc = db.get(Document, job.document_id)
+        token = jobs.worker_attempt.set((job.id, self.settings.worker_id, job.attempts))
+        stop = self._start_heartbeat(job.id, job.attempts)
         with obs.bound(job_id=job.id, document_id=job.document_id, user=doc.uploaded_by if doc else None), \
                 obs.span("dps.job", **{"dps.flow": job.flow, "dps.pool": self.settings.worker_pool}):
             try:
                 self._run(db, job, doc)
+            except jobs.LeaseLost:
+                db.rollback()
+                log.warning("Discarded a stale attempt for job %s", job.id)
             finally:
-                self.page_models.clear()  # one job per process: never keep a page model past its job
+                stop.set()
+                jobs.worker_attempt.reset(token)
+                self.page_models.clear()  # sequential worker: never keep a page model past its job
 
     def _run(self, db: Session, job: Job, doc: Document | None) -> None:
         if job.flow == "ANALYZE":
@@ -220,10 +227,11 @@ class Worker:
         obs.event("JOB_START", f"{job.flow} attempt {job.attempts} on {self.settings.worker_id} "
                   f"({self.settings.worker_pool} pool)", flow=job.flow, pool=self.settings.worker_pool)
         started = time.monotonic()
-        stop = self._start_heartbeat(job.id)
         usage.begin()
         try:
             outcome, state_id, error = runner(job)
+        except jobs.LeaseLost:
+            raise
         except (CoreUnavailable, httpx.HTTPError, OSError) as ex:
             log.warning("Job %s attempt %d failed: %s", job.id, job.attempts, type(ex).__name__)
             db.refresh(job)
@@ -243,7 +251,6 @@ class Worker:
             self._sync_document(db, job)
             return
         finally:
-            stop.set()
             # The AI readers' calls for this document (AGREEMENT_READ / STATEMENT_READ), even when the job failed.
             usage.record(db, self.settings, AI_PURPOSE.get(job.flow, job.flow[:24]),
                          doc.uploaded_by if doc else ACTOR, document_id=job.document_id, job_id=job.id)
@@ -296,6 +303,8 @@ class Worker:
                     target(db, job, self.page_models.get(doc.sha256), raw)
                 else:
                     target(db, job, self.page_models[doc.sha256])
+        except jobs.LeaseLost:
+            raise
         except (CoreUnavailable, httpx.HTTPError, OSError) as ex:
             db.rollback()
             db.refresh(job)
@@ -311,7 +320,7 @@ class Worker:
                                    self.settings.worker_retry_base_seconds, self.settings.worker_retry_max_seconds)
             return
         finally:
-            vision.page_images.reset(images)  # one job per process: never keep a job's file past its job
+            vision.page_images.reset(images)  # release the source renderer at the end of the job
             usage.record(db, self.settings, job.job_type[:24], doc.uploaded_by if doc else ACTOR,
                          document_id=job.document_id, job_id=job.id)
         seconds = round(time.monotonic() - started, 2)
@@ -348,7 +357,7 @@ class Worker:
         self.page_models[doc.sha256] = model
         return True
 
-    def _start_heartbeat(self, job_id: str) -> threading.Event:
+    def _start_heartbeat(self, job_id: str, attempt: int) -> threading.Event:
         """Renews the job's lease every third of its length until the returned event is set."""
         stop = threading.Event()
         lease = self.settings.worker_lease_seconds
@@ -357,7 +366,7 @@ class Worker:
             while not stop.wait(max(1.0, lease / 3)):
                 try:
                     with self.session_factory() as db:
-                        if not jobs.renew_lease(db, job_id, self.settings.worker_id, lease):
+                        if not jobs.renew_lease(db, job_id, self.settings.worker_id, lease, attempt):
                             log.warning("Job %s: lease lost to another worker", job_id)
                             return
                 except Exception:  # noqa: BLE001 - a missed beat only shortens the lease
@@ -461,7 +470,8 @@ def build_pack_runner(settings: Settings, database: Database):
         from dps.flows.skill_job import run_skill_job
 
         run_skill_job(job.id, job.job_type,
-                      lambda: skills.run_job(job, model, gateway, tools, db, settings.pipeline_version, raw),
+                      lambda: skills.run_job(job, model, gateway, tools, db, settings.pipeline_version, raw,
+                                             scorer_dir=settings.scorer_dir),
                       lambda result: skills.finish(db, job, result))
 
     return run
@@ -555,6 +565,9 @@ def _kickoff(flow, job: Job) -> tuple[str, str, str]:
 
 
 def main() -> None:  # pragma: no cover - process entry point
+    from dps.skills.covenants.taxonomy import get as get_taxonomy
+
+    get_taxonomy()  # fail startup before claiming any jobs if the taxonomy is missing or invalid
     settings = get_settings()
     obs.setup("dps-worker-heavy" if settings.worker_pool == "HEAVY" else "dps-worker")
     database = Database(settings.database_url)

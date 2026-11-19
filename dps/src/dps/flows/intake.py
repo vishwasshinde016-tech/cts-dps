@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from dps import history, services
+from dps import history, jobs, services
 from dps.ai_guard import injection_signs
 from dps.core_client import CoreClient
 from dps.extraction.agreement import extract_terms
@@ -28,7 +28,7 @@ from dps.extraction.validation import FAILED, NEEDS_REVIEW, PUBLISH, validate
 from dps.flows.persistence import SqlFlowPersistence
 from dps.language import detect as detect_language
 from dps.language import name as language_name
-from dps.models import Document, ExtractedTerm
+from dps.models import Document, ExtractedTerm, Job
 from dps.parsing import Page, ParseError, needs_heavy
 
 log = logging.getLogger(__name__)
@@ -194,6 +194,7 @@ class AgreementIntakeFlow(Flow[IntakeState]):
     def fail(self) -> None:
         self.state.error = self.state.error or "No text found in the document, even after OCR"
         with self._deps.session_factory() as db:
+            jobs.guard_attempt(db)
             db.get(Document, self.state.document_id).status = "FAILED"
             history.pages_read(db, self.state.document_id, self.state.job_id, self.state.pages, self._deps.heavy_pool)
             history.result(db, self.state.document_id, self.state.job_id, "FAILED", self.state.error)
@@ -204,6 +205,7 @@ class AgreementIntakeFlow(Flow[IntakeState]):
     @listen("heavy")
     def hand_to_heavy_pool(self) -> None:
         with self._deps.session_factory() as db:
+            jobs.guard_attempt(db)
             history.pages_read(db, self.state.document_id, self.state.job_id, self.state.pages, False)
             history.result(db, self.state.document_id, self.state.job_id, "SENT TO DOCLING READER",
                            "too many pages the standard reader could not read")
@@ -215,6 +217,7 @@ class AgreementIntakeFlow(Flow[IntakeState]):
     def finish_review(self) -> None:
         """After review: the run completes once no term is left waiting for a decision."""
         with self._deps.session_factory() as db:
+            jobs.guard_attempt(db)
             waiting = db.scalars(select(ExtractedTerm.id).where(
                 ExtractedTerm.document_id == self.state.document_id,
                 ExtractedTerm.status.in_(("NEEDS_REVIEW", "PROPOSED")))).first()
@@ -232,6 +235,9 @@ class AgreementIntakeFlow(Flow[IntakeState]):
     def _store(self, document_status: str) -> None:
         """Upserts this document's REGEX proposals; terms a person already edited or decided are kept."""
         with self._deps.session_factory() as db:
+            jobs.guard_attempt(db)
+            job = db.get(Job, self.state.job_id)
+            shadow = job is not None and job.rollout == "SHADOW"
             existing = list(db.scalars(select(ExtractedTerm).where(
                 ExtractedTerm.document_id == self.state.document_id)))
             decided = {t.metric_raw for t in existing if t.reviewed_by}
@@ -249,7 +255,7 @@ class AgreementIntakeFlow(Flow[IntakeState]):
                     covenant_master_id=p["covenant_master_id"], expression=p["expression"],
                     operator=p["operator"], threshold=p["threshold"], unit=p["unit"], frequency=p["frequency"],
                     category=p["category"], confidence=p["confidence"], method=p["method"],
-                    status="NEEDS_REVIEW" if p["issues"] else "PUBLISHED",
+                    status="NEEDS_REVIEW" if shadow or p["issues"] else "PUBLISHED",
                     issues_json=json.dumps(p["issues"]), page=p["page"], quote=(p["quote"] or "")[:500],
                     schedule_json=json.dumps(p["schedule"]) if p.get("schedule") else None))
                 count += 1

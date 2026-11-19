@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # G6 (Miro: "call the API to update the covenants"): when set, the leader worker also POSTs every event to this
     # path on the Spring app (core_base_url), in order, at least once. Empty: Spring pulls GET /dps/v1/events only.
     events_push_path: str = ""
+    scorer_dir: str | None = None
     events_push_batch: int = 50
     ingest_enabled: bool = True
     # Unix socket of the parser container (network_mode: none). Empty: parse in a sandboxed child process.

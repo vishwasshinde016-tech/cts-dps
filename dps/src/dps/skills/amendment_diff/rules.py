@@ -8,7 +8,7 @@ from datetime import date
 
 from dps.extraction.agreement import _best_metric, extract_terms
 from dps.skills.common import issue, line_at, make_field
-from dps.skills.covenants.rules import as_pages, term_value
+from dps.skills.covenants.rules import as_pages, term_field
 
 PACK = "amendment_diff"
 CLAUSE_OP = re.compile(r"\b(?:sub-?)?clause\s+(\d+(?:\.\d+)*(?:\s*\([a-z0-9]+\))?)[^\n.]{0,120}?\bshall\s+(?:stand\s+)?"
@@ -47,23 +47,36 @@ def _ops(pages: list[dict]) -> list[dict]:
             window = text[m.start(): m.end() + 400]
             ops.append({"clause": m.group(1), "type": "ADD", "page": p["no"],
                         "quote": line_at(text, m.start(), m.end()), "metric": _best_metric(window)})
-    return ops
+    unique = {}
+    for operation in ops:
+        unique.setdefault((operation["page"], operation["clause"], operation["type"]), operation)
+    return list(unique.values())
 
 
 def rules(pages: list[dict], ctx: dict) -> list[dict]:
-    """``ctx['base']`` is the base version's covenant fields (dps.result fields); changes are found against it."""
-    base = {f["value"].get("metric"): f for f in ctx.get("base", []) if f["group"].endswith("COVENANT")}
+    """Find proposed changes against the base version's individual covenant records."""
+    base = [f for f in ctx.get("base", []) if f["group"].endswith("COVENANT")]
     effective = _effective(pages)
     ops = _ops(pages)
     new_terms = [t for t in extract_terms(as_pages(pages)) if t.category in ("FINANCIAL", "NON_FINANCIAL")]
-    out, touched = [], {}
+    out, touched, handled = [], {}, set()
     for t in new_terms:
-        op = next((o for o in ops if o["metric"] == t.metric and o["type"] != "DELETE"), None)
-        old = base.get(t.metric)
-        value = term_value(t)
+        candidates = [o for o in ops if o["metric"] == t.metric and o["type"] != "DELETE" and o["page"] == t.page]
+        term_clause = t.quote or ""
+        matching = [o for o in candidates if re.search(r"\b" + re.escape(o["clause"]) + r"(?![.\d])", term_clause)]
+        op = (matching or candidates)[0] if len(matching or candidates) == 1 else None
+        possible = _targets(base, t.metric, op["clause"] if op else None)
+        old = possible[0] if len(possible) == 1 and not (op and op["type"] == "ADD") else None
+        f = term_field(PACK, pages, t, key=f"{t.metric}-{len(out)}")
+        value = f["value"]
+        if op:
+            handled.add((op["page"], op["clause"], op["type"]))
         if old is None:
-            kind = "ADD"
-        elif (old["value"].get("threshold"), old["value"].get("operator")) != (t.threshold, t.operator):
+            kind = "CHANGE" if (op and op["type"] == "CHANGE") or (possible and not op) else "ADD"
+        elif (op or any(value.get(k) is not None and value[k] != old["value"].get(k)
+                        for k in ("threshold", "operator", "schedule", "cure", "expression"))
+              or any((old.get("test") or {}).get(k) is not None and (f.get("test") or {}).get(k) is not None
+                     and old["test"][k] != f["test"][k] for k in ("frequency", "basis"))):
             kind = "CHANGE"
         else:
             continue  # restated unchanged: no change
@@ -71,22 +84,34 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
                            "appliedCovenantId": (old["value"].get("appliedCovenantId") if old else None),
                            "from": {"operator": old["value"].get("operator"),
                                     "threshold": old["value"].get("threshold")} if old else None}
-        f = make_field(PACK, pages, old["group"] if old else "FINANCIAL_COVENANT", t.name or t.metric, value, t.page,
-                       t.quote, confidence=0.85, key=t.metric)
-        touched[t.metric] = touched.get(t.metric, 0) + 1
+        if old:
+            f["group"] = old["group"]
+        if kind == "CHANGE" and old is None:
+            _hold(f, "AMBIGUOUS_AMENDMENT_TARGET", "The change has no unique approved covenant target.")
+        target_key = _change_key(value)
+        touched[target_key] = touched.get(target_key, 0) + 1
         out.append(f)
     for o in ops:
-        if o["type"] != "DELETE" or not o["metric"] or o["metric"] not in base:
+        if (o["page"], o["clause"], o["type"]) in handled:
             continue
-        old = base[o["metric"]]
-        value = {**old["value"], "change": {"type": "DELETE", "clause": o["clause"], "effectiveDate": effective,
-                                            "appliedCovenantId": old["value"].get("appliedCovenantId"),
-                                            "from": None}}
-        touched[o["metric"]] = touched.get(o["metric"], 0) + 1
-        out.append(make_field(PACK, pages, old["group"], old["name"], value, o["page"], o["quote"], confidence=0.85,
-                              key="del-" + o["metric"]))
+        possible = _targets(base, o["metric"], o["clause"])
+        old = possible[0] if len(possible) == 1 else None
+        metric = o["metric"] or (old or {}).get("value", {}).get("metric") or "OTHER"
+        value = dict(old["value"]) if old else {
+            "metric": metric, "operator": None, "threshold": None, "unit": None, "expression": None,
+        }
+        value["change"] = {"type": o["type"], "clause": o["clause"], "effectiveDate": effective,
+                           "appliedCovenantId": value.get("appliedCovenantId"), "from": None}
+        f = make_field(PACK, pages, old["group"] if old else "POSSIBLE_COVENANT",
+                       old["name"] if old else f"Clause {o['clause']}", value, o["page"], o["quote"],
+                       confidence=0.85, key=f"{o['type']}-{o['page']}-{o['clause']}")
+        if old is None or o["type"] != "DELETE":
+            _hold(f, "UNRESOLVED_AMENDMENT", "Confirm the target and revised terms against the approved agreement.")
+        target_key = _change_key(value)
+        touched[target_key] = touched.get(target_key, 0) + 1
+        out.append(f)
     for f in out:
-        if touched.get(f["value"].get("metric"), 0) > 1:
+        if touched.get(_change_key(f["value"]), 0) > 1:
             f["issues"].append(issue("CHANGED_TWICE", "the amendment changes this covenant more than once"))
             f["status"] = "NEEDS_REVIEW"
     if base and ctx.get("baseSource") == "DPS_EXTRACTION":
@@ -99,17 +124,49 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
     return out
 
 
+def _targets(base: list[dict], metric: str | None, clause: str | None) -> list[dict]:
+    matching = [f for f in base if clause and re.sub(r"\s+", "", f["value"].get("clause") or "") == clause]
+    if len(matching) == 1:
+        return matching
+    eligible = matching or [f for f in base if not clause or not f["value"].get("clause")]
+    return [f for f in eligible if metric and f["value"].get("metric") == metric]
+
+
+def _change_key(value: dict) -> str:
+    change = value["change"]
+    return change.get("appliedCovenantId") or change.get("clause") or value["metric"]
+
+
+def _hold(field: dict, code: str, message: str) -> None:
+    field["issues"].append(issue(code, message))
+    field["status"] = "NEEDS_REVIEW"
+
+
 def amended_set(base: list[dict], changes: list[dict]) -> list[dict]:
     """The covenants as amended: base minus deletions, changed ones replaced, additions appended."""
-    by_metric = {f["value"].get("metric"): dict(f) for f in base if f["group"].endswith("COVENANT")}
+    result = [dict(f) for f in base if f["group"].endswith("COVENANT")]
     for c in changes:
-        metric = c["value"].get("metric")
-        kind = c["value"]["change"]["type"]
-        if kind == "DELETE":
-            by_metric.pop(metric, None)
+        if any(i["code"] in ("AMBIGUOUS_AMENDMENT_TARGET", "UNRESOLVED_AMENDMENT", "CHANGED_TWICE")
+               for i in c.get("issues", [])):
+            continue
+        value = c["value"]
+        change = value["change"]
+        if change["type"] == "ADD":
+            result.append(c)
+            continue
+        target = change.get("appliedCovenantId")
+        if target:
+            positions = [i for i, f in enumerate(result)
+                         if target in (f["value"].get("appliedCovenantId"),
+                                       (f["value"].get("change") or {}).get("appliedCovenantId"))]
         else:
-            by_metric[metric] = c
-    return list(by_metric.values())
+            positions = [i for i, f in enumerate(result) if f["value"].get("metric") == value.get("metric")]
+        if len(positions) == 1:
+            if change["type"] == "DELETE":
+                result.pop(positions[0])
+            else:
+                result[positions[0]] = c
+    return result
 
 
 def checks(fields: list[dict], ctx: dict) -> list[dict]:

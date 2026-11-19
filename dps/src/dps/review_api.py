@@ -167,7 +167,8 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
                                    payload_json=json.dumps({"action": d.action, "before": old, "after": new,
                                                             "reasonCode": d.reasonCode, "comment": d.comment,
                                                             "versionId": job.document_version_id}, default=str)))
-        _learn(db, job, d, old, new, reviewer)
+        if job.rollout != "SHADOW":
+            _learn(db, job, d, old, new, reviewer)
     _rederive(result, job)
     remaining = [f for f in result["fields"] if f["status"] == "NEEDS_REVIEW"]
     blocking = [w for w in result.get("warnings", []) if w["code"] in ("TOTALS_DO_NOT_ADD", "NOTHING_FOUND")]
@@ -185,7 +186,8 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
     if result["status"] == "DONE":
         job.status, job.updated_at, job.finished_at = jobs.DONE, utcnow(), utcnow()
         job.error_code = None
-        feed.emit_for_job(db, "dps.extraction.completed", job,
+        event = "dps.extraction.shadow" if job.rollout == "SHADOW" else "dps.extraction.completed"
+        feed.emit_for_job(db, event, job,
                           {"resultUrl": f"/dps/v1/jobs/{job.id}/result", "revision": revision + 1,
                            "reviewedBy": reviewer})
     db.commit()

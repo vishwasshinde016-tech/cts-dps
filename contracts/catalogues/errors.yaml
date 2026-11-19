@@ -21,6 +21,7 @@ errors:
   - { code: JOB_CANCELLED, class: REQUEST, http: 410, retry: false, message: "The job was cancelled." }
   - { code: JOB_FINISHED, class: REQUEST, http: 409, retry: false, message: "The job has already finished." }
   - { code: JOB_NOT_RETRYABLE, class: REQUEST, http: 409, retry: false, message: "Only a FAILED or DEAD job can be retried." }
+  - { code: SHADOW_MODE, class: REQUEST, http: 409, retry: false, message: "The document was processed in shadow mode; its results cannot be published or used." }
   - { code: REVISION_CHANGED, class: REQUEST, http: 409, retry: false, message: "Someone else saved a review of this result. Reload and review again." }
   - { code: QUEUE_FULL, class: REQUEST, http: 429, retry: true, message: "Too many jobs are waiting. Try again later." }
   - { code: BATCH_TOO_LARGE, class: REQUEST, http: 400, retry: false, message: "The batch has too many items." }
@@ -52,6 +53,12 @@ errors:
   - { code: CURRENCY_MISMATCH, class: QUALITY, http: null, retry: false, message: "The document is in a different currency than the cycle expects." }
   - { code: UNITS_MISMATCH, class: QUALITY, http: null, retry: false, message: "The amounts are in different units than the cycle expects." }
   - { code: TAXONOMY_DEFAULT, class: QUALITY, http: null, retry: false, message: "Not stated in the document; the covenant taxonomy's usual value was used. Please confirm it." }
+  - { code: QUALIFIED, class: QUALITY, http: null, retry: false, message: "The covenant has a condition or exception; please check it applies as extracted." }
+  - { code: UNRESOLVED_REFERENCE, class: QUALITY, http: null, retry: false, message: "The covenant refers to a clause or schedule that was not found in this document." }
+  - { code: UNRESOLVED_CANDIDATE, class: QUALITY, http: null, retry: false, message: "A duty sentence no extracted covenant explains; please confirm or dismiss it." }
+  - { code: NUMBER_NOT_IN_QUOTE, class: QUALITY, http: null, retry: false, message: "The threshold is not written in the quoted text; please check the source." }
+  - { code: RESIDUAL_BUDGET, class: QUALITY, http: null, retry: false, message: "Some unexplained duty sentences were not read again within the budget; they are listed for review." }
+  - { code: RESIDUAL_INCOMPLETE, class: QUALITY, http: null, retry: false, message: "A second read of unexplained duty sentences failed; they are listed for review." }
   - { code: AI_ONLY, class: QUALITY, http: null, retry: false, message: "Only the Document Agent found this value; please confirm it." }
   - { code: READ_FROM_IMAGE, class: QUALITY, http: null, retry: false, message: "This value was read from a page image; please confirm it." }
   - { code: NOT_GROUNDED, class: QUALITY, http: null, retry: false, message: "The value was not found on its page." }

@@ -135,7 +135,7 @@ def build(db: Session, job: Job, pipeline_version: str, store=None) -> dict:
                                                          StatementValue.superseded == false())
                             .order_by(StatementValue.key, StatementValue.as_of_date)).all()
         fields = [value_field(v, doc.status if doc else "") for v in values]
-        if not fields and doc is not None and doc.status == "NEEDS_REVIEW":
+        if not fields and doc is not None and (doc.status == "NEEDS_REVIEW" or job.rollout == "SHADOW"):
             fields = held_statement_fields(db, job, doc)
     else:
         terms = db.scalars(select(ExtractedTerm).where(ExtractedTerm.document_id == job.document_id)

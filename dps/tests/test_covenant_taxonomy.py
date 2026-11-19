@@ -27,7 +27,9 @@ def doc(*types, **extra):
 
 def test_the_shipped_taxonomy_loads_with_the_overlay_and_maps_every_old_dps_name():
     t = tx.get()
-    assert t.version == "2026.11.0+dps.1" and len(t.types) == 98
+    assert t.version == "2026.11.1+dps.1" and len(t.types) == 228
+    assert t.code_for("WAULT") == "FIN_LEASE_TERM"
+    assert t.code_for("Additional Guarantors") == "AFF_ADDITIONAL_GUARANTORS"
     for new in ("FIN_EBITDA_TO_EMI", "FIN_MIN_TANGIBLE_NET_WORTH", "FIN_MIN_COLLATERAL_VALUE", "NEG_DISPOSAL_CAP",
                 "AFF_SUBORDINATION", "NEG_MATERIAL_CONTRACTS"):
         assert t.get(new) is not None, new
@@ -171,7 +173,7 @@ def field(group, value, name="x"):
     return {"group": group, "name": name, "value": value, "issues": [], "status": "AUTO_ACCEPTED", "test": None}
 
 
-def test_stamp_sets_code_and_category_and_marks_taxonomy_defaults_for_review():
+def test_stamp_sets_code_and_category_and_holds_unspecified_operators():
     full = field("FINANCIAL_COVENANT", {"metric": "DSCR", "operator": ">=", "threshold": 1.2, "unit": "TIMES"})
     full["test"] = {"basis": None, "firstTestDate": None, "frequency": "YEARLY"}
     bare = field("FINANCIAL_COVENANT", {"metric": "DSCR", "threshold": 1.2})
@@ -181,8 +183,8 @@ def test_stamp_sets_code_and_category_and_marks_taxonomy_defaults_for_review():
     codes.stamp([full, bare, none, other, line])
     assert (full["value"]["code"], full["value"]["category"]) == ("FIN_DSCR", "financial")
     assert "defaults" not in full["value"] and full["status"] == "AUTO_ACCEPTED"
-    assert bare["value"]["operator"] == ">=" and bare["value"]["defaults"]
-    assert bare["status"] == "NEEDS_REVIEW" and bare["issues"][-1]["code"] == "TAXONOMY_DEFAULT"
+    assert not bare["value"].get("operator") and not bare["value"].get("defaults")
+    assert bare["status"] == "NEEDS_REVIEW" and bare["issues"][-1]["code"] == "REQUIRED_MISSING"
     assert (none["value"]["code"], none["value"]["category"]) == ("NEG_LIENS", "negative") and not none["issues"]
     assert other["value"]["code"] is None and other["value"]["category"] is None
     assert "code" not in line["value"]

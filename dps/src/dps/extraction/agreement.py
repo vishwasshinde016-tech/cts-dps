@@ -891,6 +891,18 @@ def _security_terms(doc: _Doc, found: set[str]) -> list[Term]:
     return out
 
 
+# "On a Change of Control the Borrower shall prepay the Loans": a payment that a change of control triggers (loan
+# mechanics), not an undertaking about control (Codex acceptance case "mandatory_prepayment", 19 Nov 2026).
+_TRIGGERED_PAYMENT = re.compile(r"\b(?:prepay|prepayment|repay|repayment|cancel(?:led|lation)?|"
+                                r"become\s+(?:immediately\s+)?due)\b", re.I)
+
+
+def _control_is_a_payment_trigger(metric: str, text: str) -> bool:
+    if metric != "CHANGE_OF_CONTROL" or not _TRIGGERED_PAYMENT.search(text):
+        return False
+    return not re.search(r"\b(?:shall|will)\s+not\b[^.]{0,80}?\b(?:change|permit|allow|cause)\b", text, re.I)
+
+
 def _non_financial(doc: _Doc, clauses: list[_Clause]) -> list[Term]:
     out: dict[str, Term] = {}
     for c in clauses:
@@ -907,6 +919,8 @@ def _non_financial(doc: _Doc, clauses: list[_Clause]) -> list[Term]:
             if metric == "INSURANCE_MAINTENANCE" and not re.search(
                     r"\b(?:maintain|maintained|keep|kept|renew|renewed|continue|continued)\b", context, re.I):
                 continue
+            if _control_is_a_payment_trigger(metric, context):
+                continue
             quote, page = _quote(doc, c.start, c.start + len(c.heading) + 1)
             out[metric] = Term(metric, "NON_FINANCIAL", None, None, None, _frequency(context), page, quote,
                                context[:320], 0.8)
@@ -921,6 +935,8 @@ def _non_financial(doc: _Doc, clauses: list[_Clause]) -> list[Term]:
                 continue
             if metric == "INSURANCE_MAINTENANCE" and not re.search(r"\b(?:maintain|keep|kept|insured|renew)\b",
                                                                    sentence, re.I):
+                continue
+            if _control_is_a_payment_trigger(metric, sentence):
                 continue
             quote, page = _quote(doc, m.start(), m.end())
             out[metric] = Term(metric, "NON_FINANCIAL", None, None, None, _frequency(sentence), page, quote,

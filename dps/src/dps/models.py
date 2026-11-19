@@ -133,10 +133,8 @@ class Job(Base):
         # Phase 1: the same Idempotency-Key from the same tenant always means the same job.
         Index("ux_dps_job_idempotency", "tenant_id", "idempotency_key", unique=True,
               mssql_where=text("idempotency_key IS NOT NULL"), sqlite_where=text("idempotency_key IS NOT NULL")),
-        # Phase 1: the same input (version, type, pipeline) is processed once; only REPROCESS runs it again.
-        Index("ux_dps_job_input", "tenant_id", "document_version_id", "job_type", "pipeline_version", unique=True,
-              mssql_where=text("document_version_id IS NOT NULL AND job_type <> 'REPROCESS'"),
-              sqlite_where=text("document_version_id IS NOT NULL AND job_type <> 'REPROCESS'")),
+        Index("ux_dps_job_scoped_input", "tenant_id", "input_key", unique=True,
+              mssql_where=text("input_key IS NOT NULL"), sqlite_where=text("input_key IS NOT NULL")),
     )
 
     id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
@@ -162,6 +160,7 @@ class Job(Base):
     due_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), default=utcnow)  # not claimed before this time
     idempotency_key: Mapped[str | None] = mapped_column(Varchar(128))
     request_hash: Mapped[str | None] = mapped_column(Varchar(64))  # SHA-256 of the submitted body
+    input_key: Mapped[str | None] = mapped_column(Varchar(64))
     request_json: Mapped[str | None] = mapped_column(UnicodeText)
     batch_id: Mapped[str | None] = mapped_column(Varchar(36), index=True)
     client_file_reference: Mapped[str | None] = mapped_column(Unicode(128))
