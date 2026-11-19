@@ -11,7 +11,7 @@ import time
 from dps.advisory.advisor import crewai_completion
 from dps.extraction.agreement import extract_terms
 from dps.extraction.agreement_ai import ai_covenants, flag_unconfirmed, vote
-from dps.extraction.coverage import possible_covenants
+from dps.extraction.safety_net import possible_covenants
 from dps.parse.engine import Page
 
 completion = crewai_completion(os.environ["DPS_AI_MODEL"], None, 120)

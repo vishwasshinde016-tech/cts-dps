@@ -1,4 +1,4 @@
-"""The daily app log: every container of the stack, one readable file per day (docs/observability.md).
+"""The daily app log: every container of the stack, one readable file per day (see dps.ops.observability).
 
     logs/covenexa-2026-11-09.log
     2026-11-09 10:42:01.120Z ui               10.0.0.5 "POST /api/v1/documents" 201 cid=3f2a...

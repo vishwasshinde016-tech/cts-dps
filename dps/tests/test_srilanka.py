@@ -167,7 +167,7 @@ def test_a_ratio_spelled_out_with_its_figures_in_brackets():
 
 def test_each_list_item_is_its_own_sentence_for_the_safety_net():
     # Dialog: the interest cover found in (ii) hid the DSCR in (iii) of the same paragraph from the safety net.
-    from dps.extraction.coverage import _sentences
+    from dps.extraction.safety_net import _sentences
 
     parts = _sentences("The Borrower shall maintain at all times: (i) a Total Debt to EBITDA ratio of not more than "
                        "2.5 times; (ii) an EBITDA to Interest Expense ratio of a minimum of 6.0 times; and (iii) a "

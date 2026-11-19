@@ -76,7 +76,7 @@ def test_a_balance_sheet_on_two_pages_is_read_whole():
 
 def test_covenants_written_as_a_prohibited_state_reach_a_person():
     # HA04, HA08, HA01: no rule read them and the safety net did not show them either.
-    from dps.extraction.coverage import looks_like_covenant
+    from dps.extraction.safety_net import looks_like_covenant
 
     assert looks_like_covenant("(2) the Borrower shall not permit the Interest Coverage Ratio as of the last day of "
                                "each Test Period to be less than 2.50 to 1.00.")
@@ -123,7 +123,7 @@ def test_a_definition_is_not_a_covenant_and_a_formula_is_not_a_number():
 
 def test_a_ratio_in_words():
     # HA10: "a Liability to Equity Ratio of not greater than one-to-one".
-    from dps.extraction.coverage import looks_like_covenant
+    from dps.extraction.safety_net import looks_like_covenant
 
     text = ("6.5 Debt to Equity Ratio. Borrower shall at all times maintain a Debt to Equity Ratio of not greater than "
             "one-to-one, as reflected on its annual Financial Statements.")

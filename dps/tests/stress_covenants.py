@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from dps.extraction.agreement import extract_terms
-from dps.extraction.coverage import possible_covenants
+from dps.extraction.safety_net import possible_covenants
 from dps.extraction.validation import check_direction
 from dps.parse.engine import Page
 

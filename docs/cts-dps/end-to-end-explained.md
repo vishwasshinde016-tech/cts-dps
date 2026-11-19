@@ -59,7 +59,7 @@ flowchart TB
   PACK --> EXT
 
   subgraph EXTRACT["Covenant extraction — skills/runner.py · _extract()"]
-    EXT["1 · Rules (no AI)<br/>skills/covenants/rules.py → extraction/agreement.py<br/>+ safety net extraction/coverage.py"]
+    EXT["1 · Rules (no AI)<br/>skills/covenants/rules.py → extraction/agreement.py<br/>+ safety net extraction/safety_net.py"]
     EXT --> PAGES["2 · Page finder<br/>skills/covenants/pages.py<br/>rule hits → covenant sections → duty sentences → definitions<br/>up to 4 batches × 25 pages"]
     PAGES --> PARTS["3 · Focused parts<br/>skills/covenants/parts.py<br/>financial · undertakings · reporting · events of default"]
     PARTS --> AGENT
@@ -189,7 +189,7 @@ Order of work in `dps/src/dps/skills/runner.py` `_extract()`. The Agreement Inta
 
 | # | Step | What happens | Where |
 |---|---|---|---|
-| 1 | **Rules** (no AI) | Numbered-clause scan, metric aliases (DSCR, ICR, Debt/EBITDA, TNW …), threshold phrases ("not less than 1.25x"), non-financial rules. Every term carries its page and a verbatim quote. A **safety net** sends covenant-shaped sentences that no rule explains to a person. | `skills/covenants/rules.py`, `extraction/agreement.py`, `extraction/coverage.py` |
+| 1 | **Rules** (no AI) | Numbered-clause scan, metric aliases (DSCR, ICR, Debt/EBITDA, TNW …), threshold phrases ("not less than 1.25x"), non-financial rules. Every term carries its page and a verbatim quote. A **safety net** sends covenant-shaped sentences that no rule explains to a person. | `skills/covenants/rules.py`, `extraction/agreement.py`, `extraction/safety_net.py` |
 | 2 | **Page finder** | Scores every page without AI, in this order: rule-hit pages, then covenant section headings (+ next page), then duty sentences, then definitions. Up to **4 batches × 25 pages**. Pages left out stay reachable through the tools. | `skills/covenants/pages.py` (`covenant_batches`) |
 | 3 | **Focused parts** | The covenants skill runs as 4 focused reads: financial, undertakings (affirmative + negative), reporting, events of default. Each read gets only its part's slice of the taxonomy in the prompt. | `skills/covenants/parts.py`, `skills/covenants/prompt.md` |
 | 4 | **Agent read** | The Document Agent reads each batch. The answer must match `schema.json`. | `skills/common.py` (`batched_proposals`, `agent_proposals`) |

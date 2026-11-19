@@ -1,4 +1,4 @@
-"""AI usage and traceability: every model call, recorded per request (review GAP-05, docs/observability.md).
+"""AI usage and traceability: every model call, recorded per request (review GAP-05; see dps.ops.observability).
 
 The completion notes each call it makes in a context variable: tokens, and for traceability the messages sent,
 the answer, the time taken and whether it failed. The endpoint that asked for the answer (or the worker, for the

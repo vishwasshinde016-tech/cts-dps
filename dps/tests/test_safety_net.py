@@ -11,8 +11,8 @@ from test_statement_pdf import amounts, header, line
 
 from dps.db import Database
 from dps.extraction.agreement import extract_terms
-from dps.extraction.coverage import looks_like_covenant, possible_covenants
 from dps.extraction.mapping import normalize
+from dps.extraction.safety_net import looks_like_covenant, possible_covenants
 from dps.extraction.statement import identity_issues, likely_lines
 from dps.extraction.statement_pdf import PdfStatement, rows_from_words
 from dps.models import Base, Document, StatementValue

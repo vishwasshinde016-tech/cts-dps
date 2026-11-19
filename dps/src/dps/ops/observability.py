@@ -1,4 +1,4 @@
-"""Logs, traces and metrics for the whole app (docs/observability.md).
+"""Logs, traces and metrics for the whole app.
 
 Every log line carries who and what it is about: the request id (the same ``X-Correlation-Id`` the gateway gives
 Core and DPS), the user, and for background work the job and document. Lines go to standard output, where the log

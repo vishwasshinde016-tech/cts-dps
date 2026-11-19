@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 
-from dps.extraction.coverage import _COMPARISON, _FINANCIAL, _OBLIGATION
+from dps.extraction.safety_net import _COMPARISON, _FINANCIAL, _OBLIGATION
 
 HEADING = re.compile(
     r"(?im)^[ \t]*(?:article|section|clause|part|schedule)?[ \t]*[\dIVXLC]*[.)]?[\d.]*[ \t]*[-–:]?[ \t]*"
