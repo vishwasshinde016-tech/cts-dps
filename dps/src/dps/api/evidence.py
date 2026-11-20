@@ -109,13 +109,6 @@ def version_runs(version_id: str, db: DB, user: User) -> dict:
                     "startedAt": (job.started_at or r.created_at).isoformat(), "finishedAt": r.created_at.isoformat(),
                     "supersededBy": newest_per_job.get(r.job_id), "resultSha256": None, "trigger": r.trigger})
         newest_per_job.setdefault(r.job_id, run_id)
-    for j in found:  # proven flows (agreement, statement) keep their results in the older tables: one run each
-        if j.id not in newest_per_job and j.status in ("DONE", "NEEDS_REVIEW"):
-            out.append({"runId": j.id, "jobId": j.id, "jobType": j.job_type, "status": j.status,
-                        "pipelineVersion": j.pipeline_version, "skillPack": None,
-                        "startedAt": (j.started_at or j.created_at).isoformat(),
-                        "finishedAt": j.finished_at.isoformat() if j.finished_at else None, "supersededBy": None,
-                        "resultSha256": None})
     return {"versionId": version_id, "runs": out}
 
 

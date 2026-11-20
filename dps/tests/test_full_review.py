@@ -90,7 +90,7 @@ def _queued_job(database, **kw):  # noqa: F811
 
     doc = add_document(database)
     with database.session_factory() as s:
-        j = Job(document_id=doc, flow="AGREEMENT_INTAKE", job_type="EXTRACT_AGREEMENT", tenant_id="default",
+        j = Job(document_id=doc, flow="SKILL_PACK", job_type="EXTRACT_AGREEMENT", tenant_id="default",
                 priority=1, due_at=utcnow(), status="QUEUED", pool="STANDARD", attempts=0, crash_count=0,
                 cancel_requested=False, **kw)
         s.add(j)

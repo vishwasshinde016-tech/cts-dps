@@ -34,8 +34,7 @@ from dps.skills.statement_lines.reader import ContentFailed, NeedsHeavyPool
 
 log = logging.getLogger(__name__)
 
-# Jobs queued before the one pipeline (full review WP7) name their old flow; they run in the skills flow too.
-SKILL_FLOWS = ("SKILL_PACK", "AGREEMENT_INTAKE", "STATEMENT_PROCESSING")
+SKILL_FLOWS = ("SKILL_PACK",)  # every job type that reads a document (one pipeline, full review WP7)
 ACTOR = "dps-worker"
 
 

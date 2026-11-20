@@ -124,7 +124,7 @@ def test_certificate_for_another_period_goes_to_review():
 def test_statement_in_other_units_is_held_before_any_value_is_reported(database):  # noqa: F811
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "units.xlsx")
     with database.session_factory() as s:
-        s.add(Job(id="j1", document_id=doc_id, flow="STATEMENT_PROCESSING", job_type="EXTRACT_STATEMENT",
+        s.add(Job(id="j1", document_id=doc_id, flow="SKILL_PACK", job_type="EXTRACT_STATEMENT",
                   request_json=json.dumps({"context": {"expectedUnits": "CRORE"}})))
         s.commit()
     from test_flows import FakeParser, StatementDeps, StatementProcessingFlow

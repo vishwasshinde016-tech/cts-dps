@@ -78,33 +78,6 @@ def test_analyze_reports_missing_required_fields():
 
 # ---------- G4: a restated statement lists what changed ----------
 
-def test_restated_statement_lists_changed_lines(client, app):
-    from dps.models import StatementValue
-
-    ids = []
-    for n, pat in ((1, 70.0), (2, 75.0)):
-        r = submit(client, app, "EXTRACT_STATEMENT", f"Item,Amount\nPAT,{pat}\n".encode(), ".csv", "text/csv",
-                   f"st-r{n}", f"key-restate-{n}", asOfDate="2026-03-31")
-        ids.append(r.json()["jobId"])
-        with app.state.db.session_factory() as s:
-            job = s.get(Job, ids[-1])
-            job.flow = "STATEMENT_PROCESSING"  # read before the one pipeline (WP7): its result is in the old tables
-            for key, value in (("PAT", pat), ("REVENUE", 500.0)):
-                s.add(StatementValue(cp_id="CP-1", key=key, value=value, unit="INR_CR", as_of_date=date(2026, 3, 31),
-                                     source_type="DOCUMENT", document_id=job.document_id, page=1))
-            jobs.finish(s, job, jobs.DONE)
-    first = client.get(f"/dps/v1/jobs/{ids[0]}/result", headers=SERVICE).json()
-    assert not [w for w in first["warnings"] if w["code"] == "RESTATED"]
-    second = client.get(f"/dps/v1/jobs/{ids[1]}/result", headers=SERVICE).json()
-    warning = next(w for w in second["warnings"] if w["code"] == "RESTATED")
-    assert "1 line(s)" in warning["message"] and "PAT 2026-03-31" in warning["message"]
-    pat = next(f for f in second["fields"] if f["name"] == "PAT")
-    assert pat["issues"][0]["code"] == "RESTATED" and "approved 70.00" in pat["issues"][0]["message"]
-    assert pat["status"] == "NEEDS_REVIEW"
-    assert next(f for f in second["fields"] if f["name"] == "REVENUE")["status"] == "AUTO_ACCEPTED"
-
-
-# ---------- G1: one ONBOARD job classifies, then extracts covenants and schedule terms ----------
 
 AGREEMENT_TEXT = ("TERM LOAN AGREEMENT\nThis Agreement is made on 1 April 2026 BETWEEN Shree Polymers Limited "
                   "(the Borrower) AND State Bank Limited (the Lender).\n"

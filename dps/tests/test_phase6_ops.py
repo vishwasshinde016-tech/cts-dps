@@ -75,7 +75,7 @@ def test_scaling_signals(client, app):
             s.add(Document(id=f"d{i}", type="LOAN_AGREEMENT", file_name="f.pdf", storage_path="x", sha256="0" * 64,
                            size_bytes=1, status="QUEUED", uploaded_by="u"))
             s.flush()
-            s.add(Job(document_id=f"d{i}", flow="AGREEMENT_INTAKE", status=jobs.QUEUED, pool="STANDARD",
+            s.add(Job(document_id=f"d{i}", flow="SKILL_PACK", status=jobs.QUEUED, pool="STANDARD",
                       created_at=utcnow() - timedelta(minutes=5), due_at=utcnow() - timedelta(minutes=5)))
         s.commit()
     pools = {p["pool"]: p for p in client.get("/dps/v1/ops/scaling", headers=OPS).json()["pools"]}

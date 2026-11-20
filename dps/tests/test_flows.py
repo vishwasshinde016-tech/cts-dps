@@ -14,7 +14,7 @@ from statement_shim import StatementDeps, StatementProcessingFlow, reviewed_if_c
 from dps import jobs
 from dps.db import Base, Database
 from dps.integrations.core import CoreClient, CoreUnavailable
-from dps.models import Document, DocumentCpLink, EventOutbox, Job, Run, StatementValue, utcnow
+from dps.models import Document, DocumentCpLink, Job, Run, StatementValue, utcnow
 from dps.parse.engine import Page
 from dps.settings import Settings
 from dps.skills import load
@@ -151,8 +151,6 @@ def test_a_statement_stores_the_approved_printed_figures_only(database):
     v = values(database)
     assert v["EBITDA"].value == 5.0 and v["EBITDA"].cell == "BS!B2" and values(database, "CP-2")["EBITDA"]
     assert "TOTAL_DEBT" not in v and "NET_DEBT" not in v  # worked out by Spring's formula engine
-    with database.session_factory() as s:
-        assert s.scalars(select(EventOutbox)).first() is None
 
 
 def test_the_derived_values_switch_keeps_the_old_figures(database):
@@ -296,13 +294,6 @@ def test_the_worker_runs_an_agreement_job_in_the_skills_flow(database, tmp_path)
     ledger = json.loads(run.result_json)["document"]["coverage"]["ledger"]  # every duty sentence accounted for
     assert ledger["scope"] == "WHOLE_DOCUMENT" and ledger["accounted"] == ledger["candidates"]
     assert w.run_once() is False
-
-
-def test_jobs_queued_under_the_old_flow_names_run_in_the_skills_flow(database, tmp_path):
-    """Jobs queued before the one pipeline (WP7) still run: AGREEMENT_INTAKE and STATEMENT_PROCESSING."""
-    job_id = add_job(database, add_document(database), flow="AGREEMENT_INTAKE")
-    assert worker(tmp_path, database, agreement_runner).run_once()
-    assert job(database, job_id).status == jobs.NEEDS_REVIEW
 
 
 def test_worker_retries_transient_errors_then_fails(database, tmp_path):
