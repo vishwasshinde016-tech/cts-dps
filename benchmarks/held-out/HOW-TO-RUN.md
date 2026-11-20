@@ -30,7 +30,8 @@ All downloads use SEC's public endpoints or the company's / exchange's own site,
 3. **Write the answer keys before running DPS.** US statements: `harness/truth_us.py` (from XBRL, no person).
    Agreements and India / Sri Lanka statements: read the documents and write `truth/*.json` by hand, following the
    `rules` field at the top of each file. Do not look at DPS's output first.
-4. **Run the real flows** in the worker containers (a throwaway SQLite database, Core read only):
+4. **Run the real flows** (note: `run_flows.py` was removed on 20 Nov 2026 with the old flows; a new runner on the
+   job API is still to be written) in the worker containers (a throwaway SQLite database, Core read only):
    `python run_flows.py out.json agreement <pdfs>` and `... statement <pdfs>`; add `--ai` for the optional AI
    readers. Documents with outcome `HEAVY` are run again in `dps-worker-heavy` with `--heavy`.
 5. **Score**: `python harness/score.py out.json [heavy.json]`. Write the numbers in `README.md` with the month,

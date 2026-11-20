@@ -39,7 +39,7 @@ The decisions this design proposes:
 3. **Rules first, AI second, a person decides.** Every value must be found on its page. The rules and the Document Agent read independently; where they disagree, or only the agent found a value, the field goes to a person. There is no second model checking the first (removed 18 Nov 2026). A null is better than a wrong value.
 4. **Multi-modal, one model per task.** Text, tables, scans and images are read: native text first, OCR for scans, a vision model for pages that text cannot read. A small model classifies and a strong model extracts; the checks against the rules, the page text and Spring's Java rules do the checking, not a second model.
 5. **One result schema for every document type**, versioned, with page, quote, location, method, model and confidence on every field.
-6. **Jobs in SQL Server with leases**, owned by DPS, submitted through a DPS API (not by Spring writing into DPS tables), results pushed back as events through an outbox.
+6. **Jobs in SQL Server with leases**, owned by DPS, submitted through a DPS API (not by Spring writing into DPS tables), results reported as events through the event feed (`dps_event_feed`), pushed to Spring or pulled.
 7. **Python where the libraries are, Java where the rules are.** Parsing, OCR and the agent stay in Python; formula, covenant-library and master-data rules stay in Spring and are called as batched tool calls with timeouts, a circuit breaker and fallback to review.
 8. **Production from day one:** error taxonomy with retry and dead-letter queue, OpenTelemetry tracing, append-only hash-chained audit, a golden set that gates every model or prompt change.
 
@@ -283,7 +283,7 @@ Every document job runs the same ten stages (DRAFT\_COMMENTARY reads no file and
 | 7 | Extract | The job type's skill: rules engine first, then the agent reads the relevant pages only and returns the schema | rules + LLM (+ VLM for image pages) | Partial → fields flagged |
 | 8 | Verify | Grounding (every value and quote found on its cited page), cross-checks (balance sheet balances, totals add up, ratio inside a sane range, threshold direction matches wording, period matches), compare with last period | verify module | Disagreement → field to review; a value never found on the page is dropped |
 | 9 | Score and route | Multi-signal confidence per field and per document; route by thresholds set per document type and field risk | calibrated scorer | `AUTO_ACCEPTED` / `NEEDS_REVIEW` / `REJECTED` |
-| 10 | Publish | Write the result JSON and artefacts to `derived/`; write result rows; write the outbox event in the same transaction | outbox | Spring pulls or receives the event |
+| 10 | Publish | Write the result JSON and artefacts to `derived/`; write result rows; write the event (`dps_event_feed`) in the same transaction | event feed | Spring pulls or receives the event |
 
 Rules that hold across all stages:
 
@@ -442,7 +442,7 @@ API rules: errors in the bank app's envelope {code, message, details, timestamp}
 
 ## Events back to Spring
 
-DPS reports every outcome as an event written to an outbox table in the same transaction as the result, so a result is never saved without its event or announced without being saved. Delivery is at least once; Spring de-duplicates on `event_id`.
+DPS reports every outcome as an event written to the event feed table (`dps_event_feed`) in the same transaction as the result, so a result is never saved without its event or announced without being saved. Delivery is at least once; Spring de-duplicates on `event_id`.
 
 Two delivery modes, Spring picks one:
 
@@ -605,7 +605,7 @@ complete, and removing the Core-demo modules.
 
 **Decision note, obligation model and document sets (20 Nov 2026, full review WP6 and WP9):** every covenant now records whom it binds and when it applies: `value.scope` (obligor as written, STANDALONE or CONSOLIDATED, facility references, and whether the quote states it), `value.conditions` (the "if / when / so long as" triggers, SPRINGING when they depend on loans drawn or availability), `value.baskets`, `value.equityCure`, and `test.firstTestDate` and `test.holiday`. They are read from the covenant's own sentence; the Document Agent's answer is used only for the company and facility when the sentence names none, and a condition it gives must be in the quote. A condition, an unknown company on a financial covenant, or a clause that binds several companies always goes to a person (`CONDITIONAL`, `SCOPE_UNKNOWN`, `SCOPE_SEVERAL`). The fields are additive to `dps.result/1.0`, so a consumer that ignores them keeps working. New document types: `WAIVER_CONSENT` (the waiver pack, also through ONBOARD), `GUARANTEE` (its covenants bind the guarantor) and `AMENDED_AND_RESTATED` (a full agreement; `result.restates` names the version it replaces). `EXTRACT_WAIVER` needs `baseCovenants`; `EXTRACT_AMENDMENT` needs `baseCovenants` or `amendsVersionId` (400 `BASE_REQUIRED`), and the fallback base now includes ONBOARD runs. `RECONCILE_SET` takes a JSON manifest and returns the covenants in force on its date; a document with no run blocks the set (`SET_INCOMPLETE`). Not built yet: a full effective-dated timeline per covenant (the proposal in `document-set-proposal.md`) and the `dps.result/2.0` media-type switch.
 
-**Decision note, nothing missed silently (19 Nov 2026, review against the requirements and the Codex design, `dps-review-2026-11-19.md`):**
+**Decision note, nothing missed silently (19 Nov 2026, review against the requirements and the Codex design):**
 
 - **Ledger.** Every covenant-shaped sentence of the whole document goes into a candidate ledger. Each sentence ends in one state: found, covered by a covenant of the same kind (listed on it in `value.covers`), dismissed with the Document Agent's reason, or unresolved. Unresolved sentences become review items, one per page and kind.
 - **Residual read.** The agent reads the unexplained sentences a second time, grounded and within budget.

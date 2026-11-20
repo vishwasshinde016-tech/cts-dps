@@ -1,8 +1,9 @@
-"""Skill-job flow: the CrewAI Flow the worker runs for ANALYZE, ONBOARD and the skill-pack jobs.
+"""Skill-job flow: the CrewAI Flow the worker runs for every job type that reads a document (one pipeline, WP7).
 
-Miro (Onboarding and Amendment flows): "Python worker invokes the CrewAI flow". Agreement intake and statement
-processing have their own flows; every other job type runs through this one, so each job is one isolated flow
-run with its own state. Two fixed steps, no LLM: ``run_skills`` (classify, then the job's skill pack and tools)
+Miro (Onboarding and Amendment flows): "Python worker invokes the CrewAI flow". Every job type runs through this
+one flow (agreements, statements, sanctions, amendments, waivers, certificates, onboarding, document sets,
+commentary), so each job is one isolated flow run with its own state.
+Two fixed steps, no LLM: ``run_skills`` (classify, then the job's skill pack and tools)
 and ``save_result`` (one ``dps_run``, the event, the job's end status). Exceptions keep their type, so the worker's
 retry rules (Spring or storage down: retry; a bug: retry once, then DEAD) stay the same.
 """

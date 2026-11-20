@@ -26,7 +26,7 @@ Copied on 18 Nov 2026 from `Vishwas2311/loan-covenant-platform`, branch `feat/dp
 | --- | --- |
 | Jobs between Spring and DPS | `dps/src/dps/api/jobs.py`, `contracts/dps-jobs-api.yaml` |
 | Python worker polls the job queue | `dps/src/dps/worker.py`, `dps/src/dps/jobs.py` |
-| CrewAI Flow per job, isolated context | `dps/src/dps/flows/skill_job.py` (also `flows/intake.py`, `flows/statement.py`) |
+| CrewAI Flow per job, isolated context | `dps/src/dps/flows/skill_job.py` (one pipeline for every job type) |
 | One agent, many skills and tools | `dps/src/dps/agent/document_agent.py`, `dps/src/dps/skills/*/pack.yaml` |
 | Java business rules as Python tools | `dps/src/dps/integrations/spring_tools.py`, `contracts/spring-tools.yaml` |
 | Schema of the extraction tool | `contracts/schemas/page-model.json`, `contracts/schemas/result.json` |

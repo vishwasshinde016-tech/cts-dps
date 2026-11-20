@@ -14,11 +14,8 @@ component inside the bank's Spring app.
 | [diagrams/dps-flow-explained.html](diagrams/dps-flow-explained.html) | **Explain the flow block by block (open in a browser):** click any of the 58 blocks to see what it does, what to say, where the data is, and its code; **Open in VS Code** opens the file on this laptop at that line; Next/Previous walks the flow |
 | [diagrams/dps-full-flow.html](diagrams/dps-full-flow.html) | **The full flow in one diagram (open in a browser):** upload, queue, extraction, type detection, skill choice, rules, agent and tools, checks, result. Every box shows its file:line and opens the code |
 | [diagrams/dps-complete.html](diagrams/dps-complete.html) | **The whole DPS on one page (open in a browser):** 4 diagrams with steps, every table, file:line references and real code excerpts |
-| [sample-run-AGR-001.txt](sample-run-AGR-001.txt) | A run log of the demo: every DPS function entered, with file and line, plus the log lines |
-| [CTS-DPS-overview-for-teams.md](CTS-DPS-overview-for-teams.md) | Short overview for the other teams |
 | [CTS-DPS-schema-explained.md](CTS-DPS-schema-explained.md) | The result schema in simple words |
 | [end-to-end-explained.md](end-to-end-explained.md) | Upload to covenant result in one diagram: libraries, flows, agent, skills, tools, Java rules, with code paths |
-| [dps-review-2026-11-19.md](dps-review-2026-11-19.md) | Review against every requirement source and the Codex DPS: inventory, comparison, measurements, changes, open gaps |
 | [document-set-proposal.md](document-set-proposal.md) | Proposal for the Spring team: reading an agreement with its amendments and waivers as one set (RECONCILE_SET, covenant timeline) |
 | [design.md](design.md) | End-to-end design, v0.6 (17 Nov 2026), including the scaling decision and the Java tools boundary |
 | [../../contracts/dps-jobs-api.yaml](../../contracts/dps-jobs-api.yaml) | The job API the Spring app calls |
