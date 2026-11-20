@@ -95,7 +95,7 @@
   <tr><td><b>The picture to show</b> (Archify, the complete DPS)</td><td><a href="../../../docs/cts-dps/diagrams/dps-complete.html">docs/cts-dps/diagrams/dps-complete.html</a></td><td>2, 5, 7</td><td>the room</td></tr>
   <tr><td><b>The picture explained, block by block</b> (what each block does, what to say, its code)</td><td><a href="../../../docs/cts-dps/diagrams/dps-flow-explained.html">docs/cts-dps/diagrams/dps-flow-explained.html</a></td><td>read before; open in 5 beside the full flow</td><td>you</td></tr>
   <tr><td>The full flow in 14 rows: every skill, rules first then the agent, the DB tables of each step, file:line on every box</td><td><a href="../../../docs/cts-dps/diagrams/dps-full-flow.html">docs/cts-dps/diagrams/dps-full-flow.html</a></td><td>5</td><td>the room</td></tr>
-  <tr><td>Swagger (the API page)</td><td><a href="http://localhost:9400/docs">http://localhost:9400/docs</a> (after the API starts)</td><td>3, 6</td><td>the room</td></tr>
+  <tr><td>Swagger (the API page)</td><td><code>http://localhost:9400/docs</code> (after the API starts)</td><td>3, 6</td><td>the room</td></tr>
   <tr><td><b>Architect's agreement</b> (onboarding, 100 pages, SEC EDGAR 2020)</td><td><a href="../../../architect-documents/us_ex10_1_credit_agreement_2020.pdf">architect-documents/us_ex10_1_credit_agreement_2020.pdf</a></td><td>3</td><td>the room</td></tr>
   <tr><td><b>Architect's amendment</b> (Sixth Amendment, Southcross 2018)</td><td><a href="../../../architect-documents/us_southcross_amendment_2018.pdf">architect-documents/us_southcross_amendment_2018.pdf</a></td><td>4a</td><td>the room</td></tr>
   <tr><td>Architect's second amendment (First Amendment to a <i>restated</i> credit agreement, Holly 2010)</td><td><a href="../../../architect-documents/us_holly_amendment_2010.pdf">architect-documents/us_holly_amendment_2010.pdf</a></td><td>4b</td><td>the room</td></tr>
@@ -146,7 +146,7 @@ C:\cts-dps\dps\.venv\Scripts\alembic.exe upgrade head</pre></div>
 <table>
   <tr><th>Window</th><th>What</th><th>How</th></tr>
   <tr><td>1. Browser tab 1</td><td>Archify picture</td><td><a href="../../../docs/cts-dps/diagrams/dps-complete.html">dps-complete.html</a></td></tr>
-  <tr><td>2. Browser tab 2</td><td>Swagger</td><td><a href="http://localhost:9400/docs">http://localhost:9400/docs</a> (after Terminal A runs)</td></tr>
+  <tr><td>2. Browser tab 2</td><td>Swagger</td><td><code>http://localhost:9400/docs</code> (after Terminal A runs)</td></tr>
   <tr><td>3. VS Code</td><td>Terminals A, B, H, C and the files</td><td><code>code C:\cts-dps</code>; split the terminal (Ctrl+Shift+5)</td></tr>
   <tr><td>4. DB viewer</td><td><code>dps.db</code></td><td>DB Browser for SQLite: File &rarr; Open, <code>C:\cts-dps\dps\dps.db</code>, tab "Browse Data". Press F5 to refresh.</td></tr>
 </table>
@@ -398,7 +398,7 @@ curl.exe -H "X-User: ops-1" -H "X-Roles: SUPPORT" http://localhost:9400/dps/v1/o
 <!-- ================================================================== -->
 <div class="phase">
 <h2>Phase 6. What each team builds <span class="pill">10 min &middot; Spring and UI developers &middot; Swagger</span></h2>
-<div class="box open"><span class="tag">OPEN</span> Browser tab 2: <a href="http://localhost:9400/docs">http://localhost:9400/docs</a>. Click "Try it out" on each endpoint below. Paste a job ID from phase 3 (it was printed on line 2). In Swagger, add the headers <code>X-User: cts-spring</code> and <code>X-Roles: SERVICE</code>.</div>
+<div class="box open"><span class="tag">OPEN</span> Browser tab 2: <code>http://localhost:9400/docs</code>. Click "Try it out" on each endpoint below. Paste a job ID from phase 3 (it was printed on line 2). In Swagger, add the headers <code>X-User: cts-spring</code> and <code>X-Roles: SERVICE</code>.</div>
 
 <h3>6.1 For the Spring developers: what Spring calls</h3>
 <table>
