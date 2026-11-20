@@ -1,14 +1,13 @@
-"""DPS → Covenant Core calls made by the flows and workers as the SERVICE identity.
-
-C4 reads: covenant library (``GET /api/v1/covenants``) and formula validation
-(``POST /api/v1/formulas/validate``). C5: ``POST /api/v1/data-events``.
+"""DPS → the CTS Spring app's reads the statement reader needs, as the SERVICE identity: a CP's loan currency and
+borrower profile, the country profiles, and the bank's FX rates. Everything else DPS asks Spring goes through the
+Spring tools client (``integrations/spring_tools.py``: covenant library, formula validation, identifier lookup) or
+the event push. DPS writes nothing to Spring's database and sends no data events (full review G9, G12).
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
 from datetime import date
 
 import httpx
@@ -18,15 +17,6 @@ from dps.integrations.service_auth import ClientCredentialsToken, TokenError
 from dps.settings import Settings
 
 log = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class CoreMaster:
-    id: str
-    name: str
-    category: str
-    assessment_type: str
-    referenced_measures: tuple[str, ...]
 
 
 class CoreUnavailable(Exception):
@@ -70,33 +60,6 @@ class CoreClient:
         if resp.status_code >= 500:
             raise CoreUnavailable(f"{method} {path}: HTTP {resp.status_code}")
         return resp
-
-    def active_masters(self) -> list[CoreMaster]:
-        """All active library covenants (paged read of Core's search endpoint)."""
-        out: list[CoreMaster] = []
-        page = 0
-        while True:
-            resp = self._request("GET", "/api/v1/covenants", params={"active": "true", "size": 200, "page": page})
-            resp.raise_for_status()
-            body = resp.json()
-            for c in body.get("content", []):
-                if c.get("custom"):
-                    continue  # CP-scoped custom covenants are not library entries
-                out.append(CoreMaster(str(c["id"]), c.get("name") or "", c.get("category") or "",
-                                      c.get("assessmentType") or "AUTO", tuple(c.get("referencedMeasures") or ())))
-            if body.get("last", True):
-                return out
-            page += 1
-
-    def validate_formula(self, expression: str) -> list[str]:
-        """Core's error messages for the expression; empty when valid."""
-        resp = self._request("POST", "/api/v1/formulas/validate",
-                             json={"expression": expression, "requireBoolean": True})
-        resp.raise_for_status()
-        body = resp.json()
-        if body.get("valid"):
-            return []
-        return [e.get("message") or e.get("code") or "invalid" for e in body.get("errors") or []] or ["invalid"]
 
     def cp_currency(self, cp_id: str) -> str | None:
         """Money for any country: the CP's loan currency ("LKR"), or None when Core does not answer."""
@@ -149,9 +112,3 @@ class CoreClient:
             return None  # 422 FX_RATE_MISSING
         rate = (resp.json() or {}).get("rate")
         return float(rate) if rate is not None else None
-
-    def send_data_event(self, payload: dict) -> dict:
-        """C5. 202 (or 200 for a duplicate) is success; 4xx is permanent and raised as HTTPStatusError."""
-        resp = self._request("POST", "/api/v1/data-events", json=payload)
-        resp.raise_for_status()
-        return resp.json() if resp.content else {}

@@ -9,11 +9,9 @@ from datetime import date
 import pytest
 from conftest import reviewed_if_clean
 from statement_shim import StatementDeps, StatementProcessingFlow
-from test_bug_hunt import terms_of
 from test_flows import FakeParser, add_document, doc_status, values, xlsx_bytes
 
 from dps.db import Database
-from dps.extraction.mapping import normalize
 from dps.extraction.statement import detect_number_style, number_style, parse_number, rows_from_csv
 from dps.models import Base
 from dps.money import detect_currency
@@ -184,10 +182,3 @@ def test_flow_b_converts_a_statement_in_a_currency_added_in_core(database):
     assert values(database)["EBITDA"].value == pytest.approx(7.7)  # KES 1,000 Mn at 0.0077
 
 
-def test_an_agreement_for_a_loan_of_unknown_currency_holds_its_amount_limits():
-    [p] = normalize(terms_of("7.1 Net Worth. The Borrower shall maintain a Tangible Net Worth of not less than "
-                             "LKR 1,000,000,000."), [], None)
-    assert p.expression is None and p.unit == "LKR"
-    assert any(i.startswith("LOAN_CURRENCY_UNKNOWN") for i in p.issues)
-    [r] = normalize(terms_of("7.2 The Borrower shall maintain a DSCR of not less than 1.25x."), [], None)
-    assert r.expression is not None  # a ratio needs no currency

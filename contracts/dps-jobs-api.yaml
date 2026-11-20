@@ -12,7 +12,7 @@ info:
     - Request and result bodies are the JSON schemas in `schemas/`.
     - `x-phase` on an operation says in which build phase it is implemented; until then it answers
       `422 UNSUPPORTED_JOB_TYPE` (job types) or is absent.
-    - The older Covenexa endpoints stay in `dps-api.yaml`; this file only adds.
+    - This is the whole DPS API: the old Covenexa endpoints and `dps-api.yaml` were removed (full review G12).
 servers:
   - url: http://localhost:9400
     description: local dev

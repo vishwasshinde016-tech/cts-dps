@@ -9,7 +9,7 @@ import sys
 import time
 import urllib.request
 
-UA = "Covenexa-benchmark research@covenexa.local"
+UA = "cts-dps-benchmark research@cts-dps.local"
 CIKS = {"US01": 18230, "US02": 315189, "US03": 73309, "US04": 106640, "US05": 46080, "US06": 63276,
         "US07": 793952, "US08": 48465, "US09": 21076, "US10": 89800, "US11": 9389, "US12": 1370946,
         "US13": 931015, "US14": 91440, "US15": 55067}

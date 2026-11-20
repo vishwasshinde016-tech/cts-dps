@@ -15,8 +15,6 @@ from sqlalchemy import select
 from test_flows import add_document, database, statement  # noqa: F401 - database is a fixture
 
 from dps import services
-from dps.catalog import LINE_ITEMS
-from dps.extraction.mapping import DPS_FORMULAS
 from dps.extraction.statement_pdf import choose_column, column_months, period_columns, period_months
 from dps.models import Document, StatementValue
 
@@ -156,14 +154,6 @@ def test_comparatives_never_replace_a_periods_own_statement(database):  # noqa: 
 
 
 # ---------------------------------------------------------------- what Core tests
-
-def test_earnings_covenants_are_tested_on_twelve_months():
-    for metric in ("DSCR", "ICR", "DEBT_TO_EBITDA", "NET_LEVERAGE_RATIO", "EBITDA_TO_EMI", "MIN_EBITDA",
-                   "FIXED_CHARGE_COVERAGE_RATIO"):
-        assert "_TTM" in DPS_FORMULAS[metric], metric
-    assert DPS_FORMULAS["CURRENT_RATIO"] == "DPS_CURRENT_ASSETS / DPS_CURRENT_LIABILITIES"  # balances as they are
-    assert {"EBITDA_TTM", "EBITDA_ANN", "INTEREST_PAID_TTM", "PRINCIPAL_PAID_TTM"} <= LINE_ITEMS.keys()
-
 
 def test_a_reported_half_year_statement_builds_its_twelve_months(database):  # noqa: F811
     # End to end through Flow B: the annual figure is stored first, then the half year with last year's column.

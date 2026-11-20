@@ -2,7 +2,7 @@
 
 Every log line carries who and what it is about: the request id (the same ``X-Correlation-Id`` the gateway gives
 Core and DPS), the user, and for background work the job and document. Lines go to standard output, where the log
-collector writes them into the daily file ``logs/covenexa-YYYY-MM-DD.log``.
+collector writes them into the daily file ``logs/cts-dps-YYYY-MM-DD.log``.
 
 With ``OTEL_EXPORTER_OTLP_ENDPOINT`` set (the local stack points it at the Grafana container), the same lines, a
 trace per request and the counters below also go to Grafana through OpenTelemetry. Without it (tests, CI) nothing
@@ -108,7 +108,7 @@ def _start_otel(service: str) -> None:  # pragma: no cover - needs a running col
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
     resource = Resource.create({"service.name": os.environ.get("OTEL_SERVICE_NAME", service),
-                                "service.namespace": "covenexa"})
+                                "service.namespace": "cts-dps"})
     tracer_provider = TracerProvider(resource=resource)
     tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
     trace.set_tracer_provider(tracer_provider)

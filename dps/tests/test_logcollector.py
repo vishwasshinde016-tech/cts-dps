@@ -39,7 +39,7 @@ def test_one_file_per_day_continues_after_a_restart_and_old_files_go(tmp_path):
 
     old = file_for(date(2026, 10, 1), tmp_path)
     old.write_text("x")
-    (tmp_path / "covenexa-notes.log").write_text("not a daily file")
+    (tmp_path / "cts-dps-notes.log").write_text("not a daily file")
     assert prune(tmp_path, 30, date(2026, 11, 10)) == [old] and not old.exists()
     (tmp_path / ".positions.json").write_text("{broken")
     assert Writer(tmp_path).last == {}

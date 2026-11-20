@@ -455,12 +455,12 @@ def test_f9_a_text_page_mostly_covered_by_a_picture_is_also_ocr_read():
 
 # ---------- WP7 / WP8: one product; sign-in and tenant safety ----------
 
-def test_g12_the_old_covenexa_routes_are_off_unless_asked_for(settings):
+def test_g12_the_old_upload_routes_do_not_exist(settings):
     from fastapi.testclient import TestClient
 
     from dps.main import create_app
 
-    off = TestClient(create_app(settings.model_copy(update={"legacy_api": False}), create_schema=True))
+    off = TestClient(create_app(settings, create_schema=True))
     assert off.post("/dps/v1/documents", headers={"X-User": "rm", "X-Roles": "RM"}).status_code == 404
     assert off.get("/health").status_code == 200 and off.get("/health/ready").status_code == 200
 

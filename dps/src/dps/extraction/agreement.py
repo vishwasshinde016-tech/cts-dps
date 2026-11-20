@@ -67,24 +67,10 @@ for _metric, _names in {
 }.items():
     FINANCIAL_ALIASES[_metric] = FINANCIAL_ALIASES[_metric] + [n for n in _names if n not in FINANCIAL_ALIASES[_metric]]
 
-# Phase 4 learning loop: covenant names an administrator added from reviewers' decisions (set per document by
-# Flow A from dps_learned_wording). Kept apart from the built-in names so retiring one takes effect at once.
-_LEARNED_COVENANTS: dict[str, list[str]] = {}
-
-
-def set_learned_covenants(names: dict[str, list[str]]) -> None:
-    _LEARNED_COVENANTS.clear()
-    _LEARNED_COVENANTS.update({m: [n.upper() for n in ns] for m, ns in names.items()})
-
-
 def _aliases() -> dict[str, list[str]]:
-    if not _LEARNED_COVENANTS:
-        return FINANCIAL_ALIASES
-    merged = {m: list(p) for m, p in FINANCIAL_ALIASES.items()}
-    for m, names in _LEARNED_COVENANTS.items():
-        merged.setdefault(m, [])
-        merged[m] += [n for n in names if n not in merged[m]]
-    return merged
+    """The covenant names the rules know (the administrator learning loop of the old Covenexa screens was removed
+    with them; borrower label memory and the review API's golden candidates remain)."""
+    return FINANCIAL_ALIASES
 
 
 AMOUNT_METRICS = {"MIN_NET_WORTH", "MIN_TANGIBLE_NET_WORTH", "MINIMUM_LIQUIDITY", "MIN_EBITDA"}

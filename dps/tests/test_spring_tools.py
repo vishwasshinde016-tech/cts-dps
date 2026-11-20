@@ -30,7 +30,10 @@ def make(handler, **kw) -> tuple[SpringTools, list[httpx.Request]]:
 def test_contract_lists_the_tools_and_the_event_push():
     spec = yaml.safe_load(CONTRACT.read_text(encoding="utf-8"))
     assert set(spec["paths"]) == {"/api/v1/dps-tools/formulas/validate", "/api/v1/dps-tools/lookups",
-                                  "/api/v1/dps-tools/covenant-library", "/api/v1/dps-tools/events"}
+                                  "/api/v1/dps-tools/covenant-library", "/api/v1/dps-tools/events",
+                                  # the statement reader's reads (WP7: moved here from the old Core contract)
+                                  "/api/v1/credit-proposals/{cpId}/currency", "/api/v1/credit-proposals/{cpId}/profile",
+                                  "/api/v1/settings/countries", "/api/v1/fx/convert"}
 
 
 def test_formulas_go_in_one_batch_call_with_correlation_id():

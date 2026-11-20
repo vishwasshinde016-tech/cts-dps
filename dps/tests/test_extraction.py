@@ -6,9 +6,6 @@ import pytest
 from pypdf import PdfWriter
 
 from dps.extraction.agreement import Term, _Doc, _quote, _threshold, extract_terms
-from dps.extraction.mapping import normalize
-from dps.extraction.validation import FAILED, NEEDS_REVIEW, check_conflicts, validate
-from dps.integrations.core import CoreMaster
 from dps.parse.engine import HeavyEngine, Page, ParseError, ParserEngine, needs_heavy, page_runs, text_quality
 
 GOLDEN = Path(__file__).resolve().parents[2] / "golden-set" / "documents"
@@ -93,81 +90,9 @@ def test_frequency_mapping():
     assert terms["DEBT_TO_EQUITY"].frequency is None
 
 
-MASTERS = [
-    CoreMaster("m-dscr", "Minimum DSCR", "FINANCIAL", "AUTO", ("DSCR",)),
-    CoreMaster("m-cr", "Current Ratio Floor", "FINANCIAL", "AUTO", ("CURRENT_ASSETS", "CURRENT_LIAB")),
-    CoreMaster("m-ins", "Insurance Cover Maintained", "NON_FINANCIAL", "MANUAL", ()),
-    CoreMaster("m-emi", "EBITDA to EMI Floor", "FINANCIAL", "AUTO", ("DPS_EBITDA_TTM", "DPS_EMI_AMOUNT_TTM")),
-]
-
-
-def test_normalize_maps_library_custom_and_units():
-    terms = extract_terms(AGREEMENT) + [
-        Term("INSURANCE_MAINTENANCE", "NON_FINANCIAL", None, None, None, None, 2, "q", None, 0.8),
-        Term("MIN_TANGIBLE_NET_WORTH", "FINANCIAL", ">=", 20.0, "lakhs", None, 2, "q", None, 0.85),
-        Term("QUICK_RATIO", "FINANCIAL", ">=", 1.0, None, None, 2, "q", None, 0.85),
-        Term("INVENTORY_DAYS", "FINANCIAL", "<=", 90.0, None, None, 2, "q", None, 0.85),
-    ]
-    props = {p.metric_raw: p for p in normalize(terms, MASTERS)}
-
-    assert (props["DSCR"].covenant_master_id, props["DSCR"].expression) == ("m-dscr", "DSCR >= 1.25")
-    assert props["CURRENT_RATIO"].expression == "CURRENT_RATIO >= 1.1"  # multi-measure master: mapped measure
-    assert props["INSURANCE_MAINTENANCE"].expression is None
-    assert props["INSURANCE_MAINTENANCE"].assessment_type == "MANUAL"
-
-    dnw = props["DEBT_TO_NET_WORTH"]
-    assert dnw.covenant_master_id is None and dnw.name == "Debt to Net Worth Ceiling"
-    assert dnw.expression == "DPS_TOTAL_DEBT / DPS_NET_WORTH <= 2.5"
-    emi = normalize([Term("EBITDA_TO_EMI", "FINANCIAL", ">=", 1.2, None, None, 1, "q", None, 0.9)], MASTERS)[0]
-    assert (emi.covenant_master_id, emi.expression) == ("m-emi", "DPS_EBITDA_TTM / DPS_EMI_AMOUNT_TTM >= 1.2")
-
-    nw = props["MIN_NET_WORTH"]
-    assert (nw.expression, nw.unit, nw.threshold_raw) == ("DPS_NET_WORTH >= 5000", "INR_CR", 5000.0)
-    tnw = props["MIN_TANGIBLE_NET_WORTH"]
-    assert (tnw.threshold, tnw.unit) == (0.2, "INR_CR")
-
-    quick = props["QUICK_RATIO"]  # library entry absent in this Core: DPS-measure rule instead
-    assert quick.covenant_master_id is None
-    assert quick.expression == "(DPS_CURRENT_ASSETS - DPS_INVENTORY) / DPS_CURRENT_LIABILITIES >= 1"
-    days = props["INVENTORY_DAYS"]  # no library entry and no DPS rule: the RM writes it
-    assert (days.expression, days.assessment_type, days.name) == (None, "MANUAL", "Inventory Days")
-    assert props["NEGATIVE_PLEDGE"].name == "Negative Pledge"
-
-
-def test_validate_routes_and_flags_issues():
-    props = normalize(extract_terms(AGREEMENT), MASTERS)
-    route = validate(AGREEMENT, props, lambda e: ["unknown measure"] if "DPS_" in e else [], 0.8)
-    assert route == NEEDS_REVIEW
-    by = {p.metric_raw: p for p in props}
-    assert by["DSCR"].issues == []
-    assert real(by["DEBT_TO_NET_WORTH"].issues) == ["FORMULA_INVALID: unknown measure"]
-    assert by["CURRENT_RATIO"].issues == ["LOW_CONFIDENCE"]
-
-
 def real(issues: list[str]) -> list[str]:
     """The issues besides FORMULA_TEMPLATE (every DPS-template formula carries it since the full review, F5)."""
     return [i for i in issues if not i.startswith("FORMULA_TEMPLATE")]
-
-
-def test_validate_never_publishes_failed_and_empty():
-    props = normalize([t for t in extract_terms(AGREEMENT) if t.metric == "DSCR"], MASTERS)
-    # a clean proposal still waits for a person (F5): only a review publishes
-    assert validate(AGREEMENT, props, lambda e: [], 0.8) == NEEDS_REVIEW
-    assert all(not p.issues for p in props)
-    assert validate([Page(1, " ", "NONE", 0.0)], [], lambda e: [], 0.8) == FAILED
-    assert validate(AGREEMENT, [], lambda e: [], 0.8) == NEEDS_REVIEW
-
-
-def test_quote_checks():
-    [p] = normalize([Term("DSCR", "FINANCIAL", ">=", 9.0, None, None, 1, "Required threshold: >= 1.25x.", None,
-                          0.9)], MASTERS)
-    validate(AGREEMENT, [p], lambda e: [], 0.8)
-    assert p.issues == ["THRESHOLD_NOT_IN_QUOTE"]
-    [q] = normalize([Term("DSCR", "FINANCIAL", ">=", 1.25, None, None, 1, "invented text 1.25", None, 0.9)], MASTERS)
-    [r] = normalize([Term("DSCR", "FINANCIAL", ">=", 1.25, None, None, 7, "x", None, 0.9)], MASTERS)
-    validate(AGREEMENT, [q, r], lambda e: [], 0.8)
-    assert q.issues[0] == "QUOTE_NOT_FOUND"
-    assert "QUOTE_PAGE_MISSING" in r.issues
 
 
 @pytest.mark.parametrize(("text", "metric", "op", "value"), [
@@ -187,27 +112,6 @@ def test_negated_comparisons_keep_their_direction(text, metric, op, value):
     """A verb between "not" and the comparison must not flip a floor into a ceiling (review BUG-01)."""
     [term] = extract_terms([Page(1, text, "TEXT", 1.0)])
     assert (term.metric, term.operator, term.threshold) == (metric, op, value)
-
-
-def test_operator_against_the_metric_direction_needs_review():
-    floor, ceiling, fine = normalize([
-        Term("DSCR", "FINANCIAL", "<", 1.25, None, None, 1, "Required threshold: >= 1.25x.", None, 0.95),
-        Term("DEBT_TO_NET_WORTH", "FINANCIAL", ">=", 2.5, None, None, 2, "exceed 2.50 times.", None, 0.95),
-        Term("DSCR", "FINANCIAL", ">=", 1.25, None, None, 1, "Required threshold: >= 1.25x.", None, 0.95),
-    ], MASTERS)
-    assert validate(AGREEMENT, [floor, ceiling], lambda e: [], 0.8) == NEEDS_REVIEW
-    assert real(floor.issues) == ["OPERATOR_UNEXPECTED: usually a minimum (>=)"]
-    assert real(ceiling.issues) == ["OPERATOR_UNEXPECTED: usually a maximum (<=)"]
-    validate(AGREEMENT, [fine], lambda e: [], 0.8)
-    assert fine.issues == []
-
-
-def test_conflicting_thresholds_are_flagged():
-    a, b = normalize([Term("DSCR", "FINANCIAL", ">=", 1.25, None, None, 1, "q", None, 0.9),
-                      Term("DSCR", "FINANCIAL", ">=", 1.5, None, None, 1, "q", None, 0.9)], MASTERS)
-    b.issues.append("THRESHOLD_CONFLICT")
-    check_conflicts([a, b])
-    assert a.issues == ["THRESHOLD_CONFLICT"] and b.issues == ["THRESHOLD_CONFLICT"]
 
 
 class _Ocr:
@@ -329,14 +233,6 @@ def test_text_quality():
 
 
 @pytest.mark.skipif(not GOLDEN.exists(), reason="golden set not present")
-def test_golden_agreement_parses_to_publishable_proposals():
-    pages = ParserEngine().parse((GOLDEN / "AGR-001.pdf").read_bytes())
-    assert all(p.method == "TEXT" for p in pages[:-1])
-    props = normalize(extract_terms(pages), MASTERS)
-    assert validate(pages, props, lambda e: [], 0.8) == NEEDS_REVIEW  # clean, and still for a person (F5)
-    assert {p.metric_raw for p in props} >= {"DSCR", "ICR", "DEBT_TO_EBITDA", "EBITDA_TO_EMI", "NEGATIVE_PLEDGE"}
-
-
 def test_statement_units_and_debt_found_by_the_golden_set():
     """Golden-set findings: plain-rupee statements were read as crore; one-part debt gave no TOTAL_DEBT."""
     from dps.extraction.statement import extract_values
@@ -378,14 +274,6 @@ def test_security_and_disposal_covenants_are_found_and_held_for_review(text, met
     [term] = [t for t in extract_terms([Page(1, text, "TEXT", 1.0)]) if t.metric == metric]
     assert (term.operator, term.threshold, term.unit) == (op, value, unit)
     assert term.confidence < 0.8  # below the publish floor: a person decides covenant or condition
-
-
-def test_security_amounts_become_crore_and_custom_candidates():
-    [p] = normalize([Term("MIN_COLLATERAL_VALUE", "FINANCIAL", ">=", 50000, "lakhs", None, 1,
-                          "not less than INR 50000 lakhs", None, 0.75)], MASTERS)
-    assert (p.threshold, p.unit, p.name, p.covenant_master_id) == (500.0, "INR_CR", "Minimum Collateral Value", None)
-    assert p.assessment_type == "MANUAL"
-    assert extract_terms([Page(1, "Each drawdown shall not be less than INR 25 crore.", "TEXT", 1.0)]) == []
 
 
 def _xls(rows):

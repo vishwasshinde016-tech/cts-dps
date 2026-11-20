@@ -144,6 +144,9 @@ class StatementState(BaseModel):
     currency: str = ""
     loan_currency: str = ""
     fx_rate: float = 1.0
+    # A rate was found for a statement printed in another currency than the loans (a rate of exactly 1.0 is a rate:
+    # it was taken for "no rate" and the figures stayed unconverted with no hold; local end-to-end run, 20 Nov 2026).
+    fx_known: bool = False
     fiscal_month: int = 0
     entity: str = ""
     number_style: str = ""
@@ -259,7 +262,7 @@ class StatementReader:
         rows, memory_issues = self._recall([tuple(r) for r in self.state.rows])
         money_issues = self._money()
         ccy, rate = self.state.loan_currency, self.state.fx_rate
-        if self.state.currency != ccy and rate == 1.0:
+        if self.state.currency != ccy and not self.state.fx_known:
             ccy = self.state.currency  # no rate: read in the statement's own currency and held, never reported
         result: StatementResult = extract_values(rows, self.state.header_text, ccy, rate)
         self._set_months(result.values)
@@ -357,6 +360,7 @@ class StatementReader:
             got = self._deps.fx_rate(printed, loan, as_of) if self._deps.fx_rate else None
             if got:
                 rate = got
+                self.state.fx_known = True
             else:
                 issues.append(f"CURRENCY_DIFFERS: the statement is in {printed}, the loan in {loan}, and there is no "
                               f"{printed} to {loan} rate for {as_of.isoformat()}; add it in Settings (FX rates), "

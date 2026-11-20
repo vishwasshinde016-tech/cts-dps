@@ -7,8 +7,6 @@ import pytest
 from test_flows import agreement_result
 
 from dps.db import Database
-from dps.extraction.agreement import extract_terms
-from dps.extraction.mapping import normalize
 from dps.extraction.schedule import (
     adjustments,
     basis,
@@ -123,23 +121,6 @@ def test_basis(quote, entity):
 
 
 # ---------------------------------------------------------------- read with the covenants and sent to Core
-
-def test_an_agreement_carries_its_schedule_cure_definitions_and_basis():
-    terms = {t.metric: t for t in extract_terms([Page(1, AGREEMENT, "TEXT", 1.0)]) if t.category == "FINANCIAL"}
-    leverage, dscr = terms["DEBT_TO_EBITDA"], terms["DSCR"]
-    assert [lv["threshold"] for lv in leverage.levels] == [4.0, 3.5]
-    assert leverage.basis == "CONSOLIDATED" and dscr.basis is None
-    assert any(i.startswith("STEP_DOWN: 2 levels read") for i in leverage.issues)
-    assert not any(i.startswith("SEVERAL_LEVELS") for i in leverage.issues)
-    assert any(i.startswith("DEFINITION_DIFFERS: the agreement's EBITDA is adjusted") for i in leverage.issues)
-    assert dscr.test_months == [3, 9] and dscr.frequency == "CUSTOM" and dscr.cure["max_uses"] == 2
-
-    [p] = [p for p in normalize(list(terms.values()), []) if p.metric_raw == "DEBT_TO_EBITDA"]
-    assert [lv["expression"] for lv in p.schedule["levels"]] == ["DPS_DEBT_TO_EBITDA_TTM <= 4",
-                                                                 "DPS_DEBT_TO_EBITDA_TTM <= 3.5"] or all(
-        lv["expression"].endswith(f"<= {lv['threshold']:g}") for lv in p.schedule["levels"])
-    assert p.schedule["cron"] == "0 0 2 1 4,10 ?" and p.schedule["cure"]["days"] == 15
-
 
 def test_a_covenant_tested_on_other_figures_than_the_borrowers_is_flagged():
     """Spring's context says whose figures this borrower's statements are read for (context.basis)."""

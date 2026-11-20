@@ -1,6 +1,6 @@
 # Golden set: guide for credit analysts
 
-The golden set is how we prove that Covenexa reads loan agreements and financial statements correctly. Before the
+The golden set is how we prove that DPS reads loan agreements and financial statements correctly. Before the
 app can go to full production, credit analysts must confirm the correct answer for **at least 20 agreements and
 20 statements** (PRD goal G6). This page is all you need to do that.
 

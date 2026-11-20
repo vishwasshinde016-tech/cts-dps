@@ -88,20 +88,20 @@ def test_core_client_sends_the_oauth_token_and_maps_token_failures_to_core_unava
 
     def core(request: httpx.Request) -> httpx.Response:
         calls.append(request.headers.get("Authorization", ""))
-        return httpx.Response(202, json={"status": "accepted"})
+        return httpx.Response(200, json={"currency": "INR"})
 
     oauth = provider(token_endpoint([httpx.Response(200, json={"access_token": "t1", "expires_in": 3600})], []),
                      Clock())
     client = CoreClient("http://core", 1.0, client=httpx.Client(base_url="http://core",
                                                                 transport=httpx.MockTransport(core)), oauth=oauth)
-    assert client.send_data_event({"cpId": "CP-1"}) == {"status": "accepted"}
+    assert client.cp_currency("CP-1") == "INR"
     assert calls == ["Bearer t1"]
 
     broken = provider(token_endpoint([httpx.Response(500)], []), Clock())
     failing = CoreClient("http://core", 1.0, client=httpx.Client(base_url="http://core",
                                                                  transport=httpx.MockTransport(core)), oauth=broken)
     with pytest.raises(CoreUnavailable, match="HTTP 500"):
-        failing.send_data_event({"cpId": "CP-1"})
+        failing._request("GET", "/api/v1/credit-proposals/CP-1/currency")  # noqa: SLF001
 
 
 def test_from_settings_picks_oauth_only_when_configured():

@@ -17,7 +17,7 @@ Target before production: at most **1 silent wrong in 200** auto-published figur
 ## Steps
 
 All downloads use SEC's public endpoints or the company's / exchange's own site, with the honest User-Agent
-`Covenexa-benchmark research@covenexa.local`. The documents are not committed (third-party copyright).
+`cts-dps-benchmark research@cts-dps.local`. The documents are not committed (third-party copyright).
 
 1. **Pick new documents.** `harness/fetch.py <dir> agreements 20` takes credit agreements from EDGAR, filed in the
    window it states, from companies in neither earlier sample (it reads `../real-documents/sources.tsv`; add each

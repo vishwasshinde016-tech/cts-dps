@@ -52,6 +52,7 @@ tests pick up the live model settings.
 
 ## Older parts still inside
 
-`EXTRACT_AGREEMENT` and `EXTRACT_STATEMENT` jobs still run the earlier flows (`flows/intake.py`, `flows/statement.py`),
-with the Document Agent as their reader. Some modules serve the earlier Covenexa Core demo (`api/documents.py`, `api/review.py`,
-`integrations/core.py`). They are kept because tests and those two job types use them.
+Every job type that reads a document runs in one pipeline, the skills flow (`flows/skill_job.py`, `skills/runner.py`),
+with one skill pack per job type; `EXTRACT_STATEMENT` uses the statement reader in `skills/statement_lines/reader.py`.
+The only API is the CTS job API (`contracts/dps-jobs-api.yaml`); the earlier Covenexa code was removed (full review
+WP7, 20 Nov 2026).

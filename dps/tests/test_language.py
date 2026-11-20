@@ -12,7 +12,7 @@ from statement_shim import StatementDeps, StatementProcessingFlow
 from test_flows import FakeParser, add_document, agreement_result, values
 
 from dps.db import Database
-from dps.extraction import agreement_ai, statement_ai
+from dps.extraction import statement_ai
 from dps.extraction.verify import numbers_in, quote_on_page, threshold_in
 from dps.language import detect, name, plain_digits
 from dps.models import Base
@@ -61,27 +61,6 @@ def test_digits_of_every_script_and_comma_decimals():
     page = "يجب على المقترض الحفاظ على نسبة تغطية خدمة الدين لا تقل عن ١٫٢٥ في جميع الأوقات"
     assert quote_on_page({3: page}, 3, "يجب على المقترض الحفاظ على نسبة تغطية خدمة الدين لا تقل عن 1.25") == 3
     assert name("fr") == "French" and name("xx") == "xx"
-
-
-def test_a_french_agreement_is_read_by_the_ai_with_its_quotes_checked_in_french():
-    sent = []
-
-    def model(messages):
-        sent.append(messages[0]["content"])
-        return json.dumps({"covenants": [
-            {"name": "Debt Service Coverage Ratio", "family": "DSCR", "dir": "min", "threshold": 1.2, "page": 1,
-             "quote": "maintenir un ratio de couverture du service de la dette au moins égal à 1,20"},
-            {"name": "Net Leverage", "family": "LEVERAGE", "dir": "max", "threshold": 3.5, "page": 1,
-             "quote": "un ratio d'endettement net inférieur ou égal à 3,50"},
-            {"name": "Invented", "family": "ICR", "dir": "min", "threshold": 2.0, "page": 1,
-             "quote": "un ratio de couverture des intérêts au moins égal à 2,00"},  # not in the agreement
-        ]})
-
-    terms, dropped = agreement_ai.ai_covenants([Page(1, FRENCH_AGREEMENT, "TEXT", 1.0)], [], model)
-    assert "any language" in sent[0]  # the prompt asks for English names and quotes as printed
-    assert [(t.metric, t.operator, t.threshold) for t in terms] == [("DSCR", ">=", 1.2),
-                                                                    ("NET_LEVERAGE_RATIO", "<=", 3.5)]
-    assert dropped == 1 and all("AI_ONLY" in t.issues[0] for t in terms)
 
 
 def test_without_the_ai_reader_an_agreement_in_another_language_waits():

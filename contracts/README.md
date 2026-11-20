@@ -2,7 +2,6 @@
 
 | File | What it is |
 | --- | --- |
-| `core-additions.yaml` | Endpoints DPS needs from Covenexa Core |
 | `dps-jobs-api.yaml` | **CTS job API** (Phase 1 of the CTS DPS design): jobs, batches, event feed, catalogue, ops, plus the 2 bank-app compatibility endpoints |
 | `schemas/*.json` | JSON Schemas of the CTS job API: `job-request`, `job-status`, `result`, `page-model`, `event` |
 | `catalogues/errors.yaml` | Every error code the CTS job API returns or records, with its class, HTTP status and user message |

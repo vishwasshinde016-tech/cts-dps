@@ -18,7 +18,7 @@ import time
 import urllib.parse
 import urllib.request
 
-UA = "Covenexa-benchmark research@covenexa.local"
+UA = "cts-dps-benchmark research@cts-dps.local"
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIRST = os.path.join(HERE, "..", "..", "real-documents", "sources.tsv")
 FIRST_10K = {18230, 315189, 73309, 106640, 46080, 63276, 793952, 48465, 21076, 89800, 9389, 1370946, 931015, 91440,
