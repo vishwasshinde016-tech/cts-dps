@@ -16,7 +16,8 @@ from pathlib import Path
 import yaml
 
 SKILLS_DIR = Path(__file__).resolve().parent
-PACKS = ("covenants", "schedule_terms", "amendment_diff", "sanction", "statement_lines", "certificate", "commentary")
+PACKS = ("covenants", "schedule_terms", "amendment_diff", "sanction", "statement_lines", "certificate", "commentary",
+         "waiver", "reconcile_set")
 
 
 @dataclass(frozen=True)
@@ -56,13 +57,15 @@ def _rules_module(name: str):
     from dps.skills.certificate import rules as certificate
     from dps.skills.commentary import rules as commentary
     from dps.skills.covenants import rules as covenants
+    from dps.skills.reconcile_set import rules as reconcile_set
     from dps.skills.sanction import rules as sanction
     from dps.skills.schedule_terms import rules as schedule_terms
     from dps.skills.statement_lines import rules as statement_lines
+    from dps.skills.waiver import rules as waiver
 
     return {"amendment_diff": amendment_diff, "certificate": certificate, "commentary": commentary,
             "covenants": covenants, "sanction": sanction, "schedule_terms": schedule_terms,
-            "statement_lines": statement_lines}[name]
+            "statement_lines": statement_lines, "waiver": waiver, "reconcile_set": reconcile_set}[name]
 
 
 @cache

@@ -257,6 +257,9 @@ def normalise(value):
     return value
 
 
+AI_HINTS = ("obligor", "facilityRefs", "conditions", "firstTestDate", "equityCure", "baskets")
+
+
 def vote(fields: list[dict], proposals: list[dict] | None, key=lambda f: f["name"], compare=None) -> list[dict]:
     """Rules vs agent per field: agree -> RULES+AI_CONFIRMED and higher confidence; disagree -> review with both
     values; agent-only (grounded) -> AI, sent to review when high-risk is decided later by the runner."""
@@ -269,6 +272,9 @@ def vote(fields: list[dict], proposals: list[dict] | None, key=lambda f: f["name
         if f is None:
             continue
         p["_matched"] = True
+        hints = {k: v for k, v in (p.get("value") or {}).items() if k in AI_HINTS and v not in (None, "", [], {})}
+        if hints:  # WP6: the agent's company, facility, conditions ... for obligation.enrich (checked there)
+            f["value"].setdefault("_ai", {}).update(hints)
         if compare(f["value"], p.get("value")):
             f["method"] = "RULES+AI_CONFIRMED"
             f["confidence"] = round(max(f["confidence"] or 0, 0.95), 3)

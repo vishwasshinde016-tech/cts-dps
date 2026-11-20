@@ -167,6 +167,9 @@ def build(db: Session, job: Job, pipeline_version: str, store=None) -> dict:
     from dps.skills.covenants.taxonomy import get as taxonomy
 
     stamp(fields, defaults=False)  # the proven flows: codes only, their review state stays as it was
+    from dps.skills.covenants.obligation import enrich
+
+    enrich(fields, None, json.loads(job.request_json or "{}").get("context") or {}, review=False)  # WP6 values
     if job.flow == "STATEMENT_PROCESSING":
         warnings += skills.statement_warnings(fields, approved_figures(db, doc))
     if job.rollout == "ASSISTED":  # phase 7 pilot: analysts review every field

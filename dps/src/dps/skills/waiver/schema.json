@@ -1,0 +1,8 @@
+{"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {
+  "type": "object", "required": ["name", "value", "page", "quote"],
+  "properties": {"name": {"type": "string"}, "page": {"type": ["integer", "null"]}, "quote": {"type": ["string", "null"]},
+    "value": {"type": "object", "properties": {"metric": {"type": ["string", "null"]},
+      "clause": {"type": ["string", "null"]}, "kind": {"type": ["string", "null"]},
+      "periods": {"type": ["array", "null"], "items": {"type": "object"}},
+      "conditions": {"type": ["array", "null"], "items": {"type": "string"}},
+      "expiresOn": {"type": ["string", "null"]}}}}}}}}

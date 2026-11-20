@@ -9,6 +9,7 @@ errors:
   - { code: VALIDATION_FAILED, class: REQUEST, http: 400, retry: false, message: "The request is not valid. See details for the fields to fix." }
   - { code: INVALID_INPUT, class: REQUEST, http: 400, retry: false, message: "The request breaks a rule. See details." }
   - { code: IDEMPOTENCY_KEY_REQUIRED, class: REQUEST, http: 400, retry: false, message: "Send an Idempotency-Key header." }
+  - { code: BASE_REQUIRED, class: REQUEST, http: 400, retry: false, message: "Send the approved covenants (context.baseCovenants) with an amendment or waiver job." }
   - { code: IDEMPOTENCY_KEY_REUSED, class: REQUEST, http: 409, retry: false, message: "This Idempotency-Key was used for a different request." }
   - { code: UNSUPPORTED_JOB_TYPE, class: REQUEST, http: 422, retry: false, message: "This job type is not available yet." }
   - { code: UNSUPPORTED_FORMAT, class: REQUEST, http: 400, retry: false, message: "This file type cannot be processed." }
@@ -54,6 +55,16 @@ errors:
   - { code: UNITS_MISMATCH, class: QUALITY, http: null, retry: false, message: "The amounts are in different units than the cycle expects." }
   - { code: TAXONOMY_DEFAULT, class: QUALITY, http: null, retry: false, message: "Not stated in the document; the covenant taxonomy's usual value is suggested. Please confirm or correct it." }
   - { code: QUALIFIED, class: QUALITY, http: null, retry: false, message: "The covenant has a condition or exception; please check it applies as extracted." }
+  - { code: WAIVER_TARGET_UNKNOWN, class: QUALITY, http: null, retry: false, message: "The waived covenant could not be matched to one approved covenant; please choose it." }
+  - { code: WAIVER_PERIOD_UNKNOWN, class: QUALITY, http: null, retry: false, message: "No test date or period was found for the waiver; please set it." }
+  - { code: BASE_MISSING, class: QUALITY, http: null, retry: false, message: "No approved covenants were sent, so the waived covenants could not be matched; please match them." }
+  - { code: RESTATES, class: QUALITY, http: null, retry: false, message: "An amended and restated agreement: once approved, its covenants replace those of the earlier agreement." }
+  - { code: SET_INCOMPLETE, class: QUALITY, http: null, retry: false, message: "Some documents of the set have no DPS result yet; extract them, then reconcile again." }
+  - { code: SET_CHANGE_HELD, class: QUALITY, http: null, retry: false, message: "A change in the set was not applied because its target or terms are not settled; please apply it by hand." }
+  - { code: SET_MANIFEST_INVALID, class: CONTENT, http: null, retry: false, message: "The document set manifest is not valid; please correct it and submit again." }
+  - { code: CONDITIONAL, class: QUALITY, http: null, retry: false, message: "The covenant applies only when its condition is met (for example a springing covenant); please check the condition." }
+  - { code: SCOPE_UNKNOWN, class: QUALITY, http: null, retry: false, message: "The clause does not say whose figures are tested; please set the company." }
+  - { code: SCOPE_SEVERAL, class: QUALITY, http: null, retry: false, message: "The clause binds several companies; split it if their figures are tested separately." }
   - { code: UNRESOLVED_REFERENCE, class: QUALITY, http: null, retry: false, message: "The covenant refers to a clause or schedule that was not found in this document." }
   - { code: UNRESOLVED_CANDIDATE, class: QUALITY, http: null, retry: false, message: "A duty sentence no extracted covenant explains; please confirm or dismiss it." }
   - { code: NUMBER_NOT_IN_QUOTE, class: QUALITY, http: null, retry: false, message: "The threshold is not written in the quoted text; please check the source." }

@@ -273,7 +273,7 @@ paths:
               type: object
               required: [type, reason]
               properties:
-                type: { type: string, enum: [SANCTION_LETTER, LOAN_AGREEMENT, AMENDMENT, FINANCIAL_STATEMENT, COMPLIANCE_CERTIFICATE, SECURITY_DOCUMENT, OTHER_EVIDENCE] }
+                type: { type: string, enum: [SANCTION_LETTER, LOAN_AGREEMENT, AMENDMENT, FINANCIAL_STATEMENT, COMPLIANCE_CERTIFICATE, SECURITY_DOCUMENT, OTHER_EVIDENCE, WAIVER_CONSENT, GUARANTEE, AMENDED_AND_RESTATED] }
                 reason: { type: string, maxLength: 500 }
       responses:
         "202":

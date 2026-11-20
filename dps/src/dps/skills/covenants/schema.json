@@ -5,4 +5,9 @@
       "basis": {"type": ["string", "null"]}, "operator": {"type": ["string", "null"]},
       "threshold": {"type": ["number", "null"]}, "unit": {"type": ["string", "null"]},
       "frequency": {"type": ["string", "null"]}, "schedule": {"type": ["array", "null"]},
-      "cureDays": {"type": ["integer", "null"]}}}}}}}}
+      "cureDays": {"type": ["integer", "null"]}, "obligor": {"type": ["string", "null"]},
+      "facilityRefs": {"type": ["array", "null"], "items": {"type": "string"}},
+      "conditions": {"type": ["array", "null"], "items": {"type": "object", "properties": {
+        "text": {"type": "string"}, "kind": {"type": ["string", "null"]}}}},
+      "firstTestDate": {"type": ["string", "null"]}, "equityCure": {"type": ["object", "null"]},
+      "baskets": {"type": ["array", "null"], "items": {"type": "object"}}}}}}}}}

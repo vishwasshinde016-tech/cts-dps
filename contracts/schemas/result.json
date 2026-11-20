@@ -113,7 +113,8 @@
             "STATEMENT_LINE",
             "CERTIFIED_FIGURE",
             "IDENTIFIER",
-            "EVENT_OF_DEFAULT"
+            "EVENT_OF_DEFAULT",
+            "WAIVER"
           ]
         },
         "name": {
@@ -154,6 +155,17 @@
                 "null"
               ],
               "format": "date"
+            },
+            "holiday": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "WP6: testing starts later ('shall not be tested until 30 June 2026'): {until, text}",
+              "properties": {
+                "until": {"type": ["string", "null"], "format": "date"},
+                "text": {"type": "string"}
+              }
             }
           }
         },
@@ -338,6 +350,10 @@
               }
             }
           }
+        },
+        {
+          "if": {"properties": {"group": {"const": "WAIVER"}}},
+          "then": {"properties": {"value": {"$ref": "#/$defs/waiverValue"}}}
         }
       ]
     },
@@ -552,7 +568,105 @@
             "string",
             "null"
           ]
+        },
+        "scope": {
+          "type": "object",
+          "description": "WP6 (F4): who the covenant binds and on whose figures it is tested. obligor as written (Borrower, Guarantor, Parent, Group ...); confidence STATED (the quote says it), INFERRED (the Document Agent or the job context) or UNKNOWN. An UNKNOWN financial covenant, or one that binds several companies, is always reviewed",
+          "required": ["obligor", "basis", "facilityRefs", "confidence"],
+          "properties": {
+            "obligor": {"type": ["string", "null"]},
+            "basis": {"type": ["string", "null"], "enum": ["STANDALONE", "CONSOLIDATED", null]},
+            "facilityRefs": {"type": "array", "items": {"type": "string"}},
+            "confidence": {"enum": ["STATED", "INFERRED", "UNKNOWN"]}
+          }
+        },
+        "conditions": {
+          "type": "array",
+          "description": "WP6 (F3): the 'if / when / so long as' triggers. SPRINGING: tested only while loans are drawn or availability is low. A condition always means review",
+          "items": {
+            "type": "object",
+            "required": ["text", "kind"],
+            "properties": {
+              "text": {"type": "string"},
+              "kind": {"enum": ["SPRINGING", "RATING", "CONDITIONAL"]},
+              "metric": {"type": ["string", "null"]},
+              "operator": {"type": ["string", "null"], "enum": [">=", ">", "<=", "<", "=", null]},
+              "threshold": {"type": ["number", "null"]},
+              "unit": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "baskets": {
+          "type": "array",
+          "description": "WP6: permitted amounts of a negative covenant ('not exceeding USD 5,000,000 in aggregate')",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {"type": "string"},
+              "amount": {"type": ["number", "null"]},
+              "currency": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "inForce": {
+          "type": "object",
+          "description": "RECONCILE_SET (WP9): this covenant in force at asOfDate, with the documents that set or changed it (trail) and the waivers attached to it",
+          "properties": {
+            "asOfDate": {"type": "string", "format": "date"},
+            "waivedAtDate": {"type": "boolean"},
+            "sourceFieldId": {"type": ["string", "null"]},
+            "trail": {"type": "array", "items": {"type": "object", "properties": {
+              "versionId": {"type": "string"}, "role": {"type": "string"},
+              "action": {"enum": ["APPROVED", "SET", "RESTATED", "ADDED", "CHANGED", "WAIVED"]},
+              "effectiveDate": {"type": ["string", "null"]}, "fieldId": {"type": ["string", "null"]}}}},
+            "waivers": {"type": "array", "items": {"type": "object"}}
+          }
+        },
+        "equityCure": {
+          "type": ["object", "null"],
+          "description": "WP6: the agreement's equity cure right, on each financial covenant",
+          "properties": {
+            "allowed": {"type": "boolean"},
+            "maxUses": {"type": ["integer", "null"]},
+            "window": {"type": ["string", "null"]},
+            "page": {"type": ["integer", "null"]},
+            "text": {"type": "string"}
+          }
         }
+      }
+    },
+    "waiverValue": {
+      "type": "object",
+      "description": "WP9 (F10): what a waiver or consent letter waives. Always reviewed",
+      "required": ["kind", "target", "periods", "conditions", "expiresOn"],
+      "properties": {
+        "kind": {"enum": ["WAIVER", "CONSENT", "NOT_TESTED"]},
+        "target": {
+          "type": "object",
+          "properties": {
+            "metric": {"type": ["string", "null"]},
+            "clause": {"type": ["string", "null"]},
+            "appliedCovenantId": {"type": ["string", "null"], "description": "The approved CTS covenant waived"},
+            "name": {"type": ["string", "null"]}
+          }
+        },
+        "periods": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {"type": ["string", "null"], "format": "date"},
+              "to": {"type": ["string", "null"], "format": "date"},
+              "testDate": {"type": ["string", "null"], "format": "date"}
+            }
+          }
+        },
+        "conditions": {"type": "array", "items": {"type": "string"}},
+        "expiresOn": {"type": ["string", "null"], "format": "date"},
+        "reinstatement": {"type": ["string", "null"]},
+        "fee": {"type": ["object", "null"]},
+        "metric": {"type": ["string", "null"]},
+        "code": {"type": ["string", "null"]}
       }
     },
     "statementLineValue": {
@@ -947,6 +1061,9 @@
             "COMPLIANCE_CERTIFICATE",
             "SECURITY_DOCUMENT",
             "OTHER_EVIDENCE",
+            "WAIVER_CONSENT",
+            "GUARANTEE",
+            "AMENDED_AND_RESTATED",
             "UNKNOWN"
           ]
         },
@@ -1260,6 +1377,24 @@
             "$ref": "#/$defs/issue"
           }
         }
+      }
+    },
+    "restates": {
+      "type": ["object", "null"],
+      "description": "WP9: an amended and restated agreement; its covenants replace those of versionId once approved",
+      "properties": {"versionId": {"type": ["string", "null"]}, "evidence": {"type": "array"}}
+    },
+    "set": {
+      "type": ["object", "null"],
+      "description": "RECONCILE_SET (WP9): the documents of the set, in the order applied; missing ones block the set",
+      "properties": {
+        "setId": {"type": ["string", "null"]},
+        "asOfDate": {"type": "string", "format": "date"},
+        "documents": {"type": "array", "items": {"type": "object", "properties": {
+          "versionId": {"type": "string"}, "role": {"type": "string"}, "effectiveDate": {"type": ["string", "null"]},
+          "jobId": {"type": ["string", "null"]}, "applied": {"type": "boolean"}, "reason": {"type": "string"}}}},
+        "missing": {"type": "array", "items": {"type": "string"}},
+        "notYetEffective": {"type": "array", "items": {"type": "string"}}
       }
     },
     "amendedSet": {

@@ -295,7 +295,7 @@ class Worker:
                         "UNSUPPORTED_JOB_TYPE")
             return
         raw = None
-        if job.job_type == "DRAFT_COMMENTARY":  # a JSON manifest: hash-checked read, no page model
+        if job.job_type in ("DRAFT_COMMENTARY", "RECONCILE_SET"):  # a JSON manifest: hash-checked, no page model
             try:
                 raw = self.ingestor.read(doc)
             except IngestFailed as ex:

@@ -22,9 +22,11 @@
         "EXTRACT_STATEMENT",
         "EXTRACT_CERTIFICATE",
         "DRAFT_COMMENTARY",
-        "REPROCESS"
+        "REPROCESS",
+        "EXTRACT_WAIVER",
+        "RECONCILE_SET"
       ],
-      "description": "ONBOARD (Miro onboarding flow): one job classifies the document and extracts covenants and schedule terms with the right pack"
+      "description": "ONBOARD (Miro onboarding flow): one job classifies the document and extracts covenants and schedule terms with the right pack; EXTRACT_WAIVER (WP9): a waiver or consent letter, read against context.baseCovenants (required); RECONCILE_SET (WP9): the covenants in force on a date across a document set, from a JSON manifest {setId, asOfDate, documents: [{versionId, role, effectiveDate, jobId}], baseCovenants}; nothing is read again"
     },
     "document": {
       "type": "object",
@@ -210,6 +212,14 @@
           ],
           "maxLength": 64
         },
+        "restatesVersionId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64,
+          "description": "WP9: the agreement version an amended and restated agreement replaces (reported as result.restates)"
+        },
         "cycleId": {
           "type": [
             "string",
@@ -235,7 +245,7 @@
             "null"
           ],
           "maxItems": 500,
-          "description": "EXTRACT_AMENDMENT (G2): the approved covenants in the CTS DB the amendment is compared with; each change names the appliedCovenantId it touches",
+          "description": "EXTRACT_AMENDMENT and EXTRACT_WAIVER (G2, G18): the approved covenants in the CTS DB the change is compared with; each change names the appliedCovenantId it touches. Required for EXTRACT_WAIVER; EXTRACT_AMENDMENT needs it or amendsVersionId (400 BASE_REQUIRED)",
           "items": {
             "type": "object",
             "additionalProperties": false,

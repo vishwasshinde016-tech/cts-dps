@@ -54,6 +54,9 @@ REQUIRED = {
     "AMENDMENT": ("ISSUER", "SIGNATURE"),
     "FINANCIAL_STATEMENT": ("PERIOD_END", "CURRENCY", "UNIT"),
     "COMPLIANCE_CERTIFICATE": ("PERIOD_END", "UDIN", "SIGNATURE"),
+    "AMENDED_AND_RESTATED": ("BORROWER_NAME", "ISSUER", "SIGNATURE"),
+    "GUARANTEE": ("ISSUER", "SIGNATURE"),
+    "WAIVER_CONSENT": ("ISSUER", "SIGNATURE"),
 }
 BORROWER = [
     re.compile(r"\bM/s\.?\s+([A-Z][A-Za-z0-9&.,'()\- ]{2,80}?(?:Limited|Ltd\.?|LLP|Private Limited|Pvt\.? Ltd\.?))",
