@@ -9,7 +9,7 @@ import sys
 import time
 import urllib.request
 
-UA = "Covenexa-benchmark research@covenexa.local"
+UA = "cts-dps-benchmark research@cts-dps.local"
 CAP = 120 * 1024 * 1024
 
 

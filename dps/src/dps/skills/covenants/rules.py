@@ -40,10 +40,31 @@ def term_field(pack: str, pages: list[dict], t: Term, key: str = "") -> dict:
     return f
 
 
+# Which way a covenant usually points (kept from the old agreement flow's validation, full review WP7): a
+# coverage ratio read as a maximum, or a leverage ratio read as a minimum, is usually a misread.
+FLOORS = {"DSCR", "ICR", "EBITDA_TO_EMI", "CURRENT_RATIO", "QUICK_RATIO", "FIXED_CHARGE_COVERAGE_RATIO",
+          "MIN_TANGIBLE_NET_WORTH", "MIN_NET_WORTH", "MINIMUM_LIQUIDITY", "MIN_EBITDA"}
+CEILINGS = {"DEBT_TO_EBITDA", "NET_LEVERAGE_RATIO", "DEBT_TO_NET_WORTH", "DEBT_TO_EQUITY", "LOAN_TO_VALUE"}
+
+
+def direction_issue(metric: str | None, operator: str | None) -> str | None:
+    """OPERATOR_UNEXPECTED, when the operator points the wrong way for the covenant's family."""
+    family = str(metric or "").split(":", 1)[0]
+    if family in FLOORS and operator in ("<", "<="):
+        return "usually a minimum (>=)"
+    if family in CEILINGS and operator in (">", ">="):
+        return "usually a maximum (<=)"
+    return None
+
+
 def checks_for(fields: list[dict]) -> list[dict]:
     warnings = []
     for f in fields:
         v = f["value"]
+        unusual = direction_issue(v.get("metric"), v.get("operator"))
+        if unusual and not any(i.get("code") == "OPERATOR_UNEXPECTED" for i in f.get("issues") or []):
+            f["issues"].append(issue("OPERATOR_UNEXPECTED", unusual))
+            f["status"] = "NEEDS_REVIEW"
         schedule = v.get("schedule") or []
         starts = [s.get("from") for s in schedule if s.get("from")]
         if starts != sorted(starts):

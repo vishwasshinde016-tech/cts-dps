@@ -10,7 +10,7 @@ import time
 import urllib.parse
 import urllib.request
 
-UA = "Covenexa-benchmark research@covenexa.local"
+UA = "cts-dps-benchmark research@cts-dps.local"
 QUERIES = ['"financial covenants" "consolidated leverage ratio" "credit agreement"',
            '"interest coverage ratio" "credit agreement" "financial covenants"',
            '"fixed charge coverage ratio" "loan agreement" "financial covenants"',

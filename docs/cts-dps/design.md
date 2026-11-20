@@ -640,9 +640,9 @@ Each bake-off is recorded as a short decision note (what was compared, numbers, 
 
 ## What exists today vs gaps
 
-The Covenexa DPS already covers about half of this design and is the starting point, not a throw-away: its extraction core, safety net and job queue carry over.
+*Historical (17 Nov 2026), kept for the record: the earlier DPS covered about half of this design and was the starting point; its extraction core, safety net and job queue carried over. Its own screens and API were removed on 20 Nov 2026 (full review WP7).*
 
-| Area | Today (Covenexa DPS) | Gap to close |
+| Area | Then (earlier DPS) | Gap to close |
 | --- | --- | --- |
 | Job queue | `dps_job` with lease, heartbeat, attempts, LIGHT/HEAVY pools | Priorities, fairness, back-off schedule, DEAD state + DLQ screen, cancel, batches, idempotency on version |
 | Intake | DPS receives the upload itself | Read from the DMS by version id + SHA-256 check; DMS owns upload |

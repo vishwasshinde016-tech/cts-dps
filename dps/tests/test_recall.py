@@ -230,59 +230,6 @@ def test_a_covenant_job_reports_coverage_and_a_gap_warning():
 
 # ---------- EXTRACT_AGREEMENT reads with the covenants skill ----------
 
-def test_the_older_agreement_flow_reads_with_the_covenants_skill():
-    from dps.extraction.agreement import extract_terms
-    from dps.extraction.agreement_ai import read_with_skill
-    from dps.parse.engine import Page
-
-    text = ("FINANCIAL COVENANTS\n"
-            "The Borrower shall maintain a Debt Service Coverage Ratio of not less than 1.25 times.\n"
-            "The Borrower shall maintain an Interest Coverage Ratio of not less than 2.00 times.\n"
-            "NEGATIVE COVENANTS\n"
-            "The Borrower shall not create any lien over its assets without prior written consent of the Lender.\n"
-            "The Borrower shall not change the general nature of its business.\n")
-    pages = [Page(1, text, "TEXT", 1.0)]
-    terms = extract_terms(pages)
-    items = [
-        {"name": "DSCR", "page": 1, "quote": "Debt Service Coverage Ratio of not less than 1.25 times",
-         "value": {"metric": "DSCR", "operator": ">=", "threshold": 1.25, "unit": "TIMES"}},
-        {"name": "Interest Coverage Ratio", "page": 1, "quote": "Interest Coverage Ratio of not less than 2.00 times",
-         "value": {"metric": "ICR", "operator": ">=", "threshold": 2.0, "unit": "TIMES"}},
-        {"name": "Negative pledge", "page": 1, "quote": "shall not create any lien over its assets",
-         "value": {"metric": "NEGATIVE_PLEDGE"}},
-        {"name": "No change of business", "page": 1, "quote": "shall not change the general nature of its business",
-         "value": {"metric": "RESTRICTION_ON_CHANGE_OF_BUSINESS"}},
-        {"name": "Drawdown notice", "page": 1, "quote": "shall maintain a Debt Service Coverage Ratio",
-         "value": {"metric": "DRAWDOWN_NOTICE"}}]
-    voted = read_with_skill(pages, terms, Salvage(items))
-    by = {(t.metric, t.category): t for t in voted}
-    assert by[("DSCR", "FINANCIAL")].method == "REGEX+AI"
-    assert by[("ICR", "FINANCIAL")].method in ("REGEX+AI", "AI")
-    pledge = by.get(("NEGATIVE_PLEDGE", "NON_FINANCIAL"))
-    assert pledge is not None and pledge.method in ("REGEX+AI", "AI")  # kept, not dropped for having no number
-    change = by.get(("NEG_CHANGE_OF_BUSINESS", "NON_FINANCIAL"))  # a taxonomy code now, not a candidate
-    assert change is not None and "general nature" in (change.quote or "")
-    assert not any("DRAWDOWN" in str(t.metric) for t in voted)  # a loan mechanic is not a covenant
-    assert read_with_skill(pages, terms, None) == terms  # no model: the rules' terms unchanged
-
-
-def test_skill_terms_apply_the_older_sense_checks():
-    from dps.extraction.agreement_ai import skill_terms
-    from dps.parse.engine import Page
-
-    pages = [Page(1, "Cash Flow Coverage of not less than 125% and leverage of no greater than 70%.", "TEXT", 1.0)]
-    items = [{"name": "Cash flow coverage", "page": 1, "quote": "Cash Flow Coverage of not less than 125%",
-              "value": {"metric": "DSCR", "operator": ">=", "threshold": 125}},
-             {"name": "Leverage", "page": 1, "quote": "leverage of no greater than 70%",
-              "value": {"metric": "DEBT_TO_EBITDA", "operator": "<=", "threshold": 70}}]
-    out, dropped = skill_terms(pages, items)
-    assert (out[0].metric, out[0].threshold) == ("DSCR", 1.25)  # 125% coverage is 1.25 times
-    assert out[1].category == "CANDIDATE"  # 70 is not a leverage ratio: a person decides
-    assert dropped == 0
-
-
-# ---------- statements: spreadsheets are checked too; an empty AI answer is retried, then flagged ----------
-
 def test_a_spreadsheet_statement_reaches_the_ai_checker_with_its_units_line(tmp_path):
     from datetime import date
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cts.local/dps/schemas/job-status.json",
   "title": "dps.job-status/1.0",
-  "description": "GET /dps/v1/jobs/{jobId}. A superset of the older Job view: the older fields stay for the Covenexa screens.",
+  "description": "GET /dps/v1/jobs/{jobId}. The job's status, attempts and steps, with its result link once there is one.",
   "type": "object",
   "required": ["id", "jobType", "status", "priority", "attempts", "createdAt"],
   "properties": {

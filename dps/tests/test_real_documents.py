@@ -423,54 +423,6 @@ def test_step_down_tables_and_a_minimum_ebitda_clause():
     assert got == {"FIXED_CHARGE_COVERAGE_RATIO": (">=", 1.15, None), "MIN_EBITDA": (">=", 9500000.0, "usd")}
 
 
-def test_two_covenants_of_one_family_are_both_kept_under_their_own_names():
-    text = ("(a) Consolidated Leverage Ratio. The Borrower will not permit the Consolidated Leverage Ratio as at the "
-            "last day of any Test Period to exceed 5.50 to 1.0.\n(b) Consolidated Senior Secured Leverage Ratio. The "
-            "Borrower will not permit the Consolidated Senior Secured Leverage Ratio as at the last day of any Test "
-            "Period to exceed 3.50 to 1.0.\nThe Consolidated Leverage Ratio is tested quarterly: not more than 5.50 "
-            "to 1.0.")
-    terms = [t for t in extract_terms([Page(1, text, "TEXT", 1.0)]) if t.category == "FINANCIAL"]
-    assert sorted((t.name, t.threshold) for t in terms) == [("Consolidated Leverage Ratio", 5.5),
-                                                          ("Consolidated Senior Secured Leverage Ratio", 3.5)]
-    from dps.extraction.mapping import normalize
-    from dps.integrations.core import CoreMaster
-
-    masters = [CoreMaster("m-lev", "Total Debt to EBITDA Ceiling", "FINANCIAL", "AUTO", ("DEBT_EBITDA",))]
-    first, second = normalize(terms, masters)
-    assert first.covenant_master_id == "m-lev" and first.metric_raw == "DEBT_TO_EBITDA"
-    assert second.covenant_master_id is None
-    assert second.metric_raw.startswith("DEBT_TO_EBITDA:") and second.name.endswith("Leverage Ratio")
-    assert second.expression == "DPS_TOTAL_DEBT / DPS_EBITDA_TTM <= " + f"{second.threshold:g}"
-    assert any(i.startswith("SECOND_COVENANT_OF_FAMILY") for i in second.issues)
-
-
-def test_loan_to_value_is_a_manual_covenant_and_a_dollar_amount_waits_for_conversion():
-    from dps.extraction.agreement import Term
-    from dps.extraction.mapping import normalize
-    from dps.extraction.validation import check_direction
-
-    ltv, ebitda = normalize([
-        Term("LOAN_TO_VALUE", "FINANCIAL", "<=", 75.0, "%", "QUARTERLY", 10, "of 75.00% or less", None, 0.7,
-             name="Loan to Value Ratio"),
-        Term("MIN_EBITDA", "FINANCIAL", ">=", 9500000.0, "usd", None, 12, "September 30, 2017 $9,500,000", None, 0.85,
-             name="EBITDA"),
-    ], [])
-    assert (ltv.name, ltv.unit, ltv.expression, ltv.assessment_type) == ("Maximum Loan to Value", "PERCENT", None,
-                                                                        "MANUAL")
-    assert check_direction(ltv) == []
-    assert (ebitda.unit, ebitda.threshold, ebitda.expression, ebitda.assessment_type) == ("USD", 9500000.0, None,
-                                                                                          "MANUAL")
-    assert ebitda.issues == ["AMOUNT_CURRENCY_DIFFERS: the limit is in USD, the loan in INR; convert it to INR crore "
-                             "before applying"]
-    assert check_direction(Proposal_like("LOAN_TO_VALUE", ">=")) == ["OPERATOR_UNEXPECTED: usually a maximum (<=)"]
-
-
-def Proposal_like(metric, op):  # noqa: N802 - reads like the constructor it stands in for
-    from dps.extraction.mapping import Proposal
-
-    return Proposal(metric, "FINANCIAL", None, metric, None, "MANUAL", op, 1.0, None, None, 1, "q", None, 0.9)
-
-
 def test_statement_review_reasons_and_unit_are_stored_on_the_document(database):
 
     from statement_shim import StatementDeps, StatementProcessingFlow

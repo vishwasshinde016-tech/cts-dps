@@ -226,7 +226,7 @@ class TenantLimit(Base):
 class EventFeed(Base):
     """Phase 1: the event feed Spring reads with GET /dps/v1/events (contracts/catalogues/events.yaml).
 
-    Separate from ``dps_event_outbox`` (pushed to Covenexa Core), so neither consumer can disturb the other.
+    The only event channel (full review G9): the old ``dps_event_outbox`` table is no longer written.
     ``seq`` is the cursor; it only grows.
     """
 

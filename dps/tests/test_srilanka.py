@@ -7,7 +7,6 @@ import pytest
 from test_statement_pdf import amounts, header
 
 from dps.extraction.agreement import extract_terms
-from dps.extraction.mapping import TO_CRORE
 from dps.extraction.statement import _unit, match_key
 from dps.extraction.statement_pages import order_pages, rank
 from dps.extraction.statement_pdf import _text_words, choose_column, rows_from_words, unit_text
@@ -149,14 +148,6 @@ def terms(sentence: str) -> list[tuple]:
 ])
 def test_sri_lankan_covenant_wordings(sentence, metric, op, value):
     assert (metric, op, value) in terms(sentence)
-
-
-def test_mn_is_million():
-    # "Rs. 30,000 Mn" was kept as 30,000 crore, ten times too large (flagged, but wrong).
-    got = extract_terms([Page(5, "Financial Covenants\n(3) Minimum Tangible Net Worth : Rs. 30,000 Mn.", "TEXT", 1.0)])
-    floor = next(t for t in got if t.metric == "MIN_TANGIBLE_NET_WORTH")
-    assert floor.threshold == 30000 and floor.unit == "mn" and TO_CRORE["mn"] == 0.1
-
 
 
 def test_a_ratio_spelled_out_with_its_figures_in_brackets():

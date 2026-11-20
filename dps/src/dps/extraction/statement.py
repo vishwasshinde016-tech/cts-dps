@@ -323,16 +323,6 @@ _PATTERNS = [
 ]
 
 
-# Phase 4 learning loop: statement wordings an administrator added from reviewers' confirmations (set per document
-# by Flow B from dps_learned_wording); consulted after the built-in catalog, so they only add.
-_LEARNED_LINES: dict[str, list[str]] = {}
-
-
-def set_learned_lines(wordings: dict[str, list[str]]) -> None:
-    _LEARNED_LINES.clear()
-    _LEARNED_LINES.update({k: [w.lower() for w in ws] for k, ws in wordings.items()})
-
-
 def _plain(text: str) -> str:
     # "Trade & Other Payables" is "trade and other payables"; "Profit/(Loss) for the year" is "profit for the year"
     text = text.lower().replace("’", "'").replace("&", " and ")
@@ -346,7 +336,7 @@ def match_key(label: str) -> str | None:
         return None
     lead = _NUMBERING.sub("", text.strip())
     best, best_phrase = None, ""
-    for key, phrases in list(LINE_ALIASES.items()) + list(_LEARNED_LINES.items()):
+    for key, phrases in LINE_ALIASES.items():
         for phrase in map(_plain, phrases):
             # "non-current assets" is not "current assets": a hyphen before the phrase is no word boundary.
             if re.search(r"(?<![a-z-])" + re.escape(phrase) + r"(?![a-z])", text) and len(phrase) > len(best_phrase):

@@ -21,7 +21,7 @@ from dps.agent.guard import (
     mask_pii,
 )
 from dps.db import Database
-from dps.extraction import agreement_ai, statement_ai
+from dps.extraction import statement_ai
 from dps.main import create_app
 from dps.models import AiCache, AiUsage, AuditEvent, Base
 from dps.parse.engine import Page
@@ -72,21 +72,6 @@ def test_text_that_addresses_the_model_is_found():
     assert injection_signs("The Borrower shall not ignore the instructions of the Agent.") == []
     assert injection_signs("") == []
 
-
-def test_both_reader_prompts_say_the_document_is_data():
-    seen = []
-
-    def model(messages):
-        seen.append(messages[0]["content"])
-        return '{"covenants": [], "unit": "crore", "values": {}}'
-
-    statement_ai.ai_read("=== Page 1 ===\nEBITDA 10", model)
-    agreement_ai.ai_covenants([Page(1, "Financial Covenants. The Borrower shall maintain a Debt Service Coverage "
-                                       "Ratio of not less than 1.25 : 1.", "TEXT", 1.0)], [], model)
-    assert len(seen) == 2 and all(DATA_NOT_INSTRUCTIONS in p for p in seen)
-
-
-# ---------------------------------------------------------------- cache and budget
 
 def test_the_same_question_is_answered_from_the_cache(database):
     calls = []

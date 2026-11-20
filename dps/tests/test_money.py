@@ -8,11 +8,9 @@ from datetime import date
 import pytest
 from conftest import reviewed_if_clean
 from statement_shim import StatementDeps, StatementProcessingFlow
-from test_bug_hunt import terms_of
 from test_flows import FakeParser, add_document, doc_status, values, xlsx_bytes
 
 from dps.db import Database
-from dps.extraction.mapping import normalize
 from dps.extraction.statement import extract_values
 from dps.models import Base
 from dps.money import currency_of, describe, detect_currency, money_unit, to_money_unit
@@ -87,6 +85,15 @@ def test_flow_b_converts_a_usd_statement_at_the_banks_rate(database):
     assert flow.state.fx_rate == 300.0 and flow.state.currency == "USD"
 
 
+def test_a_rate_of_exactly_one_is_a_rate_not_a_missing_one(database):
+    """Local end-to-end run (20 Nov 2026): a bank rate of 1.0 was taken for "no rate", so the figures stayed in the
+    statement's currency with no hold, and approving them was refused. A rate of 1.0 converts like any other."""
+    flow, _, asked, _ = run(database, USD_ROWS, rate=1.0)
+    assert asked == [("USD", "LKR", date(2026, 3, 31))] and flow.state.fx_known
+    assert flow.state.outcome == "REPORTED"
+    assert values(database, "CP-LK")["EBITDA"].unit == "LKR_MN"
+
+
 def test_flow_b_holds_a_statement_with_no_rate_and_rereads_it_after_review(database):
     flow, doc_id, _, deps = run(database, USD_ROWS, rate=None)
     assert flow.state.outcome == "NEEDS_REVIEW" and doc_status(database, doc_id) == "NEEDS_REVIEW"
@@ -123,19 +130,3 @@ def test_flow_b_without_core_keeps_inr_crore(database):
     v = values(database)["EBITDA"]
     assert (v.value, v.unit, v.currency) == (5.0, "INR_CR", "INR")
 
-
-@pytest.mark.parametrize("amount, threshold", [
-    ("LKR 1,000,000,000", 1000.0), ("Sri Lankan Rupees 2,500 million", 2500.0), ("Rs. 3 billion", 3000.0),
-])
-def test_an_lkr_loan_keeps_lkr_limits_in_lkr_million(amount, threshold):
-    [p] = normalize(terms_of(f"7.1 Net Worth. The Borrower shall maintain a Tangible Net Worth of not less than "
-                             f"{amount}."), [], "LKR")
-    assert (p.unit, p.threshold) == ("LKR_MN", threshold)
-    assert not any(i.startswith("AMOUNT_CURRENCY_DIFFERS") for i in p.issues)
-
-
-def test_an_lkr_loan_holds_a_usd_limit():
-    [p] = normalize(terms_of("7.1 Net Worth. The Borrower shall maintain a Tangible Net Worth of not less than "
-                             "USD 50,000,000."), [], "LKR")
-    assert p.unit == "USD" and p.expression is None
-    assert any(i.startswith("AMOUNT_CURRENCY_DIFFERS: the limit is in USD, the loan in LKR") for i in p.issues)

@@ -62,6 +62,7 @@ errors:
   - { code: SET_INCOMPLETE, class: QUALITY, http: null, retry: false, message: "Some documents of the set have no DPS result yet; extract them, then reconcile again." }
   - { code: SET_CHANGE_HELD, class: QUALITY, http: null, retry: false, message: "A change in the set was not applied because its target or terms are not settled; please apply it by hand." }
   - { code: SET_MANIFEST_INVALID, class: CONTENT, http: null, retry: false, message: "The document set manifest is not valid; please correct it and submit again." }
+  - { code: OPERATOR_UNEXPECTED, class: QUALITY, http: null, retry: false, message: "The operator is unusual for this covenant (a coverage ratio is usually a minimum, a leverage ratio a maximum); please check it." }
   - { code: CONDITIONAL, class: QUALITY, http: null, retry: false, message: "The covenant applies only when its condition is met (for example a springing covenant); please check the condition." }
   - { code: SCOPE_UNKNOWN, class: QUALITY, http: null, retry: false, message: "The clause does not say whose figures are tested; please set the company." }
   - { code: SCOPE_SEVERAL, class: QUALITY, http: null, retry: false, message: "The clause binds several companies; split it if their figures are tested separately." }

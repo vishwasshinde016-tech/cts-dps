@@ -1,6 +1,6 @@
 """The daily app log: every container of the stack, one readable file per day (see dps.ops.observability).
 
-    logs/covenexa-2026-11-09.log
+    logs/cts-dps-2026-11-09.log
     2026-11-09 10:42:01.120Z ui               10.0.0.5 "POST /api/v1/documents" 201 cid=3f2a...
     2026-11-09 10:42:01.950Z core             ... INFO [3f2a... rm-anil] [CP-1/-] ... upload forwarded to DPS
     2026-11-09 10:42:08.400Z dps-worker       ... [job 77e0 doc d81c] dps.events: FOUND DSCR >= 1.25 (page 42) ...
@@ -33,7 +33,7 @@ LOG_DIR = Path(os.environ.get("LOG_DIR", "/logs"))
 KEEP_DAYS = int(os.environ.get("LOG_KEEP_DAYS", "30"))
 PROJECT = os.environ.get("LOG_PROJECT", "covenant-platform")
 SELF = os.environ.get("LOG_SELF_SERVICE", "log-collector")
-PREFIX = "covenexa-"
+PREFIX = "cts-dps-"
 
 
 def demux(buffer: bytes) -> tuple[list[bytes], bytes]:

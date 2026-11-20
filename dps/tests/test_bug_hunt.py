@@ -6,7 +6,6 @@ import pytest
 from test_statement_pdf import amounts, header, line
 
 from dps.extraction.agreement import _threshold, extract_terms
-from dps.extraction.mapping import foreign_currency, normalize
 from dps.extraction.safety_net import looks_like_covenant
 from dps.extraction.statement import extract_values, match_key, parse_number, rows_from_csv
 from dps.extraction.statement_pdf import rows_from_words
@@ -87,31 +86,6 @@ def test_wordings_the_rules_and_the_safety_net_missed(sentence, op, value):
 def test_a_net_worth_heading_over_a_tangible_net_worth_clause_is_one_covenant():
     terms = terms_of("7.1 Net Worth. The Borrower shall maintain a Tangible Net Worth of not less than INR 500 crore.")
     assert [(t.metric, t.threshold) for t in terms] == [("MIN_TANGIBLE_NET_WORTH", 500.0)]
-
-
-@pytest.mark.parametrize("amount, currency", [
-    ("LKR 1,000,000,000", "LKR"), ("$50,000,000", "USD"), ("USD 50,000,000", "USD"),
-])
-def test_an_amount_in_another_currency_is_held_not_read_as_crore(amount, currency):
-    terms = terms_of(f"7.1 Net Worth. The Borrower shall maintain a Tangible Net Worth of not less than {amount}.")
-    [p] = normalize(terms, [])
-    assert p.unit == currency and p.expression is None and p.assessment_type == "MANUAL"
-    assert any(i.startswith("AMOUNT_CURRENCY_DIFFERS") for i in p.issues)
-
-
-def test_rupee_amounts_are_converted_to_crore():
-    [p] = normalize(terms_of("7.1 Net Worth. The Borrower shall maintain a Tangible Net Worth of not less than "
-                             "Rs. 500 million."), [])
-    assert (p.unit, p.threshold) == ("INR_CR", 50.0)
-    assert [i for i in p.issues if not i.startswith("FORMULA_TEMPLATE")] == []
-
-
-@pytest.mark.parametrize("quote, code", [
-    ("not less than €50,000,000", "EUR"), ("not less than £50,000,000", "GBP"),
-    ("Sri Lankan Rupees 500,000,000", "LKR"), ("INR 500 crore", None), ("Rs. 50 lakhs", None),
-])
-def test_foreign_currency_in_a_quote(quote, code):
-    assert foreign_currency(quote) == code
 
 
 @pytest.mark.parametrize("label, flagged", [

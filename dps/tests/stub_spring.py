@@ -36,6 +36,16 @@ def _operation(spec: dict, path: str, method: str) -> dict:
     return spec["paths"][path][method.lower()]
 
 
+def _match(spec: dict, path: str) -> str | None:
+    """The contract path a request path is for ("/api/v1/credit-proposals/CP-1/currency" is ".../{cpId}/currency")."""
+    import re
+
+    for template in spec["paths"]:
+        if re.fullmatch(re.sub(r"\\{[^}]+\\}", "[^/]+", re.escape(template)), path):
+            return template
+    return None
+
+
 def _schema(op: dict, where: str) -> dict:
     if where == "request":
         return op["requestBody"]["content"]["application/json"]["schema"]
@@ -59,15 +69,25 @@ class StubSpring:
         self.calls.append((method, path, dict(request.headers), body))
         if self.down:
             return httpx.Response(503, json={"error": "down"})
-        if path not in self.spec["paths"]:
+        spec_path = _match(self.spec, path)
+        if spec_path is None:
             return httpx.Response(404, json={"error": "no such tool"})
-        op = _operation(self.spec, path, method)
+        op = _operation(self.spec, spec_path, method)
         if body is not None:
             jsonschema.validate(body, _schema(op, "request"))  # DPS sent what the contract says
         if path.endswith("/formulas/validate"):
             answer = {"items": [{"id": i["id"], "valid": "??" not in i["expression"],
                                  "errors": [] if "??" not in i["expression"] else
                                  [{"code": "SYNTAX", "message": "unknown token ??"}]} for i in body["items"]]}
+        elif path.endswith("/currency"):
+            answer = {"currency": "INR"}
+        elif path.endswith("/profile"):
+            answer = {"currency": "INR", "currencyKnown": True, "fiscalYearEndMonth": 3,
+                      "statementEntity": "STANDALONE", "numberStyle": "INDIAN"}
+        elif path.endswith("/settings/countries"):
+            answer = []
+        elif path.endswith("/fx/convert"):
+            return httpx.Response(422, json={"code": "FX_RATE_MISSING"})
         elif path.endswith("/lookups"):
             wanted = set((body.get("context") or {}).get("cpIds") or [])
             items = []

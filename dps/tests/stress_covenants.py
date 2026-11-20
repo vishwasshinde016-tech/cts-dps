@@ -24,11 +24,9 @@ import itertools
 import re
 import sys
 from dataclasses import dataclass
-from types import SimpleNamespace
 
 from dps.extraction.agreement import extract_terms
 from dps.extraction.safety_net import possible_covenants
-from dps.extraction.validation import check_direction
 from dps.parse.engine import Page
 
 FAMILY = {"DSCR": "DSCR", "ICR": "ICR", "FIXED_CHARGE_COVERAGE_RATIO": "FCCR", "DEBT_TO_EBITDA": "LEVERAGE",
@@ -205,8 +203,11 @@ def _page(text: str) -> list[Page]:
 
 
 def _flags(t) -> list[str]:
-    p = SimpleNamespace(metric_raw=t.metric, operator=t.operator)
-    return list(t.issues) + check_direction(p) + (["LOW_CONFIDENCE"] if t.confidence < 0.8 else [])
+    from dps.skills.covenants.rules import direction_issue
+
+    unusual = direction_issue(t.metric, t.operator)
+    return list(t.issues) + ([f"OPERATOR_UNEXPECTED: {unusual}"] if unusual else []) + (
+        ["LOW_CONFIDENCE"] if t.confidence < 0.8 else [])
 
 
 def outcome(case: Case) -> str:

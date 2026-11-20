@@ -13,7 +13,7 @@ from statement_shim import StatementDeps, StatementProcessingFlow, reviewed_if_c
 
 from dps import jobs
 from dps.db import Base, Database
-from dps.integrations.core import CoreClient, CoreMaster, CoreUnavailable
+from dps.integrations.core import CoreClient, CoreUnavailable
 from dps.models import Document, DocumentCpLink, EventOutbox, Job, Run, StatementValue, utcnow
 from dps.parse.engine import Page
 from dps.settings import Settings
@@ -45,23 +45,19 @@ def add_document(database: Database, type_: str = "LOAN_AGREEMENT", name: str = 
 
 
 class FakeCore:
-    def __init__(self, masters=None, down: bool = False) -> None:
-        self.masters = masters if masters is not None else [CoreMaster("m1", "Minimum DSCR", "FINANCIAL", "AUTO",
-                                                                         ("DSCR",))]
-        self.down = down
-        self.events: list[dict] = []
+    """What the statement reader asks the Spring app for: the loan currency, the profile, countries and FX rates."""
 
-    def active_masters(self):
-        if self.down:
-            raise CoreUnavailable("GET /api/v1/covenants: ConnectError")
-        return self.masters
+    def cp_currency(self, cp):
+        return None
 
-    def validate_formula(self, expression: str) -> list[str]:
+    def cp_profile(self, cp):
+        return None
+
+    def country_profiles(self):
         return []
 
-    def send_data_event(self, payload: dict) -> dict:
-        self.events.append(payload)
-        return {"assessmentsQueued": 1, "duplicate": False}
+    def fx_rate(self, src, dst, on):
+        return None
 
 
 class FakeParser:
@@ -407,50 +403,46 @@ def core_client(handler) -> CoreClient:
                                                                    transport=httpx.MockTransport(handler)))
 
 
-def test_core_client_pages_masters_and_uses_service_identity():
+def test_core_client_reads_what_the_statement_reader_needs_as_the_service():
+    """The 4 reads in contracts/spring-tools.yaml: CP currency and profile, country profiles, FX rate."""
     seen = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        page = int(request.url.params["page"])
-        content = [{"id": f"m{page}", "name": f"N{page}", "category": "FINANCIAL", "assessmentType": "AUTO",
-                    "referencedMeasures": ["DSCR"], "custom": False},
-                   {"id": "c", "name": "custom", "custom": True}]
-        return httpx.Response(200, json={"content": content, "last": page == 1})
+        path = request.url.path
+        if path.endswith("/CP-1/currency"):
+            return httpx.Response(200, json={"currency": "LKR"})
+        if path.endswith("/CP-1/profile"):
+            return httpx.Response(200, json={"currency": "LKR", "fiscalYearEndMonth": 12, "numberStyle": "WESTERN"})
+        if path == "/api/v1/settings/countries":
+            return httpx.Response(200, json=[{"country": "KE", "currency": "KES", "currencyWords": ["KShs"]}])
+        if path == "/api/v1/fx/convert":
+            return httpx.Response(200, json={"rate": 300.0}) if request.url.params["from"] == "USD" else \
+                httpx.Response(422, json={"code": "FX_RATE_MISSING"})
+        return httpx.Response(404)
 
-    masters = core_client(handler).active_masters()
-    assert [m.id for m in masters] == ["m0", "m1"] and masters[0].referenced_measures == ("DSCR",)
+    c = core_client(handler)
+    assert c.cp_currency("CP-1") == "LKR" and c.cp_currency("CP-9") is None
+    profile = c.cp_profile("CP-1")
+    assert (profile.currency, profile.fiscal_year_end_month, profile.number_style) == ("LKR", 12, "WESTERN")
+    assert c.country_profiles()[0]["currency"] == "KES" and len(seen) == 4
+    c.country_profiles()  # kept for five minutes
+    assert len(seen) == 4
+    assert c.fx_rate("USD", "LKR", date(2026, 3, 31)) == 300.0 and c.fx_rate("EUR", "LKR", date(2026, 3, 31)) is None
     assert seen[0].headers["X-Roles"] == "SERVICE"
     bearer = CoreClient("http://core", 1.0, "tok", client=httpx.Client(transport=httpx.MockTransport(handler)))
     assert bearer._headers == {"Authorization": "Bearer tok"}
 
 
-def test_core_client_validate_and_events_and_errors():
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v1/formulas/validate":
-            body = json.loads(request.content)
-            if body["expression"] == "OK":
-                return httpx.Response(200, json={"valid": True, "errors": []})
-            if body["expression"] == "EMPTY":
-                return httpx.Response(200, json={"valid": False, "errors": []})
-            return httpx.Response(200, json={"valid": False, "errors": [{"code": "UNKNOWN_MEASURE"}]})
-        if request.url.path == "/api/v1/data-events":
-            return httpx.Response(202, json={"assessmentsQueued": 2, "duplicate": False})
-        return httpx.Response(503)
-
-    c = core_client(handler)
-    assert c.validate_formula("OK") == []
-    assert c.validate_formula("X") == ["UNKNOWN_MEASURE"]
-    assert c.validate_formula("EMPTY") == ["invalid"]
-    assert c.send_data_event({"a": 1}) == {"assessmentsQueued": 2, "duplicate": False}
-    with pytest.raises(CoreUnavailable):
-        c.active_masters()
-
+def test_core_client_never_fails_a_statement_when_spring_is_down():
     def offline(request):
         raise httpx.ConnectError("refused")
 
+    c = core_client(offline)
+    assert c.cp_currency("CP-1") is None and c.cp_profile("CP-1") is None and c.country_profiles() == []
+    assert c.fx_rate("USD", "INR", date(2026, 3, 31)) is None
     with pytest.raises(CoreUnavailable):
-        core_client(offline).validate_formula("OK")
+        c._request("GET", "/x")  # noqa: SLF001 - the transport error is a CoreUnavailable
 
 
 def test_renew_lease_extends_only_the_holders_lock(database):
