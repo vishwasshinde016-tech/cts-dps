@@ -62,6 +62,25 @@ if (Test-Path ".env") {
     Write-Host ".env created from .env.example (SQLite, local storage, dev sign-in, AI off)"
 }
 
+Step "4b. Azure OpenAI key (optional: switches the Document Agent on)"
+$envLines = Get-Content ".env"
+$keyLine = $envLines | Where-Object { $_ -match '^AZURE_API_KEY=' } | Select-Object -First 1
+if ($keyLine -and $keyLine.Trim() -ne 'AZURE_API_KEY=') {
+    Write-Host "AZURE_API_KEY is already set in .env: left as it is"
+} else {
+    $secure = Read-Host "Paste the Azure OpenAI key and press Enter (or just press Enter to keep AI off)" -AsSecureString
+    $key = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+    if ($key) {
+        $envLines = $envLines | Where-Object { $_ -notmatch '^AZURE_API_KEY=' -and $_ -notmatch '^DPS_LLM_ENABLED=' }
+        $envLines += "DPS_LLM_ENABLED=true"
+        $envLines += "AZURE_API_KEY=$key"
+        Set-Content -Path ".env" -Value $envLines -Encoding ASCII
+        Write-Host "key saved in .env (this laptop only; .env is never committed); AI switched on" -ForegroundColor Green
+    } else {
+        Write-Host "no key: AI stays off (rules only). Run setup again or edit .env to add it later."
+    }
+}
+
 Step "5. Database tables (Alembic)"
 & (Join-Path $dps ".venv\Scripts\alembic.exe") upgrade head
 if ($LASTEXITCODE -ne 0) { Fail "alembic upgrade head failed" }

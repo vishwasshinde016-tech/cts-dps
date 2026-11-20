@@ -191,6 +191,31 @@ def endpoint_problem(settings: Settings, env: dict | None = None) -> str | None:
     return None
 
 
+MODEL_ENV_PREFIXES = ("AZURE_", "OPENAI_")
+
+
+def export_model_env(path: str | Path = ".env") -> list[str]:
+    """The model library (LiteLLM, through CrewAI) reads AZURE_* / OPENAI_* from the process environment, but
+    pydantic reads .env only into Settings. Copies those lines of .env into os.environ, never overriding a value
+    already set (a vault or the shell wins). Returns the names copied (never the values)."""
+    import os
+
+    file = Path(path)
+    if not file.is_file():
+        return []
+    copied = []
+    for line in file.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = (part.strip() for part in line.split("=", 1))
+        if key.startswith(MODEL_ENV_PREFIXES) and value and key not in os.environ:
+            os.environ[key] = value.strip('"').strip("'")
+            copied.append(key)
+    return copied
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    export_model_env()
     return Settings()
