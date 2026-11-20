@@ -154,6 +154,16 @@ def test_f10_waiver_guarantee_and_restated_agreement_have_their_own_types():
     assert not classify(model_of(RESTATED), "LOAN_AGREEMENT").mismatch  # an A&R agreement is a loan agreement
 
 
+def test_f10_a_facility_agreement_with_a_guarantee_clause_is_a_loan_agreement():
+    """Audit 20 Nov 2026: the architect's UK senior facilities agreement read as GUARANTEE, because LMA agreements list
+    "Guarantee and indemnity" in their contents. The facility agreement's title wins."""
+    sfa = model_of("FACILITIES AGREEMENT\nDated July 2023\nfor AQUILA MIDCO 2 LIMITED as Parent",
+                   "TABLE OF CONTENTS\n1 Definitions and interpretation ....... 6\n"
+                   "23 Guarantee and indemnity ....... 160\n24 Representations ....... 170")
+    assert classify(sfa).type == "LOAN_AGREEMENT"
+    assert classify(model_of(GUARANTEE)).type == "GUARANTEE"
+
+
 # ---------- WP9: waivers ----------
 
 def test_f10_a_waiver_names_the_approved_covenant_the_period_conditions_and_expiry():

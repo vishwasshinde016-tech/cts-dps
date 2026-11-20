@@ -187,7 +187,11 @@ def rule_scores(model: dict) -> tuple[dict[str, float], list[dict]]:
     elif scores["AMENDED_AND_RESTATED"] >= 0.6:  # a full agreement that replaces an earlier one (WP9)
         scores["AMENDED_AND_RESTATED"] = 1.0
         scores["LOAN_AGREEMENT"] = min(scores["LOAN_AGREEMENT"], 0.6)
-    if scores["GUARANTEE"] >= 0.6:  # a guarantee is a security document whose covenants bind the guarantor
+    if scores["GUARANTEE"] >= 0.6 and scores["LOAN_AGREEMENT"] >= 0.5:  # titled as a facility or loan agreement
+        # A facility agreement with a "Guarantee and Indemnity" clause (every LMA senior facilities agreement lists
+        # one in its contents) is a loan agreement, not a guarantee (the architect's UK SFA, audit of 20 Nov 2026).
+        scores["GUARANTEE"] = max(0.0, scores["GUARANTEE"] - 0.5)
+    elif scores["GUARANTEE"] >= 0.6:  # a guarantee is a security document whose covenants bind the guarantor
         scores["SECURITY_DOCUMENT"] = max(0.0, scores["SECURITY_DOCUMENT"] - 0.4)
         scores["LOAN_AGREEMENT"] = max(0.0, scores["LOAN_AGREEMENT"] - 0.3)
     if scores["WAIVER_CONSENT"] >= 0.6:  # a waiver letter quotes the agreement and its covenants
