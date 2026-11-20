@@ -1,5 +1,5 @@
 name: statement_lines
-version: 2.0.0
+version: 3.0.0
 # EXTRACT_STATEMENT runs in the skills pipeline (full review WP7): the statement reader (reader.py: table reader,
 # label memory, currency and FX, cycle checks, AI check), then the accounting identities and the restatement diff.
 job_types: [EXTRACT_STATEMENT]

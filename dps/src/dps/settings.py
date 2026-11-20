@@ -59,9 +59,6 @@ class Settings(BaseSettings):
     facility_id_pattern: str = ""
     max_upload_mb: int = 50
     max_pages: int = 500  # FR-01: longer PDFs are refused at upload
-    # Per-user calls a minute (0 switches a limit off): AI answers cost money, uploads queue work.
-    ask_per_minute: int = 20
-    uploads_per_minute: int = 30
 
     # "prod" refuses DEV_HEADER at startup; set DPS_ENV=prod in every production deployment.
     env: str = "dev"
@@ -82,12 +79,11 @@ class Settings(BaseSettings):
     # months) are not reported; Spring's formula engine works them out from the printed figures. On: the old way.
     report_derived_values: bool = False
 
-    # Covenant Core, used for CP ownership checks and C5 data-events.
+    # The Spring app (CTS), used for CP ownership checks and the Spring tools (spring-tools.yaml). The DPS_CORE_*
+    # names are kept so existing deployments need no config change.
     core_base_url: str = "http://localhost:9310"
     core_timeout_seconds: float = 5.0
-    # Data source id under which DPS is registered in Core (sent with C5 events).
-    core_data_source_id: str = ""
-    # DPS → Core calls (C4 reads, C5 events). Production: client credentials (token refreshed automatically,
+    # DPS → Spring calls. Production: client credentials (token refreshed automatically,
     # wins over core_service_token). A fixed core_service_token expires; empty both: SERVICE dev headers.
     core_token_url: str = ""
     core_client_id: str = ""

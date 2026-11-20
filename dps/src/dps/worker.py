@@ -25,7 +25,7 @@ from dps.agent import usage
 from dps.db import Database, require_snapshot_isolation
 from dps.ingest.file_store import FileStore
 from dps.ingest.pipeline import QUARANTINE, IngestFailed, Ingestor
-from dps.integrations.core import CoreClient, CoreUnavailable
+from dps.integrations.spring import SpringClient, SpringUnavailable
 from dps.models import Document, Job, utcnow
 from dps.ops import observability as obs
 from dps.profiles import currency_words
@@ -39,7 +39,7 @@ ACTOR = "dps-worker"
 
 
 class Worker:
-    def __init__(self, settings: Settings, session_factory: sessionmaker[Session], core: CoreClient,
+    def __init__(self, settings: Settings, session_factory: sessionmaker[Session], core: SpringClient,
                  runners: dict | None = None, ingestor: Ingestor | None = None,
                  page_models: dict[str, dict] | None = None,
                  analyzer: Callable[[Session, Job, dict], None] | None = None,
@@ -99,7 +99,7 @@ class Worker:
             try:
                 resp = self.core._request("POST", path, json={"events": events})
                 resp.raise_for_status()
-            except (CoreUnavailable, httpx.HTTPError) as ex:
+            except (SpringUnavailable, httpx.HTTPError) as ex:
                 log.warning("event push to Spring failed (%d events, retried later): %s", len(events),
                             type(ex).__name__)
                 self._push_after = time.monotonic() + 30
@@ -273,7 +273,7 @@ class Worker:
             jobs.finish(db, job, jobs.FAILED, str(ex)[:2000] or "No line items found", "CONTENT_FAILED")
             self._sync_document(db, job)
             return
-        except (CoreUnavailable, httpx.HTTPError, OSError) as ex:
+        except (SpringUnavailable, httpx.HTTPError, OSError) as ex:
             db.rollback()
             db.refresh(job)
             jobs.release_for_retry(db, job, str(ex)[:2000], self.settings.worker_max_attempts, "SPRING_UNAVAILABLE",
@@ -398,7 +398,7 @@ def build_analyzer(settings: Settings, database: Database) -> Callable[[Session,
     return run
 
 
-def statement_deps(settings: Settings, database: Database, core: CoreClient,
+def statement_deps(settings: Settings, database: Database, core: SpringClient,
                    page_models: dict[str, dict] | None = None, gateway=None):
     """The statement reader's dependencies: the DMS store, the parser (the ingest step's page model first), the
     table reader with OCR, the AI second reader, and Core's loan currency, FX rate and borrower profile."""
@@ -426,7 +426,7 @@ def statement_deps(settings: Settings, database: Database, core: CoreClient,
         def second_reader(text, values, scale=1.0, entity=None):
             return check(text, values, completion, entity or settings.statement_entity, scale)
 
-    return StatementDeps(database.session_factory, read_file, parser, settings.core_data_source_id, heavy,
+    return StatementDeps(database.session_factory, read_file, parser, heavy,
                          lambda data, entity=None: read_pdf_statement(
                              data, ocr, entity=entity or settings.statement_entity),
                          second_reader, settings.statement_entity, settings.fiscal_year_end_month,
@@ -435,7 +435,7 @@ def statement_deps(settings: Settings, database: Database, core: CoreClient,
                          settings.report_derived_values)
 
 
-def build_pack_runner(settings: Settings, database: Database, core: CoreClient | None = None,
+def build_pack_runner(settings: Settings, database: Database, core: SpringClient | None = None,
                       page_models: dict[str, dict] | None = None):
     """The one pipeline (full review WP7): every job type that reads a document runs its skill pack in the skills
     flow (EXTRACT_AGREEMENT, EXTRACT_STATEMENT, EXTRACT_SANCTION, EXTRACT_CERTIFICATE, EXTRACT_AMENDMENT,
@@ -446,7 +446,7 @@ def build_pack_runner(settings: Settings, database: Database, core: CoreClient |
 
     gateway = from_settings(settings, database.session_factory) if llm_allowed(settings) else None
     tools = SpringTools.from_settings(settings)
-    statements = statement_deps(settings, database, core or CoreClient.from_settings(settings), page_models,
+    statements = statement_deps(settings, database, core or SpringClient.from_settings(settings), page_models,
                                 gateway)
 
     def run(db: Session, job: Job, model: dict | None, raw: bytes | None) -> None:
@@ -468,7 +468,7 @@ def main() -> None:  # pragma: no cover - process entry point
     obs.setup("dps-worker-heavy" if settings.worker_pool == "HEAVY" else "dps-worker")
     database = Database(settings.database_url)
     require_snapshot_isolation(database.engine)
-    core = CoreClient.from_settings(settings)
+    core = SpringClient.from_settings(settings)
     page_models: dict[str, dict] = {}
     ingestor = build_ingestor(settings) if settings.ingest_enabled else None
     worker = Worker(settings, database.session_factory, core, {}, ingestor, page_models,

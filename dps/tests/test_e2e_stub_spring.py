@@ -11,7 +11,7 @@ from test_phase4_skills import SERVICE, submit
 
 from dps.ingest.pipeline import Ingestor
 from dps.ingest.store import LocalStore
-from dps.integrations.core import CoreClient
+from dps.integrations.spring import SpringClient
 from dps.integrations.spring_tools import SpringTools
 from dps.parse import sandbox
 from dps.skills import runner as skills
@@ -21,7 +21,7 @@ TEXT = AGREEMENT_TEXT + "\nCorporate Identity Number: L26940MH1990PLC056789"
 
 
 def worker_with(spring: StubSpring, app, settings, tmp_path) -> Worker:
-    tools = SpringTools(CoreClient("http://spring", 5.0, client=spring.client()), retries=0)
+    tools = SpringTools(SpringClient("http://spring", 5.0, client=spring.client()), retries=0)
     store = LocalStore(settings.storage_dir, tmp_path / "staging", tmp_path / "derived")
     ingestor = Ingestor(store, "1", lambda req, hint: sandbox.parse_in_process(
         sandbox.ParseRequest(req.data, req.fmt, req.sha256, req.version_id, False)), ocr=False)

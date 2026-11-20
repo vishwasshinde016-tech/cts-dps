@@ -251,7 +251,7 @@ def test_a_spreadsheet_statement_reaches_the_ai_checker_with_its_units_line(tmp_
         return SecondReading(confirmed=["NET_WORTH"])
 
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "fs.csv", date(2026, 3, 31), ("CP-1",))
-    deps = StatementDeps(database.session_factory, lambda d: csv, FakeParser([]), "ds-dps", False, None, second)
+    deps = StatementDeps(database.session_factory, lambda d: csv, FakeParser([]), False, None, second)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
     assert seen and "Amounts in INR crore" in seen[0] and "Revenue from operations 100" in seen[0]

@@ -36,7 +36,7 @@ def acquire_leader(db: Session, name: str, holder: str, lease_seconds: int = 60)
     now = utcnow()
     until = now + timedelta(seconds=lease_seconds)
     taken = db.execute(update(Leader).where(Leader.name == name,
-                                            (Leader.holder == holder) | (Leader.until < now))
+                                            (Leader.holder == holder) | (Leader.until <= now))
                        .values(holder=holder, until=until)).rowcount
     if taken:
         db.commit()
@@ -54,7 +54,10 @@ def acquire_leader(db: Session, name: str, holder: str, lease_seconds: int = 60)
 
 
 def release_leader(db: Session, name: str, holder: str) -> None:
-    db.execute(update(Leader).where(Leader.name == name, Leader.holder == holder).values(until=utcnow()))
+    # A second in the past: on a coarse clock "now" can equal the release time, and the next holder must see the
+    # lease as ended (this made test_leader_lock_one_holder_and_takeover flaky on Windows).
+    db.execute(update(Leader).where(Leader.name == name, Leader.holder == holder)
+               .values(until=utcnow() - timedelta(seconds=1)))
     db.commit()
 
 

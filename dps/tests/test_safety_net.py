@@ -80,7 +80,7 @@ def test_a_figure_twenty_times_off_last_period_is_held_for_a_unit_check(database
     rows = [("Revenue", 9003641728.0, 1, None), ("EBITDA", 50.5, 1, None), ("Total debt", 120.0, 1, None),
             ("Net worth", 300.0, 1, None), ("Term loans from banks", 30.0, 1, None)]
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "fs.pdf", date(2025, 3, 31), ("CP-1",))
-    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), "ds-dps", False,
+    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), False,
                          lambda d: PdfStatement(rows, "Rs. in crore", [], None, ["p"]))
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})

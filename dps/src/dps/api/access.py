@@ -1,8 +1,8 @@
-"""Per-CP access, delegated to Covenant Core so both services apply one rule.
+"""Per-CP access, delegated to the Spring app (CTS) so both services apply one rule.
 
-Core's ``GET /api/v1/credit-proposals/{cpId}`` is guarded by ``CpAccessGuard``: 200 means the caller
+Spring's ``GET /api/v1/credit-proposals/{cpId}`` is guarded by ``CpAccessGuard``: 200 means the caller
 may see the CP, 404 means not. DPS forwards the caller's identity and asks. ADMIN and SERVICE
-bypass; AUDITOR and SUPPORT may read any CP but change none, as in Core (support's own repairs are the
+bypass; AUDITOR and SUPPORT may read any CP but change none, as in Spring (support's own repairs are the
 role-gated job endpoints).
 """
 
@@ -55,13 +55,13 @@ def has_bypass(principal: Principal, read_only: bool) -> bool:
 
 
 class AccessCheckUnavailable(Exception):
-    """Core could not answer (time-out, connection error, 5xx): neither a yes nor a no."""
+    """Spring could not answer (time-out, connection error, 5xx): neither a yes nor a no."""
 
 
-class CoreCpAccessChecker:
-    """Asks Core, and remembers a "yes" for ``cache_seconds`` per (user, roles, CP, read/write).
+class SpringCpAccessChecker:
+    """Asks Spring, and remembers a "yes" for ``cache_seconds`` per (user, roles, CP, read/write).
 
-    Every DPS call on a CP needs this answer, so without the cache each one also costs a Core request
+    Every DPS call on a CP needs this answer, so without the cache each one also costs a Spring request
     (review BUG-07). Only grants are kept, so a revoked CP is refused again within ``cache_seconds``.
     """
 
@@ -91,10 +91,10 @@ class CoreCpAccessChecker:
         try:
             resp = self._client.get(f"/api/v1/credit-proposals/{cp_id}", headers=headers)
         except httpx.HTTPError as exc:
-            log.warning("Core ownership check failed for %s: %s", safe_cp, type(exc).__name__)
+            log.warning("Spring ownership check failed for %s: %s", safe_cp, type(exc).__name__)
             raise AccessCheckUnavailable from exc
         if resp.status_code >= 500:
-            log.warning("Core ownership check for %s answered HTTP %s", safe_cp, resp.status_code)
+            log.warning("Spring ownership check for %s answered HTTP %s", safe_cp, resp.status_code)
             raise AccessCheckUnavailable
         if resp.status_code != 200:
             return False
@@ -108,7 +108,7 @@ class CoreCpAccessChecker:
 
 
 def require_cp(checker: CpAccessChecker, principal: Principal, cp_id: str, read_only: bool = True) -> None:
-    """Refuses with 404 (like Core) so other portfolios' CPs are not revealed; 503 when Core cannot answer."""
+    """Refuses with 404 (like Spring) so other portfolios' CPs are not revealed; 503 when Spring cannot answer."""
     try:
         ok = checker.allowed(principal, cp_id, read_only)
     except AccessCheckUnavailable as exc:

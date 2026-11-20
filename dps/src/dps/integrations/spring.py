@@ -19,11 +19,11 @@ from dps.settings import Settings
 log = logging.getLogger(__name__)
 
 
-class CoreUnavailable(Exception):
-    """Core could not be reached or answered 5xx; the caller retries later."""
+class SpringUnavailable(Exception):
+    """Spring could not be reached or answered 5xx; the caller retries later."""
 
 
-class CoreClient:
+class SpringClient:
     """Sends a client-credentials token when ``oauth`` is given (production), else a fixed ``service_token``,
     else the SERVICE dev headers."""
 
@@ -37,7 +37,7 @@ class CoreClient:
                          else {USER_HEADER: "dps-service", ROLES_HEADER: SERVICE})
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> CoreClient:
+    def from_settings(cls, settings: Settings) -> SpringClient:
         oauth = (ClientCredentialsToken(settings.core_token_url, settings.core_client_id,
                                         settings.core_client_secret, settings.core_scope)
                  if settings.core_token_url else None)
@@ -49,23 +49,23 @@ class CoreClient:
         try:
             return {"Authorization": f"Bearer {self._oauth.token()}"}
         except TokenError as exc:
-            raise CoreUnavailable(str(exc)) from exc  # the job is retried, as for any Core outage
+            raise SpringUnavailable(str(exc)) from exc  # the job is retried, as for any Spring outage
 
     def _request(self, method: str, path: str, **kw) -> httpx.Response:
         headers = {**(kw.pop("headers", None) or {}), **self._auth_headers()}
         try:
             resp = self._client.request(method, path, headers=headers, **kw)
         except httpx.HTTPError as exc:
-            raise CoreUnavailable(f"{method} {path}: {type(exc).__name__}") from exc
+            raise SpringUnavailable(f"{method} {path}: {type(exc).__name__}") from exc
         if resp.status_code >= 500:
-            raise CoreUnavailable(f"{method} {path}: HTTP {resp.status_code}")
+            raise SpringUnavailable(f"{method} {path}: HTTP {resp.status_code}")
         return resp
 
     def cp_currency(self, cp_id: str) -> str | None:
-        """Money for any country: the CP's loan currency ("LKR"), or None when Core does not answer."""
+        """Money for any country: the CP's loan currency ("LKR"), or None when Spring does not answer."""
         try:
             resp = self._request("GET", f"/api/v1/credit-proposals/{cp_id}/currency")
-        except CoreUnavailable:
+        except SpringUnavailable:
             return None
         if resp.status_code != 200:
             return None
@@ -73,12 +73,12 @@ class CoreClient:
         return code if isinstance(code, str) and len(code) == 3 else None
 
     def cp_profile(self, cp_id: str):
-        """Phase 2: what applies to one borrower (dps.profiles.LoanProfile), or None when Core does not answer."""
+        """Phase 2: what applies to one borrower (dps.profiles.LoanProfile), or None when Spring does not answer."""
         from dps.profiles import LoanProfile
 
         try:
             resp = self._request("GET", f"/api/v1/credit-proposals/{cp_id}/profile")
-        except CoreUnavailable:
+        except SpringUnavailable:
             return None
         if resp.status_code != 200:
             return None
@@ -86,14 +86,14 @@ class CoreClient:
         return LoanProfile.from_core(body) if isinstance(body, dict) else None
 
     def country_profiles(self) -> list[dict]:
-        """Phase 2: the bank's country profiles (Settings > Countries); kept for five minutes. Empty when Core
+        """Phase 2: the bank's country profiles (Settings > Countries); kept for five minutes. Empty when Spring
         does not answer: the built-in currency words still apply."""
         now = time.monotonic()
         if self._countries is not None and now - self._countries[0] < 300:
             return self._countries[1]
         try:
             resp = self._request("GET", "/api/v1/settings/countries")
-        except CoreUnavailable:
+        except SpringUnavailable:
             return []
         body = resp.json() if resp.status_code == 200 else None
         profiles = [p for p in body if isinstance(p, dict)] if isinstance(body, list) else []
@@ -106,7 +106,7 @@ class CoreClient:
         try:
             resp = self._request("GET", "/api/v1/fx/convert",
                                  params={"amount": "1", "from": from_ccy, "to": to_ccy, "date": on.isoformat()})
-        except CoreUnavailable:
+        except SpringUnavailable:
             return None
         if resp.status_code != 200:
             return None  # 422 FX_RATE_MISSING

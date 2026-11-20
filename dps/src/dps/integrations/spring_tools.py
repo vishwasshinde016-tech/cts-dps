@@ -22,7 +22,7 @@ from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
-from dps.integrations.core import CoreClient, CoreUnavailable
+from dps.integrations.spring import SpringClient, SpringUnavailable
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ FALLBACK_PARALLEL = 4
 LOOKUP_KINDS = frozenset({"FACILITY_ID", "LOAN_ACCOUNT", "CIN", "PAN", "GSTIN", "LEI", "BORROWER_NAME"})
 
 
-class CircuitOpen(CoreUnavailable):
+class CircuitOpen(SpringUnavailable):
     """The breaker is open; no call was made."""
 
 
@@ -111,7 +111,7 @@ def _chunks(items: Sequence, size: int) -> Iterable[Sequence]:
 
 
 class SpringTools:
-    def __init__(self, core: CoreClient, breaker: CircuitBreaker | None = None, retries: int = 2,
+    def __init__(self, core: SpringClient, breaker: CircuitBreaker | None = None, retries: int = 2,
                  backoff_seconds: float = 0.5, sleep: Callable[[float], None] = time.sleep) -> None:
         self._core = core
         self.breaker = breaker or CircuitBreaker()
@@ -121,22 +121,22 @@ class SpringTools:
 
     @classmethod
     def from_settings(cls, settings) -> SpringTools:
-        return cls(CoreClient.from_settings(settings))
+        return cls(SpringClient.from_settings(settings))
 
     # -- transport --------------------------------------------------------------------------------------------
 
     def _call(self, method: str, path: str, correlation_id: str | None = None, **kw):
-        """One bounded call: breaker check, retries with back-off on CoreUnavailable, breaker bookkeeping."""
+        """One bounded call: breaker check, retries with back-off on SpringUnavailable, breaker bookkeeping."""
         headers = dict(kw.pop("headers", None) or {})
         if correlation_id:
             headers["X-Correlation-Id"] = correlation_id[:128]
-        last: CoreUnavailable | None = None
+        last: SpringUnavailable | None = None
         for attempt in range(self._retries + 1):
             if not self.breaker.allow():
                 raise CircuitOpen(f"{method} {path}: circuit open")
             try:
                 resp = self._core._request(method, path, headers=headers or None, **kw)
-            except CoreUnavailable as exc:
+            except SpringUnavailable as exc:
                 self.breaker.failure()
                 last = exc
                 if attempt < self._retries:
@@ -144,7 +144,7 @@ class SpringTools:
                 continue
             self.breaker.success()
             return resp
-        raise last or CoreUnavailable(f"{method} {path}")
+        raise last or SpringUnavailable(f"{method} {path}")
 
     # -- formulas ---------------------------------------------------------------------------------------------
 
@@ -155,7 +155,7 @@ class SpringTools:
         for chunk in _chunks(list(items), MAX_BATCH):
             try:
                 out.update(self._validate_chunk(chunk, correlation_id, require_boolean))
-            except CoreUnavailable as exc:
+            except SpringUnavailable as exc:
                 log.warning("formula validation unavailable for %d items: %s", len(chunk), exc)
                 out.update({fid: FormulaCheck(fid, False, code=UNAVAILABLE) for fid, _ in chunk})
         return out
@@ -182,7 +182,7 @@ class SpringTools:
                 resp = self._call("POST", "/api/v1/formulas/validate", correlation_id,
                                   json={"expression": expr, "requireBoolean": require_boolean})
                 resp.raise_for_status()
-            except CoreUnavailable:
+            except SpringUnavailable:
                 return FormulaCheck(fid, False, code=UNAVAILABLE)
             body = resp.json()
             return FormulaCheck(fid, True, bool(body.get("valid")), tuple(body.get("errors") or ()))
@@ -206,9 +206,9 @@ class SpringTools:
             try:
                 resp = self._call("POST", "/api/v1/dps-tools/lookups", correlation_id, json=body)
                 if resp.status_code == 404:
-                    raise CoreUnavailable("lookup tool not deployed")
+                    raise SpringUnavailable("lookup tool not deployed")
                 resp.raise_for_status()
-            except CoreUnavailable as exc:
+            except SpringUnavailable as exc:
                 log.warning("identifier lookup unavailable for %d items: %s", len(chunk), exc)
                 out.update({i: LookupMatch(i, False, code=UNAVAILABLE) for i, _, _ in chunk})
                 continue
@@ -223,7 +223,7 @@ class SpringTools:
         headers = {"If-None-Match": self._library.etag} if self._library.etag else None
         try:
             resp = self._call("GET", "/api/v1/dps-tools/covenant-library", headers=headers)
-        except CoreUnavailable as exc:
+        except SpringUnavailable as exc:
             log.warning("covenant library unavailable, using cached copy: %s", exc)
             return list(self._library.items), False
         if resp.status_code == 304:

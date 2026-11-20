@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 
 from dps import __version__, errors
 from dps.advisory.advisor import Advisor
-from dps.api.access import CoreCpAccessChecker, CpAccessChecker
+from dps.api.access import CpAccessChecker, SpringCpAccessChecker
 from dps.api.auth import Authenticator
 from dps.api.evidence import router as evidence_router
 from dps.api.jobs import router as job_router
@@ -42,7 +42,7 @@ def create_app(settings: Settings | None = None, *, cp_checker: CpAccessChecker 
             return await call_next(request)
         finally:
             reset_tenant(token)
-    app.state.cp_checker = cp_checker or CoreCpAccessChecker(settings.core_base_url, settings.core_timeout_seconds)
+    app.state.cp_checker = cp_checker or SpringCpAccessChecker(settings.core_base_url, settings.core_timeout_seconds)
     # Phase 3a: every model call is masked, cached and kept within the monthly budget (ai_guard).
     # Phase 3: through the model gateway (routes, retries, breaker, budgets) like every other model call.
     completion = None

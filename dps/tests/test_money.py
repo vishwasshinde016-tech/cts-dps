@@ -61,7 +61,7 @@ def run(database, rows, loan="LKR", rate=None, cps=("CP-LK",)):
         return rate
 
     currencies = loan if isinstance(loan, dict) else dict.fromkeys(cps, loan)
-    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(rows), FakeParser([]), "ds-dps", True,
+    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(rows), FakeParser([]), True,
                          loan_currency=currencies.get, fx_rate=fx, report_derived_values=True)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
@@ -123,7 +123,7 @@ def test_flow_b_without_core_keeps_inr_crore(database):
     rows = [("Amounts in INR lakhs", None), ("EBITDA", 500), ("Short-term borrowings", 300),
             ("Long-term borrowings", 700), ("Total equity", 2000), ("Cash and cash equivalents", 100)]
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "fs.xlsx", date(2026, 3, 31), ("CP-1",))
-    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(rows), FakeParser([]), "ds-dps", True)
+    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(rows), FakeParser([]), True)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
     reviewed_if_clean(flow)

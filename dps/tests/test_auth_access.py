@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
-from dps.api.access import AccessCheckUnavailable, CoreCpAccessChecker, require_cp
+from dps.api.access import AccessCheckUnavailable, SpringCpAccessChecker, require_cp
 from dps.api.auth import Authenticator, Principal
 from dps.errors import ApiError
 from dps.ingest.file_store import FileStore
@@ -108,7 +108,7 @@ def test_string_roles_claim(jwt_client):
 # ---------- Core-delegated CP access ----------
 
 def checker_with(handler):
-    return CoreCpAccessChecker("http://core", 1.0, client=httpx.Client(
+    return SpringCpAccessChecker("http://core", 1.0, client=httpx.Client(
         base_url="http://core", transport=httpx.MockTransport(handler)))
 
 

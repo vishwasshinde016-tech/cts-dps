@@ -168,7 +168,7 @@ def flow_with_reader(database, reader, name="fs.pdf", pages=None):
     from statement_shim import StatementDeps, StatementProcessingFlow
 
     doc_id = add_document(database, "FINANCIAL_STATEMENT", name, date(2026, 3, 31), ("CP-1",))
-    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser(pages or []), "ds-dps", False, reader)
+    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser(pages or []), False, reader)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
     return reviewed_if_clean(flow)

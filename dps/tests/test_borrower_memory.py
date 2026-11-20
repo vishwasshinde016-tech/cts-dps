@@ -56,7 +56,7 @@ def test_a_confirmed_wording_is_remembered_and_used_for_the_next_statement(clien
     rows = [("Term loans (non-current portion)", 280.0, 2, None), ("EBITDA", 50.0, 1, None),
             ("Net worth", 300.0, 1, None), ("Total debt", 280.0, 1, None)]
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "fy27.pdf", date(2027, 3, 31), ("CP-1",))
-    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), "ds-dps", False,
+    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), False,
                          lambda d: PdfStatement(rows, "Rs. in crore", [], None, ["p"], [1]))
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j2", "document_id": doc_id})
@@ -88,7 +88,7 @@ def test_memory_that_disagrees_with_the_catalog_holds_the_statement(client, app)
     rows = [("Short-term borrowings", 40.0, 2, None), ("EBITDA", 50.0, 1, None), ("Net worth", 300.0, 1, None),
             ("Total debt", 40.0, 1, None)]
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "fy27.pdf", date(2027, 3, 31), ("CP-1",))
-    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), "ds-dps", False,
+    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), False,
                          lambda d: PdfStatement(rows, "Rs. in crore", [], None, ["p"], [1]))
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j4", "document_id": doc_id})
