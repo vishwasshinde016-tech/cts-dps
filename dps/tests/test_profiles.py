@@ -35,7 +35,7 @@ def database(tmp_path) -> Database:
 
 def run(database, data: bytes, name: str, profiles: dict, cps=("CP-1",), rate=None):
     doc_id = add_document(database, "FINANCIAL_STATEMENT", name, date(2026, 3, 31), cps)
-    deps = StatementDeps(database.session_factory, lambda d: data, FakeParser([]), "ds-dps", True,
+    deps = StatementDeps(database.session_factory, lambda d: data, FakeParser([]), True,
                          loan_profile=profiles.get, currency_words=lambda: currency_words(PROFILES),
                          fx_rate=lambda s, d, on: rate)
     flow = StatementProcessingFlow(deps)

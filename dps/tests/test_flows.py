@@ -13,7 +13,7 @@ from statement_shim import StatementDeps, StatementProcessingFlow, reviewed_if_c
 
 from dps import jobs
 from dps.db import Base, Database
-from dps.integrations.core import CoreClient, CoreUnavailable
+from dps.integrations.spring import SpringClient, SpringUnavailable
 from dps.models import Document, DocumentCpLink, Job, Run, StatementValue, utcnow
 from dps.parse.engine import Page
 from dps.settings import Settings
@@ -124,7 +124,7 @@ def xlsx_bytes(rows: list[tuple]) -> bytes:
 def statement(database: Database, data: bytes, name: str, heavy: bool = True, pages=None, cps=("CP-1",),
               as_of=date(2026, 3, 31), reviewed: bool = True, derived: bool = False):
     doc_id = add_document(database, "FINANCIAL_STATEMENT", name, as_of, cps)
-    deps = StatementDeps(database.session_factory, lambda d: data, FakeParser(pages or []), "ds-dps", heavy,
+    deps = StatementDeps(database.session_factory, lambda d: data, FakeParser(pages or []), heavy,
                          report_derived_values=derived)  # G22: the figures DPS works out only with the switch on
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
@@ -155,7 +155,7 @@ def test_a_statement_stores_the_approved_printed_figures_only(database):
 
 def test_the_derived_values_switch_keeps_the_old_figures(database):
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "fs.xlsx", date(2026, 3, 31))
-    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(GOOD_ROWS), FakeParser([]), "ds-dps", True,
+    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(GOOD_ROWS), FakeParser([]), True,
                          report_derived_values=True)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
@@ -171,7 +171,7 @@ def test_flow_b_new_upload_supersedes_and_rerun_is_idempotent(database):
     assert values(database)["EBITDA"].value == 6.0
     assert len([v for v in values(database, current=False).values()]) >= 1
     # Re-running the same document replaces its own rows instead of superseding them again.
-    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(newer), FakeParser([]), "ds-dps", True)
+    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(newer), FakeParser([]), True)
     StatementProcessingFlow(deps).kickoff(inputs={"job_id": "j2", "document_id": doc_id})
     with database.session_factory() as s:
         rows = s.scalars(select(StatementValue).where(StatementValue.key == "EBITDA")).all()
@@ -186,7 +186,7 @@ def test_flow_b_csv_needs_review_then_reports_on_resume(database):
     assert flow.state.issues == ["MISSING_LINE_ITEMS: TOTAL_DEBT", "UNIT_NOT_STATED: amounts read as INR crore"]
     assert doc_status(database, doc_id) == "NEEDS_REVIEW" and values(database) == {}
 
-    deps = StatementDeps(database.session_factory, lambda d: csv_data, FakeParser([]), "ds-dps", True)
+    deps = StatementDeps(database.session_factory, lambda d: csv_data, FakeParser([]), True)
     resumed = StatementProcessingFlow(deps)
     resumed.kickoff(inputs={"id": flow.state.id, "job_id": "j1", "document_id": doc_id})
     assert resumed.state.outcome == "REPORTED" and values(database)["EBITDA"].value == 120
@@ -222,7 +222,7 @@ def test_flow_b_net_interest_waits_once_per_borrower(database):
     assert flow.state.outcome == "NEEDS_REVIEW"
     assert flow.state.issues == ["INTEREST_IS_NET: 'Interest expense, net'"]
 
-    deps = StatementDeps(database.session_factory, lambda d: csv_data, FakeParser([]), "ds-dps", True)
+    deps = StatementDeps(database.session_factory, lambda d: csv_data, FakeParser([]), True)
     resumed = StatementProcessingFlow(deps)
     resumed.kickoff(inputs={"id": flow.state.id, "job_id": "j1", "document_id": doc_id})
     assert resumed.state.outcome == "REPORTED" and values(database)["INTEREST_PAID"].value == 19
@@ -256,7 +256,7 @@ class Ingestor:
 
 def settings(tmp_path: Path, **kw) -> Settings:
     return Settings(database_url=f"sqlite:///{tmp_path / 'flows.db'}", storage_dir=tmp_path / "store",
-                    core_data_source_id="ds-dps", worker_max_attempts=2, worker_retry_base_seconds=0, **kw)
+                    worker_max_attempts=2, worker_retry_base_seconds=0, **kw)
 
 
 def add_job(database: Database, doc_id: str, flow: str = "SKILL_PACK", pool: str = "STANDARD",
@@ -300,7 +300,7 @@ def test_worker_retries_transient_errors_then_fails(database, tmp_path):
     job_id = add_job(database, add_document(database))
 
     def down(db, j, model, raw):
-        raise CoreUnavailable("GET /api/v1/covenants: ConnectError")
+        raise SpringUnavailable("GET /api/v1/covenants: ConnectError")
 
     w = worker(tmp_path, database, down)
     w.run_once()
@@ -334,7 +334,7 @@ def test_worker_moves_statements_to_the_heavy_pool_and_fails_empty_ones(database
                     job_type="EXTRACT_STATEMENT")
     files = {"scan.pdf": b"pdf", "empty.csv": b"a,b\n"}
     deps = Deps(database.session_factory, lambda d: files[d.file_name], FakeParser([Page(1, "", "NONE", 0.0)]),
-                "ds-dps", False)
+                False)
 
     def runner(db, j, model, raw):
         skills.finish(db, j, skills.run_job(j, model, None, None, db, "1", raw, statement_deps=deps))
@@ -368,7 +368,7 @@ def test_claim_takes_expired_leases_and_respects_attempts(database):
 def test_the_pack_runner_wires_the_statement_reader(database, tmp_path):
     from dps.extraction.statement_pdf import PdfStatement  # noqa: F401 - the reader the deps point at
 
-    core = CoreClient("http://core", 1.0, "")
+    core = SpringClient("http://core", 1.0, "")
     deps = statement_deps(settings(tmp_path, ocr_enabled=False), database, core)
     assert deps.pdf_reader is not None and deps.heavy_pool is False and deps.report_derived_values is False
     assert deps.loan_currency == core.cp_currency and deps.fx_rate == core.fx_rate
@@ -389,8 +389,8 @@ def test_an_agreement_job_holds_a_covenant_the_rules_cannot_read(tmp_path):
 
 # ---------- Core client ----------
 
-def core_client(handler) -> CoreClient:
-    return CoreClient("http://core", 1.0, "", client=httpx.Client(base_url="http://core",
+def core_client(handler) -> SpringClient:
+    return SpringClient("http://core", 1.0, "", client=httpx.Client(base_url="http://core",
                                                                    transport=httpx.MockTransport(handler)))
 
 
@@ -421,7 +421,7 @@ def test_core_client_reads_what_the_statement_reader_needs_as_the_service():
     assert len(seen) == 4
     assert c.fx_rate("USD", "LKR", date(2026, 3, 31)) == 300.0 and c.fx_rate("EUR", "LKR", date(2026, 3, 31)) is None
     assert seen[0].headers["X-Roles"] == "SERVICE"
-    bearer = CoreClient("http://core", 1.0, "tok", client=httpx.Client(transport=httpx.MockTransport(handler)))
+    bearer = SpringClient("http://core", 1.0, "tok", client=httpx.Client(transport=httpx.MockTransport(handler)))
     assert bearer._headers == {"Authorization": "Bearer tok"}
 
 
@@ -432,8 +432,8 @@ def test_core_client_never_fails_a_statement_when_spring_is_down():
     c = core_client(offline)
     assert c.cp_currency("CP-1") is None and c.cp_profile("CP-1") is None and c.country_profiles() == []
     assert c.fx_rate("USD", "INR", date(2026, 3, 31)) is None
-    with pytest.raises(CoreUnavailable):
-        c._request("GET", "/x")  # noqa: SLF001 - the transport error is a CoreUnavailable
+    with pytest.raises(SpringUnavailable):
+        c._request("GET", "/x")  # noqa: SLF001 - the transport error is a SpringUnavailable
 
 
 def test_renew_lease_extends_only_the_holders_lock(database):

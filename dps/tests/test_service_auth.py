@@ -5,8 +5,8 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
-from dps.integrations.core import CoreClient, CoreUnavailable
 from dps.integrations.service_auth import ClientCredentialsToken, TokenError
+from dps.integrations.spring import SpringClient, SpringUnavailable
 from dps.settings import Settings
 
 TOKEN_URL = "https://login.example/tenant/oauth2/v2.0/token"
@@ -92,23 +92,23 @@ def test_core_client_sends_the_oauth_token_and_maps_token_failures_to_core_unava
 
     oauth = provider(token_endpoint([httpx.Response(200, json={"access_token": "t1", "expires_in": 3600})], []),
                      Clock())
-    client = CoreClient("http://core", 1.0, client=httpx.Client(base_url="http://core",
+    client = SpringClient("http://core", 1.0, client=httpx.Client(base_url="http://core",
                                                                 transport=httpx.MockTransport(core)), oauth=oauth)
     assert client.cp_currency("CP-1") == "INR"
     assert calls == ["Bearer t1"]
 
     broken = provider(token_endpoint([httpx.Response(500)], []), Clock())
-    failing = CoreClient("http://core", 1.0, client=httpx.Client(base_url="http://core",
+    failing = SpringClient("http://core", 1.0, client=httpx.Client(base_url="http://core",
                                                                  transport=httpx.MockTransport(core)), oauth=broken)
-    with pytest.raises(CoreUnavailable, match="HTTP 500"):
+    with pytest.raises(SpringUnavailable, match="HTTP 500"):
         failing._request("GET", "/api/v1/credit-proposals/CP-1/currency")  # noqa: SLF001
 
 
 def test_from_settings_picks_oauth_only_when_configured():
-    plain = CoreClient.from_settings(Settings(core_service_token="fixed"))
+    plain = SpringClient.from_settings(Settings(core_service_token="fixed"))
     assert plain._oauth is None
     assert plain._auth_headers() == {"Authorization": "Bearer fixed"}
 
-    oauth = CoreClient.from_settings(Settings(core_token_url=TOKEN_URL, core_client_id="dps-app",
+    oauth = SpringClient.from_settings(Settings(core_token_url=TOKEN_URL, core_client_id="dps-app",
                                               core_client_secret="s3cret", core_scope="api://covenant/.default"))
     assert isinstance(oauth._oauth, ClientCredentialsToken)

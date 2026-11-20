@@ -53,7 +53,7 @@ def _schema(op: dict, where: str) -> dict:
 
 
 class StubSpring:
-    """Call ``client()`` for an httpx client to give ``CoreClient``; ``calls`` records (method, path, headers, body)."""
+    """Call ``client()`` for an httpx client for ``SpringClient``; ``calls`` holds (method, path, headers, body)."""
 
     def __init__(self, down: bool = False) -> None:
         self.spec = yaml.safe_load(CONTRACT.read_text(encoding="utf-8"))

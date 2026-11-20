@@ -862,7 +862,7 @@ If the model is down, the job does not fail: it falls back to the rules, and the
 - **Bounded:** timeout, retries and a circuit breaker.
 - **Degrading:** if Spring is down, the field gets `SPRING_UNAVAILABLE` and goes to review; the job carries on.
 
-DPS's own identity for these calls: [`dps/src/dps/integrations/service_auth.py`](../../dps/src/dps/integrations/service_auth.py). Other Core calls: [`dps/src/dps/integrations/core.py`](../../dps/src/dps/integrations/core.py). Tests run against a stand-in Spring: [`dps/tests/stub_spring.py`](../../dps/tests/stub_spring.py).
+DPS's own identity for these calls: [`dps/src/dps/integrations/service_auth.py`](../../dps/src/dps/integrations/service_auth.py). Other Core calls: [`dps/src/dps/integrations/spring.py`](../../dps/src/dps/integrations/spring.py). Tests run against a stand-in Spring: [`dps/tests/stub_spring.py`](../../dps/tests/stub_spring.py).
 
 ---
 
@@ -1393,7 +1393,7 @@ Java rules as a Python tool: one batched call, degrades to review if Spring is d
  155          for chunk in _chunks(list(items), MAX_BATCH):
  156              try:
  157                  out.update(self._validate_chunk(chunk, correlation_id, require_boolean))
- 158              except CoreUnavailable as exc:
+ 158              except SpringUnavailable as exc:
  159                  log.warning("formula validation unavailable for %d items: %s", len(chunk), exc)
  160                  out.update({fid: FormulaCheck(fid, False, code=UNAVAILABLE) for fid, _ in chunk})
  161          return out

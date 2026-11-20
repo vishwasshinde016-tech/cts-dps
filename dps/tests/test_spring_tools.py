@@ -9,7 +9,7 @@ import httpx
 import pytest
 import yaml
 
-from dps.integrations.core import CoreClient
+from dps.integrations.spring import SpringClient
 from dps.integrations.spring_tools import MAX_BATCH, UNAVAILABLE, CircuitBreaker, SpringTools
 
 CONTRACT = Path(__file__).resolve().parents[2] / "contracts" / "spring-tools.yaml"
@@ -23,7 +23,7 @@ def make(handler, **kw) -> tuple[SpringTools, list[httpx.Request]]:
         return handler(req)
 
     client = httpx.Client(base_url="http://spring", transport=httpx.MockTransport(wrapped))
-    core = CoreClient("http://spring", 5.0, client=client)
+    core = SpringClient("http://spring", 5.0, client=client)
     return SpringTools(core, sleep=lambda _s: None, **kw), seen
 
 

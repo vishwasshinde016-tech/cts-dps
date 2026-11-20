@@ -73,7 +73,7 @@ def test_without_the_ai_reader_an_agreement_in_another_language_waits():
 def statement(database, reader=None):
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "fr.pdf", date(2026, 12, 31), ("CP-1",))
     deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([Page(1, FRENCH_STATEMENT, "TEXT",
-                                                                                         1.0)]), "ds-dps", True,
+                                                                                         1.0)]), True,
                          second_reader=reader)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})

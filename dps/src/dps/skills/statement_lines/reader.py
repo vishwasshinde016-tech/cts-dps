@@ -90,7 +90,6 @@ class StatementDeps:
     session_factory: sessionmaker[Session]
     read_file: Callable[[Document], bytes]
     parser: object
-    data_source_id: str  # the bank app's data-source id (kept for callers; nothing is pushed to Core any more)
     heavy_pool: bool
     # Table-aware PDF reader (extraction.statement_pdf.read_pdf_statement); None: plain text lines only.
     pdf_reader: Callable[[bytes], PdfStatement] | None = None

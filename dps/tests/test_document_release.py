@@ -19,7 +19,7 @@ from test_phase2_ingest import text_pdf, xls_bytes, xlsx_bytes
 from test_phase4_skills import AMENDMENT, CERTIFICATE, SANCTION, submit
 
 from dps import jobs
-from dps.integrations.core import CoreClient
+from dps.integrations.spring import SpringClient
 from dps.models import Document, Job, StatementValue, utcnow
 from dps.skills import load, runner
 from dps.worker import Worker, build_analyzer, build_ingestor, build_pack_runner
@@ -105,8 +105,8 @@ def _worker(app, settings, tmp_path, monkeypatch):
         return stub.handle(request)
 
     http = httpx.Client(base_url="http://spring", transport=httpx.MockTransport(core_response))
-    core = CoreClient("http://spring", 5, client=http)
-    monkeypatch.setattr(CoreClient, "from_settings", classmethod(lambda cls, settings: core))
+    core = SpringClient("http://spring", 5, client=http)
+    monkeypatch.setattr(SpringClient, "from_settings", classmethod(lambda cls, settings: core))
     settings.derived_dir = tmp_path / "derived"
     settings.staging_dir = tmp_path / "staging"
     db = app.state.db

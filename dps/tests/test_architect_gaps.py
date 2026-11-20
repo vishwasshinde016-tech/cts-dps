@@ -140,7 +140,7 @@ def test_seals_go_to_their_own_folder(app, settings, tmp_path):
 def test_events_are_pushed_to_spring_in_order_at_least_once(client, app, settings):
     import httpx
 
-    from dps.integrations.core import CoreClient
+    from dps.integrations.spring import SpringClient
     from dps.models import PushCursor
     from dps.worker import Worker
 
@@ -152,7 +152,7 @@ def test_events_are_pushed_to_spring_in_order_at_least_once(client, app, setting
         received.extend(json.loads(req.content)["events"])
         return httpx.Response(202)
 
-    core = CoreClient("http://spring", 5, client=httpx.Client(base_url="http://spring",
+    core = SpringClient("http://spring", 5, client=httpx.Client(base_url="http://spring",
                                                               transport=httpx.MockTransport(handler)))
     submit(client, app, "EXTRACT_CERTIFICATE", text_pdf([CERTIFICATE]), ".pdf", "application/pdf", "push-1",
            "key-push-1")

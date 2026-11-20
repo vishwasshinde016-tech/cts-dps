@@ -335,7 +335,7 @@ def test_flow_b_holds_a_statement_the_second_reader_disagrees_with(database):
                                            "source": "second reader"}])
 
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "fs.pdf", date(2026, 3, 31), ("CP-1",))
-    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), "ds-dps", False,
+    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), False,
                          lambda d: PdfStatement(rows, "Rs. in crore", [], None, ["page one", "page two"], [4, 5]),
                          second)
     flow = StatementProcessingFlow(deps)
@@ -431,7 +431,7 @@ def test_statement_review_reasons_and_unit_are_stored_on_the_document(database):
     rows = [("Revenue", 100.0, 1, None), ("EBITDA", 50.5, 1, None), ("Total debt", 120.0, 1, None),
             ("Net worth", 300.0, 1, None)]
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "fs.pdf", date(2026, 3, 31), ("CP-1",))
-    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), "ds-dps", False,
+    deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), False,
                          lambda d: PdfStatement(rows, "Rs. in lakhs", [1], 0.95, ["p"]))
     from statement_shim import review_of
 

@@ -129,7 +129,7 @@ def test_statement_in_other_units_is_held_before_any_value_is_reported(database)
         s.commit()
     from test_flows import FakeParser, StatementDeps, StatementProcessingFlow
 
-    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(GOOD_ROWS), FakeParser([]), "ds-dps", True)
+    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(GOOD_ROWS), FakeParser([]), True)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
     assert flow.state.outcome == "NEEDS_REVIEW"
