@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import importlib.util
 import os
-from datetime import date
 
 import pytest
 from conftest import h
@@ -217,22 +216,3 @@ def _read(db, after, now=None):
     rows, cursor = feed.read(db, after, 10, now=now)
     return [e["jobId"] for e in rows], cursor
 
-
-def test_wp7_old_rows_still_serve_their_results(client, app):
-    """Jobs read before the move keep their results (read-only, from the old tables)."""
-    with app.state.db.session_factory() as s:
-        from dps.models import Document
-
-        doc = Document(type="FINANCIAL_STATEMENT", file_name="fs.csv", storage_path="x", sha256="b" * 64,
-                       size_bytes=1, uploaded_by="u", as_of_date=date(2026, 3, 31))
-        s.add(doc)
-        s.flush()
-        job = Job(document_id=doc.id, flow="STATEMENT_PROCESSING", job_type="EXTRACT_STATEMENT", status=jobs.DONE)
-        s.add(job)
-        s.flush()
-        s.add(StatementValue(cp_id="CP-1", key="EBITDA", value=5.0, unit="INR_CR", as_of_date=date(2026, 3, 31),
-                             source_type="DOCUMENT", document_id=doc.id))
-        s.commit()
-        job_id = job.id
-    res = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
-    assert [f["name"] for f in res["fields"]] == ["EBITDA"]

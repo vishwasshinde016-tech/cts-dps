@@ -139,7 +139,7 @@ class Job(Base):
 
     id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
     document_id: Mapped[str] = mapped_column(ForeignKey("dps_document.id"))
-    # SKILL_PACK | ANALYZE (rows queued before the one pipeline: AGREEMENT_INTAKE | STATEMENT_PROCESSING)
+    # SKILL_PACK | ANALYZE
     flow: Mapped[str] = mapped_column(Varchar(32))
     # QUEUED | RUNNING | RETRY_WAIT | NEEDS_REVIEW | DONE | FAILED | DEAD | CANCELLED
     status: Mapped[str] = mapped_column(Varchar(16), default="QUEUED")
@@ -148,7 +148,6 @@ class Job(Base):
     current_step: Mapped[str | None] = mapped_column(Varchar(32))
     error: Mapped[str | None] = mapped_column(Text)
     steps_json: Mapped[str] = mapped_column(Text, default="[]")
-    flow_state_id: Mapped[str | None] = mapped_column(Varchar(64))
     locked_by: Mapped[str | None] = mapped_column(Varchar(64))
     locked_until: Mapped[datetime | None] = mapped_column(UtcDateTime())
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
@@ -350,33 +349,6 @@ class AuditSeal(Base):
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
 
 
-class ExtractedTerm(Base):
-    __tablename__ = "dps_extracted_term"
-
-    id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
-    document_id: Mapped[str] = mapped_column(ForeignKey("dps_document.id"), index=True)
-    metric_raw: Mapped[str] = mapped_column(Unicode(128))
-    name: Mapped[str | None] = mapped_column(Unicode(200))  # as people should read it ("Maximum Loan to Value")
-    covenant_master_id: Mapped[str | None] = mapped_column(Varchar(64))
-    expression: Mapped[str | None] = mapped_column(Unicode(2000))
-    operator: Mapped[str | None] = mapped_column(Varchar(4))
-    threshold: Mapped[float | None] = mapped_column(Float)
-    unit: Mapped[str | None] = mapped_column(Varchar(32))
-    frequency: Mapped[str | None] = mapped_column(Varchar(16))
-    category: Mapped[str] = mapped_column(Varchar(16), default="FINANCIAL")
-    confidence: Mapped[float] = mapped_column(Float, default=0.0)
-    method: Mapped[str] = mapped_column(Varchar(8), default="REGEX")
-    status: Mapped[str] = mapped_column(Varchar(16), default="PROPOSED")
-    issues_json: Mapped[str] = mapped_column(Text, default="[]")
-    page: Mapped[int | None] = mapped_column(Integer)
-    quote: Mapped[str | None] = mapped_column(Unicode(500))
-    # Phase 3b-1: step-down levels, test months and cure right (mapping.Proposal.schedule), as JSON; None: none
-    schedule_json: Mapped[str | None] = mapped_column(UnicodeText)
-    reviewed_by: Mapped[str | None] = mapped_column(Varchar(255))
-    review_note: Mapped[str | None] = mapped_column(Unicode(2000))
-    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
-
-
 class LabelMemory(Base):
     """Phase 3 borrower memory: a statement wording a person confirmed for a CP's standard line.
 
@@ -396,29 +368,6 @@ class LabelMemory(Base):
     document_id: Mapped[str | None] = mapped_column(Varchar(36))
     confirmed_by: Mapped[str] = mapped_column(Varchar(255))
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
-
-
-class LearnedWording(Base):
-    """Phase 4 learning loop: a wording an administrator added to DPS's catalog from reviewers' decisions.
-
-    STATEMENT_LINE: a statement line wording for a standard line ("Borrowings - non-current" -> LT_DEBT), usually
-    one several borrowers' reviewers confirmed. COVENANT: a covenant name for a metric ("Debt Yield" -> a metric).
-    Used by every new document; retiring it stops that at once. Both actions are audited.
-    """
-
-    __tablename__ = "dps_learned_wording"
-    __table_args__ = (Index("ux_dps_learned_wording", "kind", "phrase", unique=True),)
-
-    id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
-    kind: Mapped[str] = mapped_column(Varchar(16))  # STATEMENT_LINE | COVENANT
-    phrase: Mapped[str] = mapped_column(Unicode(300))
-    key: Mapped[str] = mapped_column(Varchar(64))
-    evidence: Mapped[int] = mapped_column(Integer, default=0)  # reviewer confirmations behind it when added
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-    added_by: Mapped[str] = mapped_column(Varchar(255))
-    added_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
-    retired_by: Mapped[str | None] = mapped_column(Varchar(255))
-    retired_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
 
 
 class StatementValue(Base):
@@ -447,20 +396,6 @@ class StatementValue(Base):
     entered_by: Mapped[str | None] = mapped_column(Varchar(255))
     superseded: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
-
-
-class EventOutbox(Base):
-    """Events for Core (C5 data-events), sent by a worker with retries (transactional outbox)."""
-
-    __tablename__ = "dps_event_outbox"
-
-    id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
-    type: Mapped[str] = mapped_column(Varchar(32))
-    payload_json: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
-    sent_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
-    attempts: Mapped[int] = mapped_column(Integer, default=0)
-    last_error: Mapped[str | None] = mapped_column(Text)
 
 
 class AuditEvent(Base):
@@ -552,16 +487,3 @@ class TraceEvent(Base):
     summary: Mapped[str] = mapped_column(Unicode(1000))
     detail_json: Mapped[str] = mapped_column(UnicodeText, default="{}")
 
-
-class FlowState(Base):
-    """Saved CrewAI Flow state (backing store for the SQL FlowPersistence, R1)."""
-
-    __tablename__ = "dps_flow_state"
-    __table_args__ = (Index("ix_dps_flow_state_uuid", "flow_uuid", "saved_at"),)
-
-    id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
-    flow_uuid: Mapped[str] = mapped_column(Varchar(64))
-    method_name: Mapped[str] = mapped_column(Varchar(64))
-    state_json: Mapped[str] = mapped_column(Text)
-    pending_feedback_json: Mapped[str | None] = mapped_column(Text)
-    saved_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)

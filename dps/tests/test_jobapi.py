@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 import jsonschema
@@ -15,7 +15,7 @@ from referencing import Registry, Resource
 
 from dps import jobs
 from dps.api.jobs import SCHEMA_NAMES
-from dps.models import Batch, Document, EventFeed, ExtractedTerm, Job, JobAttempt, StatementValue, utcnow
+from dps.models import Batch, Document, EventFeed, Job, JobAttempt, utcnow
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "contracts"
@@ -211,61 +211,16 @@ def test_result_waits_then_matches_the_contract(client, app):
     r = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE)
     assert r.status_code == 404 and r.json()["code"] == "RESULT_NOT_READY"
     with app.state.db.session_factory() as s:
-        job = s.get(Job, job_id)
-        job.flow = "AGREEMENT_INTAKE"  # a job read before the one pipeline (WP7): its result is in the old tables
-        s.add(ExtractedTerm(document_id=job.document_id, metric_raw="DSCR", covenant_master_id="m1",
-                            expression="DSCR >= 1.25", operator=">=", threshold=1.25, frequency="QUARTERLY",
-                            category="FINANCIAL", confidence=0.95, status="PUBLISHED", page=3,
-                            quote="not less than 1.25"))
-        s.add(ExtractedTerm(document_id=job.document_id, metric_raw="LEVERAGE", category="CANDIDATE",
-                            confidence=0.4, status="NEEDS_REVIEW", page=9, quote="shall not exceed",
-                            issues_json='["LOW_CONFIDENCE: check this"]'))
-        jobs.finish(s, job, jobs.DONE)
+        jobs.finish(s, s.get(Job, job_id), jobs.DONE)  # ended without saving a run: held for a person, never invented
     r = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE)
     assert r.status_code == 200 and r.headers["ETag"]
     result = r.json()
     check("result", result)
-    assert result["document"]["route"] == "NEEDS_REVIEW"
-    assert [f["status"] for f in result["fields"]] == ["AUTO_ACCEPTED", "NEEDS_REVIEW"]
-    assert result["fields"][1]["issues"] == [{"code": "LOW_CONFIDENCE", "message": "check this"}]
+    assert result["document"]["route"] == "NEEDS_REVIEW" and result["fields"] == []
+    assert [w["code"] for w in result["warnings"]] == ["NOTHING_FOUND"]
     again = client.get(f"/dps/v1/jobs/{job_id}/result", headers={**SERVICE, "If-None-Match": r.headers["ETag"]})
     assert again.status_code == 304
 
-
-def test_statement_result_lists_values_with_cells(client, app):
-    job_id = submit(client, request_body(app, job_type="EXTRACT_STATEMENT")).json()["jobId"]
-    with app.state.db.session_factory() as s:
-        job = s.get(Job, job_id)
-        job.flow = "STATEMENT_PROCESSING"  # a job read before the one pipeline (WP7): its result is in the old tables
-        s.add(StatementValue(cp_id="CP-1", key="EBITDA", value=50.0, unit="INR_CR", as_of_date=date(2026, 3, 31),
-                             source_type="DOCUMENT", document_id=job.document_id, cell="BS!C14"))
-        jobs.finish(s, job, jobs.DONE)
-    result = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
-    check("result", result)
-    assert result["fields"][0]["source"]["cellRef"] == "BS!C14" and result["fields"][0]["confidence"] is None
-
-
-def test_statement_lines_not_found_are_listed_never_dropped(client, app):
-    from dps.catalog import lines_not_found
-
-    job_id = submit(client, request_body(app, job_type="EXTRACT_STATEMENT")).json()["jobId"]
-    with app.state.db.session_factory() as s:
-        job = s.get(Job, job_id)
-        job.flow = "STATEMENT_PROCESSING"  # a job read before the one pipeline (WP7): its result is in the old tables
-        s.add(StatementValue(cp_id="CP-1", key="EBITDA", value=50.0, unit="INR_CR", as_of_date=date(2026, 3, 31),
-                             source_type="DOCUMENT", document_id=job.document_id, cell="BS!C14"))
-        jobs.record_step(s, job, "coverage", lines=lines_not_found(["EBITDA", "TOTAL_DEBT", "NET_WORTH"]))
-        jobs.finish(s, job, jobs.DONE)
-    result = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
-    check("result", result)
-    lines = result["document"]["lines"]
-    assert lines["found"] == 3 and "CAPEX" in lines["notFound"] and "CFO" in lines["notFound"]
-    assert not any(k.endswith(("_TTM", "_ANN")) for k in lines["notFound"])
-    warning = next(w for w in result["warnings"] if w["code"] == "LINES_NOT_FOUND")
-    assert "CAPEX" in warning["message"] and result["document"]["route"] == "AUTO_ACCEPTED"  # visible, not blocking
-
-
-# ---------- cancel ----------
 
 def test_cancel_a_waiting_job_at_once_and_a_finished_one_never(client, app):
     job_id = submit(client, request_body(app)).json()["jobId"]
@@ -381,7 +336,7 @@ def _queued(s, *, priority: int = 1, tenant: str = "default", batch: str | None 
     s.add(doc)
     s.flush()
     created = utcnow() - timedelta(minutes=age_minutes)
-    job = Job(document_id=doc.id, flow="AGREEMENT_INTAKE", priority=priority, tenant_id=tenant, batch_id=batch,
+    job = Job(document_id=doc.id, flow="SKILL_PACK", priority=priority, tenant_id=tenant, batch_id=batch,
               created_at=created, due_at=created, updated_at=created)
     s.add(job)
     s.commit()

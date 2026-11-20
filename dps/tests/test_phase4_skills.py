@@ -52,6 +52,9 @@ Partner
 Date: 15/05/2026
 UDIN: 26123456ABCDEF1234"""
 
+BASE_AGREEMENT = """FACILITY AGREEMENT
+21.2 The Borrower shall maintain a Debt Service Coverage Ratio of not less than 1.20 times."""
+
 AMENDMENT = """FIRST AMENDMENT AGREEMENT
 With effect from 1 April 2026 the Facility Agreement dated 1 April 2024 is amended as follows.
 Clause 21.2 shall be substituted with: The Borrower shall maintain a Debt Service Coverage Ratio of not less than
@@ -317,16 +320,10 @@ def test_json_only_for_commentary(client, app):
 
 
 def test_amendment_job_reads_base_result(client, app, settings, tmp_path):
-    from dps.models import ExtractedTerm
-
     w = make_worker(app, settings, tmp_path)
-    base = submit(client, app, "EXTRACT_AGREEMENT", text_pdf(["FACILITY AGREEMENT base"]), ".pdf", "application/pdf",
-                  "agr-1", "key-agr-base").json()["jobId"]
-    with app.state.db.session_factory() as s:
-        job = s.get(Job, base)
-        s.add(ExtractedTerm(document_id=job.document_id, metric_raw="DSCR", operator=">=", threshold=1.2,
-                            category="FINANCIAL", confidence=0.9, status="PUBLISHED", page=1, quote="DSCR 1.20"))
-        jobs.finish(s, job, jobs.DONE)
+    submit(client, app, "EXTRACT_AGREEMENT", text_pdf([BASE_AGREEMENT]), ".pdf", "application/pdf", "agr-1",
+           "key-agr-base")
+    assert w.run_once()  # the base agreement's result is the run the skills flow saved
     amend = submit(client, app, "EXTRACT_AMENDMENT", text_pdf([AMENDMENT]), ".pdf", "application/pdf", "amd-1",
                    "key-amd-1", amendsVersionId="agr-1").json()["jobId"]
     assert w.run_once()

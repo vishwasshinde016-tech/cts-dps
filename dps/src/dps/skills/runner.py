@@ -8,7 +8,6 @@ library (Spring tools) and the pack's cross-checks;
 
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
 import logging
@@ -19,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from dps import jobs
-from dps.models import Artifact, Job
+from dps.models import Job
 from dps.skills import Pack, for_job_type, load
 from dps.skills.common import (
     MAX_PROMPT_CHARS,
@@ -722,30 +721,6 @@ def finish(db: Session, job: Job, result: dict) -> None:
     mapping = (result.get("document") or {}).get("route") == "MAPPING_REVIEW"
     jobs.finish(db, job, status, None, "MAPPING_REVIEW" if mapping and status == jobs.NEEDS_REVIEW else None,
                 payload={"skillPack": result["pipeline"]["skillPack"], "fields": len(result["fields"])})
-
-
-def legacy_extras(db: Session, job: Job, store) -> tuple[list[dict], list[dict]]:
-    """For the proven agreement and statement flows: schedule terms from the page model, statement identities.
-    Returns (extra fields, warnings) for the result adapter."""
-    extra_fields: list[dict] = []
-    warnings: list[dict] = []
-    if job.job_type != "EXTRACT_AGREEMENT" or store is None or not job.sha256:
-        return extra_fields, warnings
-    art = db.scalars(select(Artifact).where(Artifact.source_sha256 == job.sha256,
-                                            Artifact.kind == "PAGE_MODEL")).first()
-    if art is None:
-        return extra_fields, warnings
-    try:
-        model = json.loads(gzip.decompress(store.get_derived(art.path, art.sha256)))
-    except Exception:  # noqa: BLE001 - extras never block the result
-        model = None
-    if not model:
-        return extra_fields, warnings
-    sched = load("schedule_terms")
-    fields = sched.rules(model.get("pages", []), {})
-    warnings += sched.checks(fields, {})
-    extra_fields += fields
-    return extra_fields, warnings
 
 
 def statement_warnings(fields: list[dict], approved: dict | None = None) -> list[dict]:

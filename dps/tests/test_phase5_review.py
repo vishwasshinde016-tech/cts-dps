@@ -13,7 +13,7 @@ from test_phase2_ingest import text_pdf
 from test_phase4_skills import CERTIFICATE, SANCTION, make_worker, submit
 
 from dps import jobs
-from dps.models import EventFeed, GoldenCandidate, Job, LabelMemory, ReviewDecision, Run
+from dps.models import EventFeed, GoldenCandidate, Job, ReviewDecision, Run
 from dps.scoring import (
     RuleTableScorer,
     Scorer,
@@ -177,38 +177,6 @@ def test_review_validation_errors(client, app, settings, tmp_path):
     assert client.get("/dps/v1/jobs/none/review", headers=SERVICE).status_code == 404
 
 
-def test_statement_review_rederives_and_learns_labels(client, app, settings, tmp_path):
-    from dps.models import Document, StatementValue
-
-    r = submit(client, app, "EXTRACT_STATEMENT", b"Item,Amount\nPBT,100\n", ".csv", "text/csv", "st-1", "key-st-1",
-               asOfDate="2026-03-31")
-    job_id = r.json()["jobId"]
-    with app.state.db.session_factory() as s:
-        job = s.get(Job, job_id)
-        job.flow = "STATEMENT_PROCESSING"  # a job read before the one pipeline (WP7): its result is in the old tables
-        doc = s.get(Document, job.document_id)
-        from datetime import date
-
-        for key, value in (("PBT", 100.0), ("TAX", 25.0), ("PAT", 70.0)):
-            s.add(StatementValue(cp_id="CP-1", key=key, value=value, unit="INR_CR", as_of_date=date(2026, 3, 31),
-                                 source_type="DOCUMENT", document_id=doc.id, page=1, cell=f"B{key}",
-                                 note=f"{key} row"))
-        jobs.finish(s, job, jobs.NEEDS_REVIEW)
-    result = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
-    assert result["warnings"][0]["code"] == "TOTALS_DO_NOT_ADD"
-    pat = next(f for f in result["fields"] if f["name"] == "PAT")
-    pat_id = pat["id"]
-    r = client.post(f"/dps/v1/jobs/{job_id}/review", headers={**SERVICE, "If-Match": "1", "X-User": "analyst-2"},
-                    json={"decisions": [{"fieldId": pat_id, "action": "CORRECT", "value": {"amount": 75.0},
-                                         "reasonCode": "WRONG_VALUE"}]})
-    assert r.status_code == 202, r.text
-    after = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
-    assert not [w for w in after["warnings"] if w["code"] == "TOTALS_DO_NOT_ADD"]  # re-derived after the fix
-    assert after["status"] == "DONE"
-    with app.state.db.session_factory() as s:
-        assert s.scalars(select(LabelMemory)).first() is None  # no quote on the row: nothing to learn
-
-
 def test_reclassify_starts_a_new_job_and_supersedes(client, app, settings, tmp_path):
     job_id = _run_certificate(client, app, settings, tmp_path, "cv-4", "key-cert-4")
     r = client.post(f"/dps/v1/jobs/{job_id}/reclassify", json={"type": "SANCTION_LETTER", "reason": "it is a letter"},
@@ -277,26 +245,3 @@ def test_pack_results_carry_scores_and_reasons(pack_name):
         assert "reasons" in f["signals"]
     assert json.dumps(result)
 
-
-def test_held_statement_shows_its_values_for_review(client, app, settings):
-    """Found by the end-to-end run (17 Nov): a statement held for review showed 0 fields."""
-    from dps.models import Document, FlowState
-
-    r = submit(client, app, "EXTRACT_STATEMENT", b"Item,Amount\nPBT,100\n", ".csv", "text/csv", "held-1", "key-held-1",
-               asOfDate="2026-03-31")
-    job_id = r.json()["jobId"]
-    with app.state.db.session_factory() as s:
-        job = s.get(Job, job_id)
-        job.flow = "STATEMENT_PROCESSING"  # a job read before the one pipeline (WP7): its result is in the old tables
-        job.flow_state_id = "flow-held-1"
-        s.add(FlowState(flow_uuid="flow-held-1", method_name="hold", state_json=json.dumps({
-            "issues": ["UNIT_UNCLEAR: no unit header"],
-            "values": [{"key": "PBT", "value": 100.0, "unit": "INR_CR", "page": 1, "cell": "B2", "label": "PBT",
-                        "months": 12, "derived": False}]})))
-        s.get(Document, job.document_id).status = "NEEDS_REVIEW"
-        jobs.finish(s, job, jobs.NEEDS_REVIEW)
-    result = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
-    check("result", result)
-    fields = [(f["name"], f["value"]["amount"], f["status"]) for f in result["fields"]]
-    assert fields == [("PBT", 100.0, "NEEDS_REVIEW")]
-    assert result["fields"][0]["issues"][0]["code"] == "UNIT_UNCLEAR"
