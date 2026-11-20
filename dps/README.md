@@ -1,6 +1,6 @@
 # Document Processing Service (DPS)
 
-Turns loan agreements and financial statements into covenant **proposals** and financial **values** for Covenant Core. It never decides compliance. Contract: [`../contracts/dps-api.yaml`](../contracts/dps-api.yaml). The CTS job API (submit and follow jobs, batches, event feed) is [`../contracts/dps-jobs-api.yaml`](../contracts/dps-jobs-api.yaml); see [`../contracts/README.md`](../contracts/README.md).
+Turns loan agreements, amendments, waivers and financial statements into covenant **proposals** and financial **values** for the CTS Spring app. It never decides compliance. The CTS job API (submit and follow jobs, batches, event feed) is [`../contracts/dps-jobs-api.yaml`](../contracts/dps-jobs-api.yaml); see [`../contracts/README.md`](../contracts/README.md).
 
 ## What it does
 
@@ -12,8 +12,8 @@ Turns loan agreements and financial statements into covenant **proposals** and f
 | Every step | [../docs/cts-dps/end-to-end-explained.md](../docs/cts-dps/end-to-end-explained.md) |
 | Workers | `python -m dps.worker`; `DPS_WORKER_POOL=HEAVY` (with `.[heavy]`) runs Docling for scans |
 | Advisory AI | Rules by default; set `DPS_AI_MODEL` (for example `azure/<deployment>`) to use an LLM through CrewAI. Always labelled advisory |
-| Tracking | Each document's history (`GET /dps/v1/documents/{id}/history`), every AI call (`dps_ai_call`), log lines with request id, user, job and document, OpenTelemetry when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and the daily log file (`python -m dps.ops.logcollector`): [`src/dps/ops/observability.py`](src/dps/ops/observability.py) |
-| Auth | Entra ID JWT or `DEV_HEADER`; CP access delegated to Core |
+| Tracking | Each document's history (table `dps_trace_event`, shown by `scripts\show_job.py`), every AI call (`dps_ai_call`), log lines with request id, user, job and document, OpenTelemetry when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and the daily log file (`python -m dps.ops.logcollector`): [`src/dps/ops/observability.py`](src/dps/ops/observability.py) |
+| Auth | Entra ID JWT or `DEV_HEADER`; CP access delegated to the Spring app |
 
 ## Code layout
 
@@ -25,11 +25,11 @@ src/dps/
   settings.py, db.py, models.py, errors.py
                           configuration, database session, tables, the error envelope
   jobs.py, feed.py        the job queue on dps_job and the event feed Spring reads
-  results.py, services.py, history.py, learning.py
-                          the dps.result document, document services, history, the learning loop
+  results.py, services.py, history.py
+                          the dps.result document, document services, history
   catalog.py, profiles.py, money.py, language.py
                           shared domain knowledge: statement lines, country profiles, money, language
-  api/                    HTTP edge: jobs (the CTS job API), documents, review, evidence, auth, access, rate limits
+  api/                    HTTP edge: jobs (the CTS job API), review, evidence, auth, access, shared deps
   ingest/                 reading stored bytes (DMS store, upload store) and file inspection
   parse/                  parsing engine (text, OCR, Docling), the page model, sandbox, segmentation
   analyze/                classification, identifiers, key pages, obligation checks
@@ -39,7 +39,7 @@ src/dps/
   agent/                  the Document Agent, the model gateway, vision, model-call guards and usage
   scoring/                field confidence and review routing
   flows/                  CrewAI Flows: agreement intake, statement processing, skill jobs, state persistence
-  integrations/           outbound calls to Spring: Core client, Java business-rule tools, service identity
+  integrations/           outbound calls to Spring: Spring reads (spring.py), Java business-rule tools, service identity
   advisory/               advisory AI for people: narratives, portfolio questions, agreement Q&A
   ops/                    observability, the daily log collector, leader lock and audit seals, go-live readiness
   contract/               packaged copies of ../contracts (schemas and catalogues served by the API)

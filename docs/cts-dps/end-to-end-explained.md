@@ -126,10 +126,9 @@ Not used: Azure AI Document Intelligence. Parsing and OCR run locally.
 
 | Flow | Used for | Where |
 |---|---|---|
-| **covenants skill (skills flow)**: `parse → extract → normalize → validate → publish / hold / heavy`. Its state is saved, so a job held for review resumes. | `EXTRACT_AGREEMENT` | `dps/src/dps/skills/runner.py` |
-| **Skill Job Flow**: `run_skills → save_result` | `ONBOARD`, `EXTRACT_SANCTION`, `EXTRACT_AMENDMENT`, `EXTRACT_CERTIFICATE`, `ANALYZE` | `dps/src/dps/flows/skill_job.py` |
-| Statement flow | `EXTRACT_STATEMENT` | `dps/src/dps/skills/statement_lines/reader.py` |
-| Flow state persistence (`dps_flow_state`) | resume after review | `dps/src/dps/flows/persistence.py` |
+| **Skill Job Flow** (one pipeline): `run_skills → save_result` | every reading job: `EXTRACT_AGREEMENT`, `ONBOARD`, `EXTRACT_SANCTION`, `EXTRACT_AMENDMENT`, `EXTRACT_WAIVER`, `EXTRACT_CERTIFICATE`, `EXTRACT_STATEMENT`, `RECONCILE_SET`, `DRAFT_COMMENTARY` | `dps/src/dps/flows/skill_job.py`, `dps/src/dps/skills/runner.py` |
+| Statement reader (inside the `statement_lines` skill) | `EXTRACT_STATEMENT` | `dps/src/dps/skills/statement_lines/reader.py` |
+| ANALYZE (type and identifiers only) | `ANALYZE` | `dps/src/dps/analyze/analysis.py` |
 
 For `ONBOARD`, the document is first **classified** (`analyze/classify.py`). Rules decide when they are sure: top score ≥ 0.8 and a lead of ≥ 0.3. Otherwise the small model decides, with quotes. The class then picks the skill pack (`skills/runner.py` `ONBOARD_PACKS`).
 
@@ -185,12 +184,12 @@ A model problem never fails a job. The job falls back to rules only, and the fie
 
 ### Step 6 — Covenant extraction: rules + AI (the core)
 
-Order of work in `dps/src/dps/skills/runner.py` `_extract()`. The covenants skill (skills flow) runs the same reader through `extraction/agreement_ai.py` `read_with_skill()`.
+Order of work in `dps/src/dps/skills/runner.py` `_extract()`: the skill's rules first, then the Document Agent (`skills/common.py` `agent_proposals`, in 4 focused parts for covenants), then the vote and the checks.
 
 | # | Step | What happens | Where |
 |---|---|---|---|
 | 1 | **Rules** (no AI) | Numbered-clause scan, metric aliases (DSCR, ICR, Debt/EBITDA, TNW …), threshold phrases ("not less than 1.25x"), non-financial rules. Every term carries its page and a verbatim quote. A **safety net** sends covenant-shaped sentences that no rule explains to a person. | `skills/covenants/rules.py`, `extraction/agreement.py`, `extraction/safety_net.py` |
-| 2 | **Page finder** | Scores every page without AI, in this order: rule-hit pages, then covenant section headings (+ next page), then duty sentences, then definitions. Up to **4 batches × 25 pages**. Pages left out stay reachable through the tools. | `skills/covenants/pages.py` (`covenant_batches`) |
+| 2 | **Page finder** | Scores every page without AI, in this order: rule-hit pages, then covenant section headings (+ next page), then duty sentences, then definitions. Up to **12 reads × 25 pages**. Pages left out stay reachable through the tools. | `skills/covenants/pages.py` (`covenant_batches`) |
 | 3 | **Focused parts** | The covenants skill runs as 4 focused reads: financial, undertakings (affirmative + negative), reporting, events of default. Each read gets only its part's slice of the taxonomy in the prompt. | `skills/covenants/parts.py`, `skills/covenants/prompt.md` |
 | 4 | **Agent read** | The Document Agent reads each batch. The answer must match `schema.json`. | `skills/common.py` (`batched_proposals`, `agent_proposals`) |
 | 5 | **Grounding** | The quote must appear on the cited page (or ±1 page, or across the break). Otherwise the item is dropped; salvage retries with neighbour pages. | `skills/common.py` (`grounded`) |
@@ -210,7 +209,7 @@ Order of work in `dps/src/dps/skills/runner.py` `_extract()`. The covenants skil
 | What | Where |
 |---|---|
 | Result JSON `dps.result/1.0`. It holds: fields (group, name, value, source page + quote, confidence, status, issues); document route; coverage; warnings; pipeline (version, skillPack, taxonomyVersion); usage. | `contracts/schemas/result.json`, built in `skills/runner.py` `run()` / `results.py` |
-| Saved run | table `dps_run`, `dps_extracted_term` (`models.py`) |
+| Saved run | table `dps_run` (`models.py`) |
 | Event to Spring (same DB transaction as the change, at least once) | `dps/src/dps/feed.py`, `contracts/catalogues/events.yaml`, `GET /dps/v1/events` |
 | Spring pulls the result | `GET /dps/v1/jobs/{id}/result` (`api/jobs.py`) |
 | Review decisions | `dps/src/dps/api/review.py`, `contracts/schemas/review-decisions.json` |

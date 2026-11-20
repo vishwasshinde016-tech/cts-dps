@@ -97,7 +97,7 @@ The folders `storage\` (the uploaded files) and `derived\` (what DPS makes from 
 
 Wait for `Uvicorn running on http://127.0.0.1:9400`. Then open browser tab 2 at `http://localhost:9400/docs`.
 
-**Inside:** [`dps/src/dps/main.py:28`](../../dps/src/dps/main.py#L28) `create_app` builds the FastAPI app. The job endpoints are in [`dps/src/dps/api/jobs.py`](../../dps/src/dps/api/jobs.py).
+**Inside:** [`dps/src/dps/main.py:25`](../../dps/src/dps/main.py#L25) `create_app` builds the FastAPI app. The job endpoints are in [`dps/src/dps/api/jobs.py`](../../dps/src/dps/api/jobs.py).
 
 **Show:** on the `/docs` page, scroll to `POST /dps/v1/jobs`. Open it and show the request body: `jobType`, `document`, `context`.
 
@@ -119,7 +119,7 @@ Wait for `Uvicorn running on http://127.0.0.1:9400`. Then open browser tab 2 at 
 
 Wait for `DPS worker … started (pool=STANDARD)`.
 
-**Inside:** [`dps/src/dps/worker.py:580`](../../dps/src/dps/worker.py#L580) `main` starts a loop. Each turn calls `run_once` ([`dps/src/dps/worker.py:131`](../../dps/src/dps/worker.py#L131)). When there is no job, it waits 2 seconds and looks again.
+**Inside:** [`dps/src/dps/worker.py:463`](../../dps/src/dps/worker.py#L463) `main` starts a loop. Each turn calls `run_once` ([`dps/src/dps/worker.py:126`](../../dps/src/dps/worker.py#L126)). When there is no job, it waits 2 seconds and looks again.
 
 **Say:**
 > "This is the Python worker, the architect's 'worker that polls the job table'. It asks the database every 2 seconds whether there is a job waiting. In the bank there can be several workers, and they never take the same job twice. I'll show why in a moment."
@@ -143,11 +143,11 @@ It prints 4 numbered lines. Stop after line 2 and explain it.
 
 **Line `2. Spring POST /dps/v1/jobs ONBOARD -> 202 jobId …`.**
 - **Inside**, in order:
-  1. [`dps/src/dps/api/jobs.py:312`](../../dps/src/dps/api/jobs.py#L312) `submit_job` receives the call.
-  2. [`:166`](../../dps/src/dps/api/jobs.py#L166) `validate_job` checks the fields, and the stored file's SHA-256 is checked against the one Spring sent.
-  3. [`:268`](../../dps/src/dps/api/jobs.py#L268) `_input_key` builds the duplicate key from the document and its context.
-  4. [`:240`](../../dps/src/dps/api/jobs.py#L240) `create_job` writes one row in `dps_job` with status `QUEUED`, plus a row in `dps_document`.
-  5. [`dps/src/dps/feed.py:39`](../../dps/src/dps/feed.py#L39) writes the event `dps.job.accepted` in the same transaction.
+  1. [`dps/src/dps/api/jobs.py:328`](../../dps/src/dps/api/jobs.py#L328) `submit_job` receives the call.
+  2. [`:173`](../../dps/src/dps/api/jobs.py#L173) `validate_job` checks the fields, and the stored file's SHA-256 is checked against the one Spring sent.
+  3. [`:283`](../../dps/src/dps/api/jobs.py#L283) `_input_key` builds the duplicate key from the document and its context.
+  4. [`:254`](../../dps/src/dps/api/jobs.py#L254) `create_job` writes one row in `dps_job` with status `QUEUED`, plus a row in `dps_document`.
+  5. [`dps/src/dps/feed.py:40`](../../dps/src/dps/feed.py#L40) writes the event `dps.job.accepted` in the same transaction.
 - **Where it is now:** table `dps_job` (status QUEUED), table `dps_document`, table `dps_event_feed`.
 - **Say:** "Spring gets back 202, which means 'accepted, working on it', and a job ID. That took milliseconds. Spring is never kept waiting while DPS reads a 100-page document."
 
@@ -177,7 +177,7 @@ Point at section 1 (the `dps_job` row with the type, status and context Spring s
 ### 3.5 The file is read, checked and parsed
 
 **Inside**, in order:
-1. **Read.** [`dps/src/dps/worker.py:330`](../../dps/src/dps/worker.py#L330) `_ingest` gets the bytes by object key, and [`dps/src/dps/ingest/pipeline.py:48`](../../dps/src/dps/ingest/pipeline.py#L48) `read` checks the SHA-256 again. A changed file is refused.
+1. **Read.** [`dps/src/dps/worker.py:297`](../../dps/src/dps/worker.py#L297) `_ingest` gets the bytes by object key, and [`dps/src/dps/ingest/pipeline.py:48`](../../dps/src/dps/ingest/pipeline.py#L48) `read` checks the SHA-256 again. A changed file is refused.
 2. **Inspect.** [`dps/src/dps/ingest/inspect.py:63`](../../dps/src/dps/ingest/inspect.py#L63) checks the real file type (not the name). It refuses encrypted, broken, macro-carrying and zip-bomb files and checks the size and page limits. It uses **pikepdf** and **oletools**.
 3. **Parse in a sandbox.** [`dps/src/dps/parse/sandbox.py:157`](../../dps/src/dps/parse/sandbox.py#L157) starts a separate child process with CPU, memory and time limits and **no network**.
 4. **Build the page model.** In that process, [`dps/src/dps/parse/page_model.py:30`](../../dps/src/dps/parse/page_model.py#L30) `build` reads each page:
@@ -209,14 +209,14 @@ Point at section 1 (the `dps_job` row with the type, status and context Spring s
 
 **Inside**, in order:
 1. **The Flow.** The worker starts one CrewAI Flow for this job: [`dps/src/dps/flows/skill_job.py:27`](../../dps/src/dps/flows/skill_job.py#L27) `SkillJobFlow`. This is the architect's "own context per job", and it saves its state after each step.
-2. **The entry point.** [`dps/src/dps/skills/runner.py:611`](../../dps/src/dps/skills/runner.py#L611) `run_onboard`.
-3. **Classify (AI 1 on the board).** [`dps/src/dps/analyze/classify.py:294`](../../dps/src/dps/analyze/classify.py#L294) scores the first pages for each document type with rules. Words like "Credit Agreement", "the Borrower" or "Events of Default" point to a loan agreement. If the score is clear, that is the type. If not, the Document Agent gives a second opinion and must quote the lines that prove it.
-4. **Pick the skill.** [`dps/src/dps/skills/runner.py:608`](../../dps/src/dps/skills/runner.py#L608) `ONBOARD_PACKS` maps the type to a skill pack:
+2. **The entry point.** [`dps/src/dps/skills/runner.py:750`](../../dps/src/dps/skills/runner.py#L750) `run_onboard`.
+3. **Classify (AI 1 on the board).** [`dps/src/dps/analyze/classify.py:333`](../../dps/src/dps/analyze/classify.py#L333) scores the first pages for each document type with rules. Words like "Credit Agreement", "the Borrower" or "Events of Default" point to a loan agreement. If the score is clear, that is the type. If not, the Document Agent gives a second opinion and must quote the lines that prove it.
+4. **Pick the skill.** [`dps/src/dps/skills/runner.py:744`](../../dps/src/dps/skills/runner.py#L744) `ONBOARD_PACKS` maps the type to a skill pack:
    - loan agreement → `covenants`;
    - sanction letter → `sanction`;
    - amendment → `amendment_diff`.
 
-   For other job types, the pack whose `pack.yaml` lists that job type is used ([`dps/src/dps/skills/__init__.py:80`](../../dps/src/dps/skills/__init__.py#L80)).
+   For other job types, the pack whose `pack.yaml` lists that job type is used ([`dps/src/dps/skills/__init__.py:83`](../../dps/src/dps/skills/__init__.py#L83)).
 5. **What the pack sets.** [`dps/src/dps/skills/covenants/pack.yaml`](../../dps/src/dps/skills/covenants/pack.yaml) holds the model route, the 5 tools allowed, up to 4 reads of 25 pages, the limits (8 tool calls, 3 model turns, 240 seconds, 400,000 tokens) and the risk of each field. `prompt.md` holds the instructions, and `schema.json` the answer shape.
 
 **Where it is now:** in memory, inside the Flow. The type and the skill name will be written into the result.
@@ -235,12 +235,12 @@ Point at section 1 (the `dps_job` row with the type, status and context Spring s
 ### 3.7 Rules first, then the agent reads selected pages
 
 **Inside**, in order:
-1. **Rules (AI 2 on the board starts here).** [`dps/src/dps/skills/covenants/rules.py:61`](../../dps/src/dps/skills/covenants/rules.py#L61) reads the whole document with no model. It finds numbered clauses, ratio names, words like "not less than" or "shall not exceed", numbers and units. Here it finds Consolidated Leverage ≤ 3.5 and Interest Coverage ≥ 2.5 on page 63.
+1. **Rules (AI 2 on the board starts here).** [`dps/src/dps/skills/covenants/rules.py:84`](../../dps/src/dps/skills/covenants/rules.py#L84) reads the whole document with no model. It finds numbered clauses, ratio names, words like "not less than" or "shall not exceed", numbers and units. Here it finds Consolidated Leverage ≤ 3.5 and Interest Coverage ≥ 2.5 on page 63.
 2. **Page finder.** [`dps/src/dps/skills/covenants/pages.py:98`](../../dps/src/dps/skills/covenants/pages.py#L98) ranks pages: where the rules found something, covenant sections, sentences with duty words ("shall maintain", "will not"), and the definitions they use. It packs them into up to 4 reads, one per part: financial, undertakings, reporting, events of default.
 3. **The agent reads** (only when the AI is switched on):
-   - [`dps/src/dps/agent/document_agent.py:277`](../../dps/src/dps/agent/document_agent.py#L277) `make_agent` builds a fresh CrewAI agent with the skill's prompt, schema and tools.
+   - [`dps/src/dps/agent/document_agent.py:287`](../../dps/src/dps/agent/document_agent.py#L287) `make_agent` builds a fresh CrewAI agent with the skill's prompt, schema and tools.
    - The agent may call its tools: `page_text` opens another page, `search_text` searches the document, `find_definition` finds "EBITDA means …", `covenant_library` and `validate_formula` ask Spring's Java rules.
-   - Each model call goes through the gateway ([`dps/src/dps/agent/gateway.py:242`](../../dps/src/dps/agent/gateway.py#L242) `call_json`), which applies the budget, retries, circuit breaker, masking and allowed hosts, and sends the call to the bank's Azure OpenAI.
+   - Each model call goes through the gateway ([`dps/src/dps/agent/gateway.py:245`](../../dps/src/dps/agent/gateway.py#L245) `call_json`), which applies the budget, retries, circuit breaker, masking and allowed hosts, and sends the call to the bank's Azure OpenAI.
 
 **Where it is now:**
 - the selected pages go to Azure only when the AI is on, and only those pages;
@@ -261,11 +261,11 @@ Point at section 1 (the `dps_job` row with the type, status and context Spring s
 ### 3.8 Every answer is checked, and nothing is missed
 
 **Inside**, in order:
-1. **Schema check.** The agent's answer must match `schema.json`, or it gets one repair ([`dps/src/dps/agent/document_agent.py:293`](../../dps/src/dps/agent/document_agent.py#L293)).
+1. **Schema check.** The agent's answer must match `schema.json`, or it gets one repair ([`dps/src/dps/agent/document_agent.py:303`](../../dps/src/dps/agent/document_agent.py#L303)).
 2. **Grounding.** Every value must quote its page, and the quote must really be on that page. If it is not, the value is dropped ([`dps/src/dps/skills/common.py:53`](../../dps/src/dps/skills/common.py#L53)).
-3. **The number must be in the quote** ([`dps/src/dps/skills/runner.py:64`](../../dps/src/dps/skills/runner.py#L64) `check_numbers`).
-4. **Vote.** If rules and agent agree, the field is `RULES+AI_CONFIRMED`. If they differ, it goes to review ([`dps/src/dps/skills/runner.py:223`](../../dps/src/dps/skills/runner.py#L223)).
-5. **Ledger.** Every duty-like sentence in the **whole** document gets one state: found, covered, not a covenant, or unresolved ([`dps/src/dps/skills/covenants/ledger.py:146`](../../dps/src/dps/skills/covenants/ledger.py#L146)). Unresolved ones go to the agent for a second look ([`dps/src/dps/skills/covenants/omissions.py:82`](../../dps/src/dps/skills/covenants/omissions.py#L82)), then to a person.
+3. **The number must be in the quote** ([`dps/src/dps/skills/runner.py:63`](../../dps/src/dps/skills/runner.py#L63) `check_numbers`).
+4. **Vote.** If rules and agent agree, the field is `RULES+AI_CONFIRMED`. If they differ, it goes to review ([`dps/src/dps/skills/runner.py:281`](../../dps/src/dps/skills/runner.py#L281)).
+5. **Ledger.** Every duty-like sentence in the **whole** document gets one state: found, covered, not a covenant, or unresolved ([`dps/src/dps/skills/covenants/ledger.py:205`](../../dps/src/dps/skills/covenants/ledger.py#L205)). Unresolved ones go to the agent for a second look ([`dps/src/dps/skills/covenants/omissions.py:82`](../../dps/src/dps/skills/covenants/omissions.py#L82)), then to a person.
 6. **Java rules.** Formulas go to Spring's formula engine and names to the bank's covenant library, in one batched call ([`dps/src/dps/integrations/spring_tools.py:151`](../../dps/src/dps/integrations/spring_tools.py#L151)).
 7. **Code and score.** Each covenant gets a taxonomy code such as `FIN_TOTAL_LEVERAGE` ([`dps/src/dps/skills/covenants/codes.py:34`](../../dps/src/dps/skills/covenants/codes.py#L34)). Each field gets a confidence, and risky or unsure fields always go to review ([`dps/src/dps/scoring/__init__.py:211`](../../dps/src/dps/scoring/__init__.py#L211)).
 
@@ -281,8 +281,8 @@ Point at section 1 (the `dps_job` row with the type, status and context Spring s
 **Line `3. Worker QUEUED -> RUNNING -> NEEDS_REVIEW`** shows the stages. **Line `4. Result …`** shows the result.
 
 **Inside:**
-- [`dps/src/dps/skills/runner.py:557`](../../dps/src/dps/skills/runner.py#L557) `finish` saves the result as JSON (`dps.result/1.0`) in table `dps_run` and writes the event `dps.extraction.needs_review` in the same transaction.
-- Spring reads `GET /dps/v1/events`, then `GET /dps/v1/jobs/{id}/result` ([`dps/src/dps/api/jobs.py:351`](../../dps/src/dps/api/jobs.py#L351)).
+- [`dps/src/dps/skills/runner.py:716`](../../dps/src/dps/skills/runner.py#L716) `finish` saves the result as JSON (`dps.result/1.0`) in table `dps_run` and writes the event `dps.extraction.needs_review` in the same transaction.
+- Spring reads `GET /dps/v1/events`, then `GET /dps/v1/jobs/{id}/result` ([`dps/src/dps/api/jobs.py:368`](../../dps/src/dps/api/jobs.py#L368)).
 
 **Where it is now:** table `dps_run` (the result JSON), table `dps_event_feed` (the event), and `dps_job.status` = NEEDS_REVIEW.
 
@@ -311,7 +311,7 @@ In `result.json`, find the field `FIN_TOTAL_LEVERAGE` and show `value` (operator
 **Say:**
 > "From here it is Spring's side of the board:
 > 1. Spring shows each field on its review screen with the page and the highlighted sentence.
-> 2. The person accepts, edits or rejects each field. That comes back to DPS as `POST /dps/v1/jobs/{id}/review` ([`dps/src/dps/api/review.py:141`](../../dps/src/dps/api/review.py#L141)) and is saved as a new run; the old run never changes.
+> 2. The person accepts, edits or rejects each field. That comes back to DPS as `POST /dps/v1/jobs/{id}/review` ([`dps/src/dps/api/review.py:155`](../../dps/src/dps/api/review.py#L155)) and is saved as a new run; the old run never changes.
 > 3. Spring saves the approved covenants and updates the schedule.
 > 4. Spring runs the compliance calculation. **DPS never decides compliance.**"
 
@@ -326,7 +326,7 @@ In `result.json`, find the field `FIN_TOTAL_LEVERAGE` and show `value` (operator
 
 The second run prints the **same job ID** with `(duplicate: DPS already has a job for this document and context …)`.
 
-**Inside:** [`dps/src/dps/api/jobs.py:268`](../../dps/src/dps/api/jobs.py#L268) `_input_key` builds a key from the document, its context and the pipeline version. If a job with that key already exists, queued, running or finished, DPS returns it instead of making a second one ([`dps/src/dps/api/jobs.py:284`](../../dps/src/dps/api/jobs.py#L284)).
+**Inside:** [`dps/src/dps/api/jobs.py:283`](../../dps/src/dps/api/jobs.py#L283) `_input_key` builds a key from the document, its context and the pipeline version. If a job with that key already exists, queued, running or finished, DPS returns it instead of making a second one ([`dps/src/dps/api/jobs.py:283`](../../dps/src/dps/api/jobs.py#L283)).
 
 **Say:** "This is the box on the architect's board, 'check if a job is present: covenant extraction is in progress'. The same document is never read twice at the same time."
 
@@ -382,11 +382,11 @@ The second run prints the **same job ID** with `(duplicate: DPS already has a jo
 
 **Inside:**
 1. Steps 3.3 to 3.5 are the same: store, job, claim, inspect, parse.
-2. The reader is the statement_lines skill's statement reader, [`dps/src/dps/skills/statement_lines/reader.py:158`](../../dps/src/dps/skills/statement_lines/reader.py#L158). It finds each statement line (cash, inventory, total assets, long-term debt and the rest) with its value and unit.
+2. The reader is the statement_lines skill's statement reader, [`dps/src/dps/skills/statement_lines/reader.py:160`](../../dps/src/dps/skills/statement_lines/reader.py#L160). It finds each statement line (cash, inventory, total assets, long-term debt and the rest) with its value and unit.
 3. It **derives** lines the covenants need. Here TOTAL_DEBT = LT_DEBT 2342.93 + ST_DEBT 618.32 = **2961.25**, and NET_DEBT = 2961.25 − CASH 487.34 = **2473.91** (INR crore).
 4. Every expected line that is **not** found is listed (`LINES_NOT_FOUND`, [`dps/src/dps/catalog.py:65`](../../dps/src/dps/catalog.py#L65)), so a missing line is never silently zero.
 5. Figures that differ from an earlier statement for the same CP and period are flagged `RESTATED`.
-6. When a person confirms the figures, they are stored in table `dps_statement_value` and served to Spring through `POST /dps/v1/values`.
+6. When a person confirms the figures, they are stored in table `dps_statement_value` and served to the bank app through `POST /api/data/values`.
 
 **Result on this file:** 15 lines with values in INR crore, and the warnings `LINES_NOT_FOUND` and `RESTATED`.
 
@@ -437,13 +437,13 @@ The error and issue codes are all listed in [`contracts/catalogues/errors.yaml`]
 | Model calls and tokens | table `dps_ai_call` | same | section 5 |
 | The result Spring pulls | table `dps_run` (`dps.result/1.0` JSON) | same | section 6, `GET /dps/v1/jobs/{id}/result` |
 | Events for Spring | table `dps_event_feed` | same | section 7, `GET /dps/v1/events` |
-| Document history | table `dps_trace_event` | same | section 8, `GET /dps/v1/documents/{id}/history` |
-| Confirmed statement figures | table `dps_statement_value` | same | `POST /dps/v1/values` |
+| Document history | table `dps_trace_event` | same | section 8 |
+| Confirmed statement figures | table `dps_statement_value` | same | written after the review; served by `POST /api/data/values` |
 | Review decisions | table `dps_review_decision` | same | after Spring's review |
 | Settings | `dps\.env` | the vault and container settings | VS Code |
 | Logs | Terminals A and B | one JSON line per event, per container | the terminals |
 
-The full database (25 tables, every column) is in the database panel of `dps-complete.html`.
+The full database (21 tables, every column) is in the database panel of `dps-complete.html`.
 
 ---
 

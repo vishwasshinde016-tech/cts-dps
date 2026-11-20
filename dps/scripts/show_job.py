@@ -130,7 +130,7 @@ def main() -> int:
         for e in s.scalars(select(EventFeed).where(EventFeed.job_id == job.id).order_by(EventFeed.seq)):
             print(f"#{e.seq:<5} {e.occurred_at:%H:%M:%S}  {e.type}")
 
-        head("8. Document history (table dps_trace_event, GET /dps/v1/documents/{id}/history)")
+        head("8. Document history (table dps_trace_event)")
         for t in s.scalars(select(TraceEvent).where(TraceEvent.job_id == job.id).order_by(TraceEvent.at).limit(12)):
             print(f"{t.at:%H:%M:%S}  {t.step:<8} {t.summary[:110]}")
     return 0

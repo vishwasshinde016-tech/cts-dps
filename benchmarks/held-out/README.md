@@ -23,7 +23,7 @@ most 1 wrong in 200 published figures, so the measurement must be repeated each 
 
 Answer keys: `truth/`. The agreement and India / Sri Lanka keys were written by reading the documents, before
 DPS was run. Every document went through DPS's real flows (Flow A, Flow B) with the production settings (AI
-readers off) in a throwaway database (`harness/run_flows.py`). Documents handed to the heavy pool were run again
+readers off) in a throwaway database (`harness/run_flows.py`, removed on 20 Nov 2026 with the old flows it ran). Documents handed to the heavy pool were run again
 there, one at a time.
 
 ## Results

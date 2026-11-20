@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DPS Demo Script</title>
+<style>
+  :root {
+    --ink: #1d2430; --muted: #5b6575; --line: #d9dee7; --paper: #ffffff;
+    --say: #e9f7ee; --say-b: #2f8f55; --open: #eaf2fd; --open-b: #2f6fd6;
+    --run: #f3f4f7; --run-b: #3b4252; --show: #fff6e5; --show-b: #c98612;
+    --you: #f4f1fb; --you-b: #7a5cc2; --fail: #fdecec; --fail-b: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --ink:#1d2430; }
+  }
+  :root[data-theme="dark"] { --ink:#1d2430; }
+  @page { size: A4; margin: 14mm 13mm 16mm 13mm; }
+  * { box-sizing: border-box; }
+  body { font: 10.4pt/1.45 "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--paper); margin: 0 auto;
+         max-width: 190mm; padding: 0 16px; }
+  h1 { font-size: 22pt; margin: 0 0 4px; }
+  h2 { font-size: 14.5pt; margin: 22px 0 6px; padding-bottom: 4px; border-bottom: 2px solid var(--ink);
+       break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 14px 0 4px; break-after: avoid; }
+  p { margin: 4px 0 6px; }
+  a { color: #1f5fbf; text-decoration: none; word-break: break-all; }
+  code, pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.9pt; }
+  pre { white-space: pre-wrap; word-break: break-word; margin: 4px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 8px; font-size: 9.4pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: #eef1f6; }
+  tr { break-inside: avoid; }
+  .cover { border: 2px solid var(--ink); padding: 18px 20px; margin: 10px 0 14px; }
+  .meta { color: var(--muted); }
+  .phase { break-before: page; }
+  .tag { display: inline-block; font-weight: 700; font-size: 8.4pt; padding: 1px 7px; border-radius: 3px;
+         color: #fff; margin-right: 6px; letter-spacing: .3px; }
+  .box { border-left: 5px solid; padding: 7px 10px 7px 11px; margin: 7px 0; border-radius: 3px; break-inside: avoid; }
+  .box > .tag { margin-bottom: 4px; }
+  .say { background: var(--say); border-color: var(--say-b); } .say .tag { background: var(--say-b); }
+  .say p, .say li { font-size: 10.6pt; }
+  .open { background: var(--open); border-color: var(--open-b); } .open .tag { background: var(--open-b); }
+  .run { background: var(--run); border-color: var(--run-b); } .run .tag { background: var(--run-b); }
+  .show { background: var(--show); border-color: var(--show-b); } .show .tag { background: var(--show-b); }
+  .you { background: var(--you); border-color: var(--you-b); } .you .tag { background: var(--you-b); }
+  .fail { background: var(--fail); border-color: var(--fail-b); } .fail .tag { background: var(--fail-b); }
+  .head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .pill { border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; font-size: 8.8pt; color: var(--muted); }
+  ul, ol { margin: 3px 0 6px 18px; padding: 0; }
+  li { margin: 1px 0; }
+  .small { font-size: 8.8pt; color: var(--muted); }
+  .toc td:first-child { width: 34px; text-align: center; font-weight: 700; }
+  @media screen and (max-width: 600px) { body { padding: 0 16px; font-size: 10pt; } .head { display: block; } }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>CTS DPS demo: the master script</h1>
+  <p class="meta">For the call with the Spring developers, the app (UI) developers and the architect &middot; about 55 minutes &middot; 20 Nov 2026</p>
+  <p>The audience is seeing DPS for the first time, so the order is: <b>show it working first, then explain how it works, then say what each team builds.</b> Every phase says what to open, what to run, what to point at and what to say. The live flows use the <b>architect's own documents</b> (already downloaded in <code>architect-documents\</code>). Small DPS-made sample files are used only for the flows the architect's list has no document for: a waiver letter, a guarantee, an amended and restated agreement and a document set.</p>
+</div>
+
+<h2>How to read this script</h2>
+<table>
+  <tr><th>Box</th><th>Meaning</th></tr>
+  <tr><td><span class="tag" style="background:var(--open-b)">OPEN</span></td><td>A file, page or window to bring on screen. Each link opens the file on this laptop.</td></tr>
+  <tr><td><span class="tag" style="background:var(--run-b)">RUN</span></td><td>A command to type, and which terminal to type it in.</td></tr>
+  <tr><td><span class="tag" style="background:var(--show-b)">SHOW</span></td><td>What to point at on screen, and what the audience should see.</td></tr>
+  <tr><td><span class="tag" style="background:var(--say-b)">SAY</span></td><td>Words you can read out as they are.</td></tr>
+  <tr><td><span class="tag" style="background:var(--you-b)">FOR YOU</span></td><td>Notes for you only. Do not read them out.</td></tr>
+  <tr><td><span class="tag" style="background:var(--fail-b)">IF IT FAILS</span></td><td>What to do when something goes wrong, without stopping the demo.</td></tr>
+</table>
+
+<h3>The plan on one page</h3>
+<table class="toc">
+  <tr><th>#</th><th>Phase</th><th>Minutes</th><th>Main audience</th><th>Window</th></tr>
+  <tr><td>0</td><td>Before the day: set up and rehearse</td><td>30, the day before</td><td>you</td><td>terminals</td></tr>
+  <tr><td>1</td><td>The problem DPS solves</td><td>2</td><td>everyone</td><td>talk</td></tr>
+  <tr><td>2</td><td>One simple picture</td><td>3</td><td>everyone</td><td>Archify page</td></tr>
+  <tr><td>3</td><td>Live: one agreement, end to end (architect's file)</td><td>8</td><td>everyone</td><td>terminals + browser</td></tr>
+  <tr><td>4</td><td>Live: the other journeys (amendment, waiver, document set, statement, fake file)</td><td>10</td><td>everyone</td><td>terminals</td></tr>
+  <tr><td>5</td><td>How it is built</td><td>15</td><td>architect</td><td>Archify page (full)</td></tr>
+  <tr><td>6</td><td>What each team builds</td><td>10</td><td>Spring and UI developers</td><td>Swagger</td></tr>
+  <tr><td>7</td><td>Database and operations</td><td>3</td><td>architect, Spring</td><td>DB viewer</td></tr>
+  <tr><td>8</td><td>Honest status and decisions needed</td><td>4</td><td>everyone</td><td>talk</td></tr>
+  <tr><td>A&ndash;E</td><td>Appendix: request bodies, failures, questions and answers, reset, glossary</td><td>&ndash;</td><td>you</td><td>&ndash;</td></tr>
+</table>
+
+<h3>Every file you will use</h3>
+<p class="small">On the demo laptop the repository is <code>C:\cts-dps</code> (below: <b>DPS</b>). Every command runs in <code>C:\cts-dps\dps</code> and uses full paths.</p>
+<table>
+  <tr><th>What</th><th>File (click to open)</th><th>Used in</th><th>Who sees it</th></tr>
+  <tr><td><b>The picture to show</b> (Archify, the complete DPS)</td><td><a href="../../../docs/cts-dps/diagrams/dps-complete.html">docs/cts-dps/diagrams/dps-complete.html</a></td><td>2, 5, 7</td><td>the room</td></tr>
+  <tr><td><b>The picture explained, block by block</b> (what each block does, what to say, its code)</td><td><a href="../../../docs/cts-dps/diagrams/dps-flow-explained.html">docs/cts-dps/diagrams/dps-flow-explained.html</a></td><td>read before; open in 5 beside the full flow</td><td>you</td></tr>
+  <tr><td>The full flow in 14 rows: every skill, rules first then the agent, the DB tables of each step, file:line on every box</td><td><a href="../../../docs/cts-dps/diagrams/dps-full-flow.html">docs/cts-dps/diagrams/dps-full-flow.html</a></td><td>5</td><td>the room</td></tr>
+  <tr><td>Swagger (the API page)</td><td><a href="http://localhost:9400/docs">http://localhost:9400/docs</a> (after the API starts)</td><td>3, 6</td><td>the room</td></tr>
+  <tr><td><b>Architect's agreement</b> (onboarding, 100 pages, SEC EDGAR 2020)</td><td><a href="../../../architect-documents/us_ex10_1_credit_agreement_2020.pdf">architect-documents/us_ex10_1_credit_agreement_2020.pdf</a></td><td>3</td><td>the room</td></tr>
+  <tr><td><b>Architect's amendment</b> (Sixth Amendment, Southcross 2018)</td><td><a href="../../../architect-documents/us_southcross_amendment_2018.pdf">architect-documents/us_southcross_amendment_2018.pdf</a></td><td>4a</td><td>the room</td></tr>
+  <tr><td>Architect's second amendment (First Amendment to a <i>restated</i> credit agreement, Holly 2010)</td><td><a href="../../../architect-documents/us_holly_amendment_2010.pdf">architect-documents/us_holly_amendment_2010.pdf</a></td><td>4b</td><td>the room</td></tr>
+  <tr><td>The architect's list, with sources</td><td><a href="../../../architect-documents/README.md">architect-documents/README.md</a></td><td>if asked</td><td>the room</td></tr>
+  <tr><td>Approved covenants Spring would send with the Southcross amendment (sample)</td><td><a href="../../../docs/cts-dps/demo-kit/southcross-base.json">docs/cts-dps/demo-kit/southcross-base.json</a></td><td>4a</td><td>the room</td></tr>
+  <tr><td>DPS-made sample: waiver letter</td><td><a href="../../../docs/cts-dps/demo-kit/waiver-letter.pdf">docs/cts-dps/demo-kit/waiver-letter.pdf</a></td><td>4c</td><td>the room</td></tr>
+  <tr><td>DPS-made sample: the amendment of the same loan</td><td><a href="../../../docs/cts-dps/demo-kit/amendment-demo.pdf">docs/cts-dps/demo-kit/amendment-demo.pdf</a></td><td>4c, 4d</td><td>the room</td></tr>
+  <tr><td>Approved covenants of that loan (DSCR AC-11, ICR AC-12)</td><td><a href="../../../docs/cts-dps/demo-kit/base-covenants.json">docs/cts-dps/demo-kit/base-covenants.json</a></td><td>4c, 4d</td><td>the room</td></tr>
+  <tr><td>Document set manifest (agreement + amendment + waiver, in force on 30 Jun 2026)</td><td><a href="../../../docs/cts-dps/demo-kit/set-manifest.json">docs/cts-dps/demo-kit/set-manifest.json</a></td><td>4d</td><td>the room</td></tr>
+  <tr><td>DPS-made samples: two companies + springing covenant, guarantee, amended and restated agreement, fake PDF</td><td><a href="../../../docs/cts-dps/demo-kit/">docs/cts-dps/demo-kit/</a></td><td>4e, 4g</td><td>the room</td></tr>
+  <tr><td>A statement (the architect's list has none)</td><td><a href="../../../golden-set/documents/FS-012.pdf">golden-set/documents/FS-012.pdf</a></td><td>4f</td><td>the room</td></tr>
+  <tr><td>What Spring builds: the 3 tools and the push receiver</td><td><a href="../../../contracts/spring-tools.yaml">contracts/spring-tools.yaml</a></td><td>6</td><td>the room</td></tr>
+  <tr><td>The job API contract</td><td><a href="../../../contracts/dps-jobs-api.yaml">contracts/dps-jobs-api.yaml</a></td><td>6</td><td>the room</td></tr>
+  <tr><td>The result format</td><td><a href="../../../contracts/schemas/result.json">contracts/schemas/result.json</a></td><td>6</td><td>the room</td></tr>
+  <tr><td>Every error and warning code, with its message</td><td><a href="../../../contracts/catalogues/errors.yaml">contracts/catalogues/errors.yaml</a></td><td>6</td><td>the room</td></tr>
+  <tr><td>The database (after the first run)</td><td><code>C:\cts-dps\dps\dps.db</code> (open in DB Browser for SQLite, or the VS Code SQLite viewer)</td><td>3, 7</td><td>the room</td></tr>
+  <tr><td>The full design</td><td><a href="../../../docs/cts-dps/design.md">docs/cts-dps/design.md</a></td><td>if asked</td><td>you</td></tr>
+  <tr><td>Document set proposal (what is built, what is open)</td><td><a href="../../../docs/cts-dps/document-set-proposal.md">docs/cts-dps/document-set-proposal.md</a></td><td>4d, 8</td><td>you</td></tr>
+</table>
+
+<!-- ================================================================== -->
+<div class="phase">
+<h2>Phase 0. Before the day: set up and rehearse <span class="pill">30 min, the day before</span></h2>
+
+<div class="box you"><span class="tag">FOR YOU</span>
+<p>Do every step once the day before, run every flow once, then <b>reset</b> (step 0.6). If you skip the reset, the audience sees "duplicate" instead of the real run.</p></div>
+
+<h3>0.1 Get the latest code</h3>
+<div class="box run"><span class="tag">RUN</span> <b>Any PowerShell window</b>
+<pre>git clone https://github.com/vishwasshinde016-tech/cts-dps.git C:\cts-dps</pre>
+<p class="small">Already cloned? Get the latest instead:</p>
+<pre>cd C:\cts-dps
+git switch main
+git pull</pre></div>
+<div class="box you"><span class="tag">FOR YOU</span><p>Use exactly <code>C:\cts-dps</code>: every command in this script uses that path, so you can copy and paste it as it is. A long path (for example under OneDrive) can break <code>pip install</code>.</p></div>
+
+<h3>0.2 Settings and database (once)</h3>
+<div class="box run"><span class="tag">RUN</span> <b>Any PowerShell window (first time only, about 10 minutes)</b>
+<pre>cd C:\cts-dps\dps
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\cts-dps\dps\scripts\setup.ps1</pre></div>
+<p class="small"><code>setup.ps1</code> checks Python 3.11-3.13, creates <code>C:\cts-dps\dps\.venv</code>, installs DPS, copies <code>.env.example</code> to <code>.env</code> (only if missing), creates the tables (<code>alembic upgrade head</code>) and runs a one-document smoke demo. Already installed? Make sure the tables are current:</p>
+<div class="box run"><span class="tag">RUN</span> <b>PowerShell</b>
+<pre>cd C:\cts-dps\dps
+C:\cts-dps\dps\.venv\Scripts\alembic.exe upgrade head</pre></div>
+<p class="small"><code>.env</code> from <code>.env.example</code> means: SQLite <code>dps.db</code>, local <code>storage\</code> and <code>derived\</code> folders, dev sign-in headers, AI off. Never show <code>.env</code> on screen if you add Azure settings to it. Every command below calls the programs in <code>C:\cts-dps\dps\.venv\Scripts\</code> by their full path, so no <code>Activate.ps1</code> is needed (it is often blocked by the execution policy).</p>
+
+<h3>0.3 The four windows (open them before the call)</h3>
+<table>
+  <tr><th>Window</th><th>What</th><th>How</th></tr>
+  <tr><td>1. Browser tab 1</td><td>Archify picture</td><td><a href="../../../docs/cts-dps/diagrams/dps-complete.html">dps-complete.html</a></td></tr>
+  <tr><td>2. Browser tab 2</td><td>Swagger</td><td><a href="http://localhost:9400/docs">http://localhost:9400/docs</a> (after Terminal A runs)</td></tr>
+  <tr><td>3. VS Code</td><td>Terminals A, B, H, C and the files</td><td><code>code C:\cts-dps</code>; split the terminal (Ctrl+Shift+5)</td></tr>
+  <tr><td>4. DB viewer</td><td><code>dps.db</code></td><td>DB Browser for SQLite: File &rarr; Open, <code>C:\cts-dps\dps\dps.db</code>, tab "Browse Data". Press F5 to refresh.</td></tr>
+</table>
+<p>Keep <b>this script</b> and <a href="../../../docs/cts-dps/diagrams/dps-flow-explained.html">dps-flow-explained.html</a> on your own second screen or phone.</p>
+
+<h3>0.4 Start DPS (four terminals, each in DPS\dps, each with the venv active)</h3>
+<p class="small">In every new terminal run first: <code>cd C:\cts-dps\dps</code> (the <code>.env</code>, <code>dps.db</code>, <code>storage\</code> and <code>derived\</code> of the demo are in that folder)</p>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal A: the API</b>
+<pre>cd C:\cts-dps\dps
+C:\cts-dps\dps\.venv\Scripts\uvicorn.exe --factory dps.main:create_app --port 9400</pre>
+Wait for <code>Uvicorn running on http://127.0.0.1:9400</code>.</div>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal B: the worker</b>
+<pre>cd C:\cts-dps\dps
+C:\cts-dps\dps\.venv\Scripts\python.exe -m dps.worker</pre>
+Wait for <code>DPS worker ... started (pool=STANDARD)</code>.</div>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal H: the heavy worker (backup for big or slow files)</b>
+<pre>cd C:\cts-dps\dps
+$env:DPS_WORKER_POOL = "HEAVY"; $env:DPS_WORKER_ID = "heavy-1"; C:\cts-dps\dps\.venv\Scripts\python.exe -m dps.worker</pre>
+Wait for <code>started (pool=HEAVY)</code>.</div>
+<div class="box you"><span class="tag">FOR YOU</span><p>Why Terminal H: if the laptop is busy, a large PDF can pass the parse time limit. DPS then moves the job to the HEAVY pool (<code>MOVED_HEAVY PARSE_TIMEOUT</code> in Terminal B). Without a heavy worker the job waits forever. Close other heavy programs (Teams video, builds) during the demo.</p></div>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C: your commands</b> (the rest of the script types here)
+<pre>cd C:\cts-dps\dps
+curl.exe http://localhost:9400/health/ready</pre>
+You should see <code>"status":"UP"</code> and <code>"workers":"UP"</code>.</div>
+
+<h3>0.5 Rehearse: run every command of phases 3 and 4 once</h3>
+<p>Check each one ends as the script says. Note the job IDs you need for Swagger (phase 6).</p>
+
+<h3>0.6 Reset for a clean demo</h3>
+<div class="box run"><span class="tag">RUN</span> Stop Terminals A, B and H with Ctrl+C. Then in Terminal C:
+<pre>cd C:\cts-dps\dps
+Remove-Item C:\cts-dps\dps\dps.db, C:\cts-dps\dps\storage, C:\cts-dps\dps\derived, C:\cts-dps\dps\staging -Recurse -Force -ErrorAction SilentlyContinue
+C:\cts-dps\dps\.venv\Scripts\alembic.exe upgrade head</pre>
+This deletes only the local demo data. <code>.env</code> and <code>architect-documents\</code> stay. Start A, B and H again before the call.</div>
+
+<h3>0.7 Optional: the AI second reader</h3>
+<div class="box you"><span class="tag">FOR YOU</span><p>Only if the bank VPN is on and the Azure settings are in <code>.env</code>. Otherwise demo on rules only and say "the AI adds a second reading of every page; it is switched off on this laptop". Do not run a live Azure call unless you decided to before the call.</p></div>
+</div>
+
+<!-- ================================================================== -->
+<div class="phase">
+<h2>Phase 1. The problem DPS solves <span class="pill">2 min &middot; everyone &middot; no screen needed</span></h2>
+<div class="box say"><span class="tag">SAY</span>
+<p>"Today, when a bank signs a loan, someone reads the whole agreement, sometimes 300 pages, to find every covenant: the ratios the borrower must keep, the reports it must send and the things it must not do. Then they type them into the tracking system. It is slow, and things get missed.</p>
+<p>DPS, the Document Processing Service, does that reading. It finds each covenant and gives it back with the page and the exact sentence it came from. A person still checks and approves every covenant. DPS never approves anything.</p>
+<p>One sentence to remember: <b>DPS reads and proposes. Spring decides. The DMS stores. Java calculates.</b>"</p></div>
+</div>
+
+<!-- ================================================================== -->
+<div class="phase">
+<h2>Phase 2. One simple picture <span class="pill">3 min &middot; everyone &middot; Archify</span></h2>
+<div class="box open"><span class="tag">OPEN</span> Browser tab 1: <a href="../../../docs/cts-dps/diagrams/dps-complete.html">dps-complete.html</a>. Stay on the top architecture view. Press Ctrl+plus so the room can read it.</div>
+<div class="box show"><span class="tag">SHOW</span><p>Point at the boxes from left to right, in this order: <b>CTS UI</b> &rarr; <b>Spring app</b> &rarr; <b>DMS store</b> &rarr; <b>DPS</b> (API, queue, worker) &rarr; back to <b>Spring</b>. Do not open the inner DPS blocks yet.</p></div>
+<div class="box say"><span class="tag">SAY</span>
+<p>"Here is the whole journey.</p>
+<ol><li>The RM uploads a document on the CTS screen.</li>
+<li>Spring stores it in the DMS. The stored file never changes.</li>
+<li>Spring sends DPS a <b>job</b>: 'read this document'. DPS answers straight away with a job number, and reads in the background.</li>
+<li>DPS sends back the covenants, each with its page and quote.</li>
+<li>Spring shows them to a person on the review screen. The person confirms or corrects them, and only then do they become real covenants in CTS.</li></ol>
+<p>Who owns what: the DMS stores, Spring approves and calculates, DPS reads and proposes, and the model runs in the bank's own Azure."</p></div>
+<div class="box you"><span class="tag">FOR YOU</span><p>Questions about workers, the queue or CrewAI go to phase 5: "I'll show the inside in ten minutes, right after the live run."</p></div>
+</div>
+
+<!-- ================================================================== -->
+<div class="phase">
+<h2>Phase 3. Live: one agreement, end to end <span class="pill">8 min &middot; everyone &middot; terminals + DB viewer</span></h2>
+<p><b>Document:</b> the architect's <a href="../../../architect-documents/us_ex10_1_credit_agreement_2020.pdf">us_ex10_1_credit_agreement_2020.pdf</a>, a real 100-page US credit agreement from his list.</p>
+
+<h3>3.1 Show the document first</h3>
+<div class="box open"><span class="tag">OPEN</span> The PDF in the browser. Scroll to page 63 (the financial covenants).</div>
+<div class="box say"><span class="tag">SAY</span><p>"This is one of the agreements the architect gave us. A person would read all 100 pages to find the covenants on page 63 and the reporting duties spread across the document. Let's give it to DPS."</p></div>
+
+<h3>3.2 Upload it, the way Spring and the DMS will</h3>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\architect-documents\us_ex10_1_credit_agreement_2020.pdf --type LOAN_AGREEMENT --json C:\cts-dps\dps\ex10-result.json</pre></div>
+<div class="box show"><span class="tag">SHOW</span><p>The script prints 4 numbered lines. Stop at each one:</p>
+<table>
+<tr><th>Line</th><th>Point at</th><th>Say</th></tr>
+<tr><td><code>1. DMS stored ...</code></td><td>the file key (its SHA-256)</td><td>"Stored once, under its fingerprint. It never changes, like a DMS version."</td></tr>
+<tr><td><code>2. Spring POST /dps/v1/jobs ONBOARD -&gt; 202 jobId ...</code></td><td>202 and the job ID</td><td>"Spring gets an answer in milliseconds. It is never kept waiting."</td></tr>
+<tr><td><code>3. Worker QUEUED ... RUNNING ... NEEDS_REVIEW</code></td><td>the stages; Terminal B logs at the same time</td><td>"The worker picked the job up from the queue and reads it in the background."</td></tr>
+<tr><td><code>4. Result ... type LOAN_AGREEMENT ...</code></td><td>the covenant lines: page, code, threshold, <b>[company]</b>, <b>only if</b></td><td>see the SAY box below</td></tr>
+</table></div>
+<div class="box say"><span class="tag">SAY</span>
+<p>"DPS worked out by itself that this is a loan agreement, and picked the covenant skill. Each line is a covenant: its page, its type in the bank's taxonomy and its limit. Here: leverage no more than 3.5 times and interest cover at least 2.5 times, both on page 63, both for the Borrower on consolidated figures.</p>
+<p>New this week: each covenant also says <b>whose</b> covenant it is (the Borrower, the Guarantor, the Group), on what basis (standalone or consolidated), for which facility, and any <b>'only if'</b> condition. Without that, CTS could test the wrong company's figures.</p>
+<p>And look at the status: <b>NEEDS_REVIEW</b>. Nothing here is live yet. A person checks every covenant."</p></div>
+<div class="box you"><span class="tag">FOR YOU</span><p><b>What this file gives on rules only (checked 20 Nov):</b> 3 financial covenants: page 63 <code>DEBT_TO_EBITDA &lt;= 3.5 [Borrower, consolidated]</code>, page 63 <code>ICR &gt;= 2.5 [Borrower, consolidated]</code>, and page 9 <code>ICR 0.75</code>, which is really a benchmark-rate floor. That one is flagged <code>CONDITIONAL</code> with no company, so it goes to a person: a good live example of "DPS does not guess". Coverage: 171 duty sentences, 164 of them review items on rules only, 100% accounted.</p>
+<p>On rules only, a real agreement also gives many "possible covenant" review items. That is the ledger: every duty sentence the rules could not settle is put in front of a person, not dropped. If asked: "with the AI on, the second reading settles most of them; on our two 85-page test agreements on live Azure, 100% of duty sentences were explained."</p></div>
+
+<h3>3.3 Where it is now (the job row and the event)</h3>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\show_job.py</pre></div>
+<div class="box open"><span class="tag">OPEN</span> The DB viewer, press F5. Table <code>dps_job</code> (the last row), then <code>dps_event_feed</code>, then <code>dps_run</code>.</div>
+<div class="box show"><span class="tag">SHOW</span><ul>
+<li><code>dps_job</code>: status went QUEUED &rarr; RUNNING &rarr; NEEDS_REVIEW, with the attempt count.</li>
+<li><code>dps_event_feed</code>: <code>dps.job.accepted</code>, then <code>dps.extraction.needs_review</code>, with increasing <code>seq</code> numbers.</li>
+<li><code>dps_run</code>: the result JSON, exactly what Spring receives.</li></ul></div>
+<div class="box say"><span class="tag">SAY</span><p>"Every step is in DPS's own tables. The event tells Spring 'your result is ready'. Spring either pulls the events or DPS pushes them. The result itself is one JSON document."</p></div>
+
+<h3>3.4 The result Spring receives</h3>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>code C:\cts-dps\dps\ex10-result.json</pre></div>
+<div class="box show"><span class="tag">SHOW</span><p>One covenant field: <code>value.metric</code>, <code>value.threshold</code>, <code>source.page</code>, <code>source.quote</code>, <code>value.scope</code>, <code>value.conditions</code>, <code>status</code>, <code>issues</code>. Then <code>document.coverage.ledger</code>.</p></div>
+<div class="box say"><span class="tag">SAY</span><p>"Every value carries its proof: the page and the exact quote. The review screen will highlight that sentence on the page image. And <code>coverage</code> counts every duty sentence in the document, so nothing is missed silently."</p></div>
+
+<h3>3.5 Upload the same file again: "extraction in progress"</h3>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\architect-documents\us_ex10_1_credit_agreement_2020.pdf --type LOAN_AGREEMENT --wait 5</pre></div>
+<div class="box show"><span class="tag">SHOW</span><p>Line 2 ends with <code>(duplicate: ...)</code> and the <b>same job ID</b> as before.</p></div>
+<div class="box say"><span class="tag">SAY</span><p>"If an RM uploads the same document twice, DPS does not read it twice. It returns the existing job, so the screen can say 'extraction in progress'."</p></div>
+<div class="box fail"><span class="tag">IF IT FAILS</span><ul>
+<li><b>Line 3 stays QUEUED:</b> Terminal B is not running. Start it (0.4).</li>
+<li><b>Terminal B shows <code>MOVED_HEAVY PARSE_TIMEOUT</code>:</b> Terminal H picks it up. Say: "a slow file moves to the heavy pool by itself."</li>
+<li><b>Line 1 says duplicate right away:</b> you did not reset after the rehearsal. Show the result anyway and say "it was read in the rehearsal".</li>
+<li><b>The job is too slow for the room</b> (more than 3 minutes): press Ctrl+C in Terminal C and run the same code in-process, without the queue:
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\demo_onboard.py C:\cts-dps\architect-documents\us_ex10_1_credit_agreement_2020.pdf</pre>
+Say: "the same code, run directly; the job carries on in the background."</li></ul></div>
+</div>
+
+<!-- ================================================================== -->
+<div class="phase">
+<h2>Phase 4. Live: the other journeys <span class="pill">10 min &middot; everyone &middot; Terminal C</span></h2>
+<div class="box you"><span class="tag">FOR YOU</span><p>Order: 4a and 4b are the architect's real amendments. 4c, 4d and 4e use DPS-made samples, because the architect's list has no waiver, guarantee or restated agreement. Say so openly. 4f is our statement sample. 4g is the safety check. If time is short, skip 4b and 4e.</p></div>
+
+<h3>4a. Amendment: the architect's Southcross amendment <span class="pill">2 min</span></h3>
+<div class="box open"><span class="tag">OPEN</span> <a href="../../../architect-documents/us_southcross_amendment_2018.pdf">us_southcross_amendment_2018.pdf</a>, then <a href="../../../docs/cts-dps/demo-kit/southcross-base.json">southcross-base.json</a> (what Spring sends: the covenants already approved in CTS).</div>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\architect-documents\us_southcross_amendment_2018.pdf --job EXTRACT_AMENDMENT --base C:\cts-dps\docs\cts-dps\demo-kit\southcross-base.json</pre></div>
+<div class="box show"><span class="tag">SHOW</span><p>The line <code>p 1 FINANCIAL_COVENANT FIN_INTEREST_COVERAGE &gt;= 1.5 [Borrower, consolidated] CHANGE AC-SX-1</code>: the amendment changes the approved interest cover covenant AC-SX-1 from 2.0 to 1.5. Each change says ADD, CHANGE or DELETE and names the approved covenant it touches.</p></div>
+<div class="box say"><span class="tag">SAY</span><p>"For an amendment, Spring also sends the covenants already approved. DPS says, for each one, whether the amendment adds, changes or deletes it, and gives the full set after the change. If it cannot tell which covenant a change touches, it asks a person instead of guessing. And Spring must send those approved covenants: without them DPS refuses the job with <code>BASE_REQUIRED</code>, because it would compare against nothing."</p></div>
+<div class="box you"><span class="tag">FOR YOU</span><p>The values in <code>southcross-base.json</code> are a sample of what CTS would hold, not taken from the original 2014 agreement. Say "sample approved covenants" if asked.</p></div>
+
+<h3>4b. A restated agreement's amendment: the architect's Holly file <span class="pill">1 min, optional</span></h3>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\architect-documents\us_holly_amendment_2010.pdf --amends v-holly-restated-2008</pre></div>
+<div class="box show"><span class="tag">SHOW</span><p><code>type AMENDMENT (0.9), skill amendment_diff/1.0.0</code>. It was sent as ONBOARD, so DPS chose the skill itself.</p></div>
+<div class="box say"><span class="tag">SAY</span><p>"This one is the First Amendment to an amended and restated credit agreement. DPS classifies it correctly as an <b>amendment</b>, not as a new agreement. That matters: an amendment changes existing covenants, it does not create a new set."</p></div>
+
+<h3>4c. Waiver letter <span class="pill">2 min &middot; DPS sample, new this week</span></h3>
+<div class="box open"><span class="tag">OPEN</span> <a href="../../../docs/cts-dps/demo-kit/waiver-letter.pdf">waiver-letter.pdf</a>. Read the waiver sentence out loud.</div>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\docs\cts-dps\demo-kit\waiver-letter.pdf --job EXTRACT_WAIVER --base C:\cts-dps\docs\cts-dps\demo-kit\base-covenants.json</pre></div>
+<div class="box show"><span class="tag">SHOW</span><p><code>WAIVER of AC-11 DSCR for 2026-03-31; expires 2026-09-30; 1 condition(s)</code>, and status NEEDS_REVIEW.</p></div>
+<div class="box say"><span class="tag">SAY</span><p>"Say the borrower's DSCR fell below 1.20 in March, and the bank forgives it once. That letter is a waiver. DPS reads which approved covenant it waives (AC-11, the DSCR), for which test date (31 March 2026), on what condition (equity of 10 crore by June) and until when (30 September). A waiver changes whether a breach is a breach, so it always goes to a person."</p></div>
+
+<h3>4d. The covenants in force today, across the set <span class="pill">2 min &middot; new this week</span></h3>
+<div class="box you"><span class="tag">FOR YOU</span><p>Needs the amendment and the waiver of the same loan read first. 4c read the waiver. Run the amendment now (5 seconds). The set refers to both by their version IDs, which <code>submit_job.py</code> builds from the file content, so they always match <code>set-manifest.json</code>.</p></div>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\docs\cts-dps\demo-kit\amendment-demo.pdf --job EXTRACT_AMENDMENT --base C:\cts-dps\docs\cts-dps\demo-kit\base-covenants.json
+C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\docs\cts-dps\demo-kit\set-manifest.json --job RECONCILE_SET --base C:\cts-dps\docs\cts-dps\demo-kit\base-covenants.json</pre></div>
+<div class="box open"><span class="tag">OPEN</span> <a href="../../../docs/cts-dps/demo-kit/set-manifest.json">set-manifest.json</a>: the list Spring sends (agreement, amendment, waiver, with effective dates, and the date 30 Jun 2026).</div>
+<div class="box show"><span class="tag">SHOW</span><ul>
+<li>DSCR at <b>1.1</b> (changed by the amendment), with <code>trail: APPROVED &gt; CHANGED &gt; WAIVED</code>;</li>
+<li>ICR gone (deleted), current ratio 1.25 added;</li>
+<li>the line <code>set SET-DEMO-1 at 2026-06-30: applied ...</code>.</li></ul></div>
+<div class="box say"><span class="tag">SAY</span><p>"CTS needs the covenants <b>in force on a date</b>, not what one PDF says. Spring sends the list of related documents. DPS does not read them again: it takes each one's result, applies them in date order, and returns what is in force on 30 June, with a trail showing which document set or changed each covenant. If a document in the list has not been read yet, DPS blocks the set instead of giving a wrong answer. Spring approves the set, as always."</p></div>
+
+<h3>4e. Company and condition, guarantee and restated agreement <span class="pill">1 min, optional</span></h3>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\docs\cts-dps\demo-kit\agreement-two-companies.pdf
+C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\docs\cts-dps\demo-kit\guarantee.pdf
+C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\docs\cts-dps\demo-kit\restated-agreement.pdf --restates v-agreement-2024</pre></div>
+<div class="box show"><span class="tag">SHOW</span><ul>
+<li>two DSCR lines: <code>[Borrower, standalone] 1.25</code> and <code>[Guarantor, consolidated] 1.1</code>;</li>
+<li>FCCR with <code>only if: If Excess Availability is less than USD 10,000,000 ...</code> (a springing covenant);</li>
+<li>guarantee: type GUARANTEE, covenant <code>[Guarantor, consolidated]</code>;</li>
+<li>restated agreement: <code>restates version v-agreement-2024</code> and the warning RESTATES.</li></ul></div>
+<div class="box say"><span class="tag">SAY</span><p>"Two covenants with the same name but for two companies stay two covenants. A covenant that applies only when loans are drawn is marked as springing, so CTS does not test it every quarter. A guarantee's covenants bind the guarantor. A restated agreement replaces the old covenant set once approved."</p></div>
+
+<h3>4f. Assessment: a financial statement <span class="pill">1 min</span></h3>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\golden-set\documents\FS-012.pdf --job EXTRACT_STATEMENT --as-of 2026-03-31</pre></div>
+<div class="box say"><span class="tag">SAY</span><p>"For the assessment cycle, DPS reads the statement lines with their page or cell, and checks the period, the company, the currency and the units against what the cycle expects. Every expected line that is not found is listed, so nothing is silently zero. The figures go to Spring only after a person has reviewed them."</p></div>
+
+<h3>4g. Safety: a fake PDF <span class="pill">1 min</span></h3>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>C:\cts-dps\dps\.venv\Scripts\python.exe C:\cts-dps\dps\scripts\submit_job.py C:\cts-dps\docs\cts-dps\demo-kit\fake.pdf
+curl.exe -H "X-User: ops-1" -H "X-Roles: SUPPORT" http://localhost:9400/dps/v1/ops/queues</pre></div>
+<div class="box show"><span class="tag">SHOW</span><p><code>job ended FAILED: TYPE_SPOOFED</code>, then the queue counts.</p></div>
+<div class="box say"><span class="tag">SAY</span><p>"This is a text file renamed to .pdf. DPS checks the real file type before opening anything, refuses it and tells Spring why. Unsafe files are never parsed. And operations can see every queue at any time."</p></div>
+</div>
+
+<!-- ================================================================== -->
+<div class="phase">
+<h2>Phase 5. How it is built <span class="pill">15 min &middot; the architect &middot; Archify, full view</span></h2>
+<div class="box open"><span class="tag">OPEN</span> Browser tab 1: <a href="../../../docs/cts-dps/diagrams/dps-complete.html">dps-complete.html</a>, now with the DPS blocks open. Keep <a href="../../../docs/cts-dps/diagrams/dps-flow-explained.html">dps-flow-explained.html</a> on your screen for the words for each block. Then switch to <a href="../../../docs/cts-dps/diagrams/dps-full-flow.html">dps-full-flow.html</a> and walk the team through it row by row (14 rows, steps 5.1 to 5.4 below), with the file and line on each box.</div>
+<div class="box show"><span class="tag">SHOW</span><p>Point in order: API (<code>api/jobs.py</code>) &rarr; <code>dps_job</code> queue &rarr; worker (<code>worker.py</code>) &rarr; ingest and parse sandbox &rarr; CrewAI flow &rarr; skills runner &rarr; Document Agent + gateway + tools &rarr; Spring tools client &rarr; scoring &rarr; ledger &rarr; event feed.</p></div>
+
+<h3>5.1 Walk dps-full-flow.html row by row (the tables each row writes)</h3>
+<p class="small">Keep <a href="../../../docs/cts-dps/diagrams/dps-flow-explained.html">dps-flow-explained.html</a> on your own screen: click the same block number there for what it does, what to say, its DB tables and columns, and its code (VS Code or GitHub).</p>
+<table>
+  <tr><th>Row</th><th>Say</th><th>DB tables (columns) written</th></tr>
+  <tr><td>0</td><td>The contracts: what Spring sends (job request), what DPS returns (result), what DPS calls in Spring (tools).</td><td>none</td></tr>
+  <tr><td>1</td><td>Spring sends a job; DPS checks type, format and SHA-256, stops duplicates, answers 202 at once.</td><td><code>dps_document</code> (id, type, file_name, sha256, object_key, status) &middot; <code>dps_document_cp_link</code> (document_id, cp_id) &middot; <code>dps_job</code> (job_type, flow=SKILL_PACK, status=QUEUED, request_json, input_key) &middot; <code>dps_event_feed</code> (seq, type=dps.job.accepted)</td></tr>
+  <tr><td>2</td><td>A Python worker claims the job atomically, keeps a lease, and every reading job takes the one pipeline.</td><td><code>dps_job</code> (status=RUNNING, locked_by, locked_until, attempts) &middot; <code>dps_job_attempt</code> (attempt_no, worker_id, started_at)</td></tr>
+  <tr><td>3</td><td>The file is read again by hash, inspected, parsed in a sandbox with no network; OCR is local.</td><td>file <code>derived\...\page-model.json.gz</code> &middot; <code>dps_artifact</code> (kind=PAGE_MODEL, path, sha256, pipeline_version)</td></tr>
+  <tr><td>4</td><td>The skill: from the job type, or for ONBOARD from the document type (rules first, the agent double-checks).</td><td>none</td></tr>
+  <tr><td>5</td><td>Rules first, no AI: every skill reads with its own rules, page and quote on every value.</td><td>none</td></tr>
+  <tr><td>6</td><td>Only the right pages go to the agent: covenant pages ranked, read in 4 focused parts.</td><td>none</td></tr>
+  <tr><td>7</td><td>One fresh Document Agent per read, with the skill's tools; every model call through the gateway to the bank's Azure.</td><td><code>dps_ai_call</code> (purpose, model, tokens, cost, masked text) &middot; <code>dps_ai_usage</code> &middot; <code>dps_ai_cache</code></td></tr>
+  <tr><td>8</td><td>Rules vs agent: schema, quote on the page, then the vote (see 5.3). The ledger accounts for every duty sentence.</td><td>none (kept in the result)</td></tr>
+  <tr><td>9</td><td>Checks: taxonomy code, whose covenant and conditions, Java formula check, direction, number in its quote; then confidence and route.</td><td>none (kept in the result)</td></tr>
+  <tr><td>10</td><td>Result saved once, event for Spring, a person reviews, Spring decides.</td><td><code>dps_run</code> (run_no, status, trigger, result_json) &middot; <code>dps_job</code> (DONE / NEEDS_REVIEW, finished_at) &middot; <code>dps_event_feed</code> &middot; review: <code>dps_review_decision</code> (field_id, action, old/new value), new <code>dps_run</code>, statements: <code>dps_statement_value</code></td></tr>
+  <tr><td>11-12</td><td>Every skill, its rules, prompt, schema and tools (table 5.2).</td><td>&ndash;</td></tr>
+  <tr><td>13</td><td>The 21 tables of the <code>dps</code> schema.</td><td>&ndash;</td></tr>
+</table>
+
+<h3>5.2 Each flow: how it runs and what it extracts</h3>
+<table>
+  <tr><th>Flow (demo step)</th><th>Job type &rarr; skill</th><th>Rules read (no AI)</th><th>Agent reads (AI on)</th><th>Fields extracted (<code>value</code>)</th></tr>
+  <tr><td>Onboarding (3, 4e)</td><td>ONBOARD &rarr; classify &rarr; <b>covenants</b> 3.1.0 + schedule_terms</td><td>numbered clauses, metric names, 'not less than / shall not exceed', step-down tables; safety net for unknown wordings</td><td>up to 12 &times; 25 pages, 4 parts (financial, undertakings, reporting, events of default); then a residual read of unexplained duty sentences</td><td>metric, code, operator, threshold, unit, frequency, schedule, cure, scope (obligor, basis, facility), conditions, firstTestDate; schedule terms: kind, rule, daysAfterPeriodEnd</td></tr>
+  <tr><td>Amendment (4a, 4b, 4d)</td><td>EXTRACT_AMENDMENT &rarr; <b>amendment_diff</b> 1.0.0 + schedule_terms</td><td>'substituted / deleted / inserted' per clause, matched to the approved covenant (<code>baseCovenants</code>)</td><td>the same changes, with a one-line explanation of each</td><td>the covenant + change (ADD / CHANGE / DELETE, clause, effectiveDate, appliedCovenantId); <code>amendedSet</code></td></tr>
+  <tr><td>Waiver (4c)</td><td>EXTRACT_WAIVER &rarr; <b>waiver</b> 1.0.0</td><td>waived covenant (by clause, then metric), test dates or periods, conditions, expiry, fee</td><td>the same, from the letter</td><td>kind, target (metric, clause, appliedCovenantId), periods, conditions, expiresOn, reinstatement, fee</td></tr>
+  <tr><td>Document set (4d)</td><td>RECONCILE_SET &rarr; <b>reconcile_set</b> 1.0.0</td><td>no reading: each document's latest result, applied in date order</td><td>none</td><td>the covenants in force on the date, each with its trail (APPROVED, CHANGED, RESTATED, WAIVED)</td></tr>
+  <tr><td>Guarantee, restated (4e)</td><td>ONBOARD &rarr; GUARANTEE / AMENDED_AND_RESTATED &rarr; <b>covenants</b></td><td>as onboarding</td><td>as onboarding</td><td>as onboarding; restated: <code>restates</code> + warning RESTATES</td></tr>
+  <tr><td>Statement (4f)</td><td>EXTRACT_STATEMENT &rarr; <b>statement_lines</b> 3.0.0</td><td>table reader (positions, columns, periods), Excel/CSV rows, label memory, currency + FX, units, cycle checks, accounting identities</td><td>optional second reader on the same pages: same figure = confirmed; different = SECOND_READER_DIFFERS</td><td>line key (EBITDA, PAT, TOTAL_DEBT ...), amount, unit, currency, asOfDate, periodMonths, cellRef; stored in <code>dps_statement_value</code> only after review</td></tr>
+  <tr><td>Fake file (4g)</td><td>any</td><td>inspection refuses it before parsing (TYPE_SPOOFED)</td><td>none</td><td>none: job FAILED, event dps.job.failed</td></tr>
+  <tr><td>Not in the demo</td><td>EXTRACT_SANCTION &rarr; <b>sanction</b>; EXTRACT_CERTIFICATE &rarr; <b>certificate</b>; DRAFT_COMMENTARY &rarr; <b>commentary</b>; ANALYZE</td><td>sanction terms; certified figures, UDIN; draft from the manifest; type + identifiers</td><td>same skills' prompts</td><td>sanction: SANCTIONED_AMOUNT, FACILITY_TYPE, TENOR_MONTHS, INTEREST_RATE, SECURITY, CONDITIONS_PRECEDENT, VALIDITY &middot; certificate: covenant, figure, declaredCompliant, signatory, udin</td></tr>
+</table>
+<p class="small">Every field also carries <code>source</code> (page, quote, box), <code>method</code>, <code>confidence</code>, <code>issues</code> and <code>status</code>. The fields are listed in full in <a href="../../../docs/cts-dps/diagrams/dps-complete.html">dps-complete.html</a> (section "Which fields does each skill extract?").</p>
+
+<h3>5.3 Rules first, then the agent: what happens when they agree or not</h3>
+<table>
+  <tr><th>Outcome</th><th>Field</th><th>Say</th></tr>
+  <tr><td>Rules and agent read the same value</td><td>method <code>RULES+AI_CONFIRMED</code>, confidence at least 0.95</td><td>"Two independent readings agree."</td></tr>
+  <tr><td>They read different values</td><td>rules' value kept, issue <code>MODELS_DISAGREE</code> with both readings, <code>NEEDS_REVIEW</code></td><td>"A person sees both and decides."</td></tr>
+  <tr><td>Only the agent found it</td><td>method <code>AI</code>, issue <code>AI_ONLY</code>, <code>NEEDS_REVIEW</code></td><td>"What only the AI found is shown, never accepted automatically."</td></tr>
+  <tr><td>Only the rules found it</td><td>method <code>RULES</code>, lower confidence</td><td>"High-risk fields, such as every covenant, are reviewed anyway."</td></tr>
+  <tr><td>The quote is not on its page</td><td>the agent's item is dropped (<code>AI_UNGROUNDED</code>)</td><td>"If the model cannot show where it read it, we drop it."</td></tr>
+  <tr><td>AI switched off (today on this laptop)</td><td>rules only, warning <code>AI_NOT_USED</code>, every field reviewed</td><td>"The AI adds a second reading in the bank; the flow is the same."</td></tr>
+</table>
+
+<div class="box say"><span class="tag">SAY</span>
+<p>"Your five rules are all kept:</p>
+<ol><li><b>Same VM</b> as the Spring app.</li>
+<li><b>Jobs only</b>: every document is a job in a queue table, with retries and a dead-letter state.</li>
+<li><b>Python workers poll</b> that table. Several workers never take the same job twice.</li>
+<li><b>One CrewAI flow per job</b>, with fixed steps, so the same input always takes the same path.</li>
+<li><b>One fresh Document Agent per job</b>, with only that job type's skill pack and tools. It reads; the rules and checks decide what is trusted.</li></ol>
+<p>Against your two Miro boards, there are three differences, and each needs your decision:</p>
+<ul><li><b>Who writes the job row:</b> Spring calls our job API and DPS writes the row. The API checks input and removes duplicates, so the table stays private to DPS.</li>
+<li><b>Push or pull:</b> DPS pushes events to Spring, and Spring can also pull them as a safety net.</li>
+<li><b>Assessment:</b> the boards show it only as an entry point, so we followed Flow 3 of the design for statements and certificates."</li></ul></div>
+<div class="box you"><span class="tag">FOR YOU</span><p>The Java wrap: Spring's business rules (formula check, identifier lookup, covenant library) are called as read-only tools. DPS never writes to the Spring database.</p></div>
+</div>
+
+<!-- ================================================================== -->
+<div class="phase">
+<h2>Phase 6. What each team builds <span class="pill">10 min &middot; Spring and UI developers &middot; Swagger</span></h2>
+<div class="box open"><span class="tag">OPEN</span> Browser tab 2: <a href="http://localhost:9400/docs">http://localhost:9400/docs</a>. Click "Try it out" on each endpoint below. Paste a job ID from phase 3 (it was printed on line 2). In Swagger, add the headers <code>X-User: cts-spring</code> and <code>X-Roles: SERVICE</code>.</div>
+
+<h3>6.1 For the Spring developers: what Spring calls</h3>
+<table>
+<tr><th>Step</th><th>Endpoint</th><th>Point at</th></tr>
+<tr><td>Submit a job</td><td><code>POST /dps/v1/jobs</code></td><td>the body (<code>jobType</code>, <code>document</code>, <code>context</code>), the <code>Idempotency-Key</code> header, <code>duplicate: true</code> on a repeat. Sample bodies are in Appendix A.</td></tr>
+<tr><td>Follow it</td><td><code>GET /dps/v1/jobs/{jobId}</code></td><td>status: QUEUED, RUNNING, NEEDS_REVIEW, DONE, FAILED, DEAD, CANCELLED</td></tr>
+<tr><td>Get the result</td><td><code>GET /dps/v1/jobs/{jobId}/result</code></td><td>fields with page and quote; <code>ETag</code> and 304</td></tr>
+<tr><td>Result format</td><td><code>GET /dps/v1/schemas/result</code></td><td>the JSON schema; the new <code>scope</code>, <code>conditions</code>, <code>waiverValue</code> and <code>inForce</code></td></tr>
+<tr><td>Events</td><td><code>GET /dps/v1/events?after=0</code></td><td><code>seq</code>, <code>type</code>, <code>jobId</code>; Spring keeps its last <code>seq</code></td></tr>
+<tr><td>Bulk upload</td><td><code>POST /dps/v1/batches</code>, <code>GET /dps/v1/batches/{id}</code>, <code>/errors.csv</code>, <code>/rerun</code></td><td>one result per file; a bad file never stops the rest</td></tr>
+<tr><td>Cancel, retry</td><td><code>POST /dps/v1/jobs/{id}/cancel</code>, <code>/retry</code></td><td>cancel is honoured even while running</td></tr>
+<tr><td>What exists</td><td><code>GET /dps/v1/capabilities</code></td><td>job types, now including <code>EXTRACT_WAIVER</code> and <code>RECONCILE_SET</code></td></tr>
+</table>
+<div class="box say"><span class="tag">SAY</span><p>"Every error has the same envelope as the bank app: <code>code</code>, <code>message</code>, <code>details</code>, <code>timestamp</code>. Every code is listed in the error catalogue with a message you can show users."</p></div>
+<div class="box open"><span class="tag">OPEN</span> <a href="../../../contracts/catalogues/errors.yaml">errors.yaml</a>, then <a href="../../../contracts/spring-tools.yaml">spring-tools.yaml</a>.</div>
+<div class="box say"><span class="tag">SAY</span>
+<p>"What Spring builds for DPS is small:</p>
+<ol><li><b>Three read-only tool endpoints:</b> formula validation (in a batch), identifier lookup and the covenant library. They reuse your Java rules.</li>
+<li><b>One endpoint that receives our events.</b> Ignore duplicates by <code>eventId</code>, because we deliver at least once.</li>
+<li><b>Always send <code>baseCovenants</code></b>, the approved covenants, with every amendment and waiver job.</li>
+<li><b>For 'in force today'</b>, send the list of related documents as a set manifest.</li></ol>
+<p>And read two new things on each covenant: <code>scope</code>, meaning whose covenant it is, and <code>conditions</code>, meaning 'only if'. They are additions, so code that ignores them keeps working."</p></div>
+
+<h3>6.2 For the UI developers: the review screen</h3>
+<table>
+<tr><th>Step</th><th>Endpoint</th><th>Point at</th></tr>
+<tr><td>Load the review</td><td><code>GET /dps/v1/jobs/{jobId}/review</code></td><td>each field: value, page, quote, box (<code>bbox</code>), confidence, reasons, issues; the <code>revision</code></td></tr>
+<tr><td>The page picture</td><td><code>GET /dps/v1/versions/{versionId}/pages/{n}/image</code></td><td>draw the <code>bbox</code> on it to highlight the sentence</td></tr>
+<tr><td>Save decisions</td><td><code>POST /dps/v1/jobs/{jobId}/review</code> with <code>If-Match: &lt;revision&gt;</code></td><td>CONFIRM, CORRECT, REJECT, and ACKNOWLEDGE for a blocking warning (with a reason)</td></tr>
+</table>
+<div class="box say"><span class="tag">SAY</span><p>"The screen shows each covenant next to its page, with the sentence highlighted. The reviewer confirms, corrects or rejects. Every save creates a new revision, and nothing is overwritten, so the audit trail is complete. A blocking warning, such as 'wrong borrower', needs an explicit acknowledgement with a reason. For a waiver or a springing covenant, show the condition text beside the value."</p></div>
+<div class="box you"><span class="tag">FOR YOU</span><p>Let Spring and the UI developers ask their contract questions here. Write each one down as an action item, with a name.</p></div>
+</div>
+
+<!-- ================================================================== -->
+<div class="phase">
+<h2>Phase 7. Database and operations <span class="pill">3 min &middot; architect, Spring &middot; DB viewer</span></h2>
+<div class="box open"><span class="tag">OPEN</span> DB viewer on <code>dps.db</code>, and <a href="../../../docs/cts-dps/diagrams/dps-complete.html">dps-complete.html</a>, database panel.</div>
+<div class="box show"><span class="tag">SHOW</span><p><code>dps_job</code> (the queue), <code>dps_run</code> (each result, never changed), <code>dps_event_feed</code> (events with seq), <code>dps_artifact</code> (where the parsed pages are), <code>dps_review_decision</code> (each person's decision).</p></div>
+<div class="box run"><span class="tag">RUN</span> <b>Terminal C</b>
+<pre>curl.exe http://localhost:9400/health/ready</pre></div>
+<div class="box say"><span class="tag">SAY</span><p>"DPS has its own <code>dps</code> schema on the bank's SQL Server, and shares no tables with Spring. The <code>derived</code> folder holds the parsed pages, written once. Every job writes JSON logs. There are metrics and alerts for stuck, failed and dead jobs, and <code>/health/ready</code> also says whether the workers are alive."</p></div>
+</div>
+
+<!-- ================================================================== -->
+<div class="phase">
+<h2>Phase 8. Honest status and decisions needed <span class="pill">4 min &middot; everyone</span></h2>
+<div class="box say"><span class="tag">SAY</span>
+<p><b>"Built and working:</b> all the flows you saw, the job API, the review gate, the checks, and rules with the AI as a second reader.</p>
+<p><b>Found in our own review, and fixed</b> (I'd rather say it before you find it):</p>
+<ul><li>the old agreement and statement paths could auto-publish; now nothing is applied without a person;</li>
+<li>a job could stay stuck as RUNNING; now it is reaped;</li>
+<li>some covenant wordings, tables and springing conditions were missed; now they are found or sent to review.</li></ul>
+<p><b>New this week:</b> company and condition on each covenant, waivers, guarantees, amended and restated agreements, and the 'in force on a date' set.</p>
+<p><b>Still open:</b> a full timeline per covenant (today it is in force on one date per call), speed tests on the real VM with the bank's Azure, and a labelled set of the bank's own documents to measure accuracy."</p></div>
+<div class="box say"><span class="tag">SAY</span> <b>Decisions we need today:</b>
+<ol><li><b>Who writes the job row:</b> the DPS API (our proposal) or Spring directly into the table?</li>
+<li><b>Push or pull</b> for events (our proposal: push, plus pull as a safety net)?</li>
+<li><b>The new covenant fields</b>, <code>scope</code> and <code>conditions</code>: are they OK for Spring and the UI?</li>
+<li><b>Waivers and document sets:</b> will Spring send <code>baseCovenants</code> and the set list?</li>
+<li><b>Sign-in:</b> a service token (our proposal) or the bank's IdP?</li></ol></div>
+<div class="box you"><span class="tag">FOR YOU</span><p>Close with: "I'll send the action items and this script today." Then stop the terminals (Ctrl+C).</p></div>
+</div>
+
+<!-- ================================================================== -->
+<div class="phase">
+<h2>Appendix A. Request bodies, ready to paste</h2>
+<p class="small">The <code>objectKey</code> and <code>sha256</code> are printed by <code>submit_job.py</code> on line 1 (the key) and in <code>show_job.py</code>. In Swagger, replace them with the values of a file already stored.</p>
+<h3>A.1 Onboarding (ONBOARD)</h3>
+<pre>{
+  "jobType": "ONBOARD",
+  "document": {"versionId": "v-agr-2026-001", "objectKey": "cb/cba19...pdf", "sha256": "&lt;64 hex&gt;",
+               "fileName": "us_ex10_1_credit_agreement_2020.pdf", "mediaType": "application/pdf", "sizeBytes": 1734296},
+  "context": {"tenantId": "default", "cpIds": ["CP-DEMO-1"], "facilityIds": ["FAC-101"],
+              "expectedType": "LOAN_AGREEMENT", "requestedBy": "rm-demo"}
+}
+Header: Idempotency-Key: demo-onboard-0001</pre>
+<h3>A.2 Amendment (EXTRACT_AMENDMENT) with the approved covenants</h3>
+<pre>{
+  "jobType": "EXTRACT_AMENDMENT",
+  "document": { ... as above, the amendment's file ... },
+  "context": {"tenantId": "default", "cpIds": ["CP-DEMO-1"], "requestedBy": "rm-demo",
+              "baseCovenants": [
+                {"appliedCovenantId": "AC-SX-1", "name": "Consolidated Interest Coverage Ratio", "metric": "ICR",
+                 "operator": "&gt;=", "threshold": 2.0},
+                {"appliedCovenantId": "AC-SX-2", "name": "Consolidated Leverage Ratio", "metric": "DEBT_TO_EBITDA",
+                 "operator": "&lt;=", "threshold": 5.0}]}
+}</pre>
+<h3>A.3 Waiver (EXTRACT_WAIVER)</h3>
+<pre>{"jobType": "EXTRACT_WAIVER", "document": { ... the waiver letter ... },
+ "context": {"requestedBy": "rm-demo", "cpIds": ["CP-DEMO-1"], "baseCovenants": [ ... approved covenants ... ]}}
+Without baseCovenants: 400 {"code": "BASE_REQUIRED", ...}</pre>
+<h3>A.4 Document set (RECONCILE_SET): the manifest file</h3>
+<pre>{"setId": "SET-DEMO-1", "asOfDate": "2026-06-30",
+ "documents": [
+   {"versionId": "v-agreement-2024", "role": "AGREEMENT", "effectiveDate": "2024-04-01"},
+   {"versionId": "&lt;amendment version&gt;", "role": "AMENDMENT", "effectiveDate": "2026-04-01"},
+   {"versionId": "&lt;waiver version&gt;", "role": "WAIVER", "effectiveDate": "2026-05-15"}]}
+Roles: AGREEMENT, AMENDED_AND_RESTATED, AMENDMENT, WAIVER, SIDE_LETTER, GUARANTEE.
+Sent as the job's document with mediaType application/json; baseCovenants in context.</pre>
+<h3>A.5 Review decisions</h3>
+<pre>POST /dps/v1/jobs/{jobId}/review      Header: If-Match: &lt;revision from GET review&gt;
+{"decisions": [
+  {"fieldId": "cov-...", "action": "CONFIRM"},
+  {"fieldId": "cov-...", "action": "CORRECT", "value": {"threshold": 3.25}, "comment": "per page 63"},
+  {"fieldId": "cov-...", "action": "REJECT", "comment": "a definition, not a covenant"},
+  {"fieldId": "warning:ENTITY_MISMATCH", "action": "ACKNOWLEDGE", "comment": "group name in the header"}]}</pre>
+<h3>A.6 The result with curl</h3>
+<pre>curl.exe -H "X-User: cts-spring" -H "X-Roles: SERVICE" http://localhost:9400/dps/v1/jobs/&lt;jobId&gt;/result -o C:\cts-dps\dps\result.json
+curl.exe -H "X-User: cts-spring" -H "X-Roles: SERVICE" "http://localhost:9400/dps/v1/events?after=0"</pre>
+</div>
+
+<div class="phase">
+<h2>Appendix B. If something goes wrong</h2>
+<table>
+<tr><th>What you see</th><th>Why</th><th>Do</th><th>Say</th></tr>
+<tr><td><code>submit_job.py</code> stays on QUEUED</td><td>no worker running</td><td>start Terminal B</td><td>"the worker was not started"</td></tr>
+<tr><td>Terminal B: <code>MOVED_HEAVY PARSE_TIMEOUT</code></td><td>a slow parse on a busy laptop</td><td>Terminal H takes it; wait</td><td>"slow files move to the heavy pool by themselves"</td></tr>
+<tr><td>Line 2: <code>400 BASE_REQUIRED</code></td><td>no <code>--base</code> on an amendment or waiver</td><td>add <code>--base ...json</code></td><td>"exactly what Spring must send"</td></tr>
+<tr><td>Line 2: duplicate at once</td><td>read in the rehearsal</td><td>carry on, or reset (0.6) in a break</td><td>"it was read earlier, so no double work"</td></tr>
+<tr><td>Warnings <code>SPRING_UNAVAILABLE</code></td><td>no Spring on the laptop</td><td>nothing</td><td>"the Java checks run in the bank; here those fields go to review"</td></tr>
+<tr><td>Warning <code>AI_NOT_USED</code></td><td>AI is off</td><td>nothing</td><td>"rules only today; the AI adds a second reading"</td></tr>
+<tr><td>Set: <code>SET_INCOMPLETE</code></td><td>the amendment or waiver of 4d not read yet</td><td>run them, then the set again</td><td>"it refuses to guess with a document missing"</td></tr>
+<tr><td>Swagger 401/403</td><td>missing headers</td><td>add <code>X-User</code> and <code>X-Roles: SERVICE</code></td><td>"dev sign-in; the bank uses a service token"</td></tr>
+<tr><td>Port 9400 in use</td><td>an old API still running</td><td>close it, or <code>--port 9401</code> (and <code>--api http://localhost:9401</code>)</td><td>&ndash;</td></tr>
+</table>
+</div>
+
+<div class="phase">
+<h2>Appendix C. Questions you may get</h2>
+<table>
+<tr><th>Question</th><th>Answer</th></tr>
+<tr><td>Does DPS ever approve or publish a covenant?</td><td>No. Every result waits for a person in Spring. Even a clean agreement is stored as proposed.</td></tr>
+<tr><td>What if the AI makes something up?</td><td>Every value must quote the page it came from, and the quote is checked against the page text. A number not in its quote goes to review. The model cannot vouch for itself.</td></tr>
+<tr><td>What if Azure is down?</td><td>The job finishes on rules only, and the fields go to review. A model problem never fails a job.</td></tr>
+<tr><td>How do you know nothing was missed?</td><td>The ledger lists every duty sentence in the document and gives each an outcome. Anything not explained is a review item, and 10% of dismissals are sampled for a person.</td></tr>
+<tr><td>Why does Spring send the approved covenants?</td><td>People may have corrected DPS's first reading. An amendment or waiver must be compared with what was approved, not with what DPS once read.</td></tr>
+<tr><td>Is the result format changing?</td><td>Only additions: <code>scope</code>, <code>conditions</code>, <code>baskets</code>, <code>equityCure</code>, the waiver value and <code>inForce</code>. Code that ignores them keeps working.</td></tr>
+<tr><td>Two companies with the same covenant?</td><td>Two covenants, each with its own <code>scope</code>. If one clause binds both, it is flagged so a person can split it.</td></tr>
+<tr><td>What does DPS store?</td><td>Its own tables and the parsed pages. The file itself stays in the DMS. DPS never writes to the Spring database.</td></tr>
+<tr><td>How fast is it?</td><td>Spring gets the job ID in milliseconds. A 100-page native PDF is read in about a minute on rules; speed on the real VM with Azure is still to be measured.</td></tr>
+<tr><td>Word and Excel?</td><td>Yes. Word is read as logical pages, including form fields, footnotes and tracked changes; Excel flags hidden rows and missing saved values.</td></tr>
+</table>
+</div>
+
+<div class="phase">
+<h2>Appendix D. Reset after the demo</h2>
+<div class="box run"><span class="tag">RUN</span> Stop A, B and H with Ctrl+C. Then in any PowerShell window:
+<pre>cd C:\cts-dps\dps
+Remove-Item C:\cts-dps\dps\dps.db, C:\cts-dps\dps\storage, C:\cts-dps\dps\derived, C:\cts-dps\dps\staging -Recurse -Force -ErrorAction SilentlyContinue
+C:\cts-dps\dps\.venv\Scripts\alembic.exe upgrade head
+Remove-Item C:\cts-dps\dps\ex10-result.json -ErrorAction SilentlyContinue</pre></div>
+
+<h2>Appendix E. Words you will use</h2>
+<table>
+<tr><th>Word</th><th>Meaning</th></tr>
+<tr><td>Job</td><td>One request to read one document (or one set). It goes through a queue.</td></tr>
+<tr><td>Covenant</td><td>A promise in the loan: a ratio to keep, a report to send, something not to do.</td></tr>
+<tr><td>Skill pack</td><td>The instructions, rules and checks for one kind of document (covenants, amendment, waiver ...).</td></tr>
+<tr><td>Document Agent</td><td>The AI reader, built fresh for each job with one skill pack. It proposes; it never decides.</td></tr>
+<tr><td>Ledger</td><td>The list of every duty sentence in the document, each with an outcome.</td></tr>
+<tr><td>baseCovenants</td><td>The approved covenants Spring sends with an amendment, waiver or set.</td></tr>
+<tr><td>Scope</td><td>Whose covenant it is (Borrower, Guarantor, Group), standalone or consolidated, which facility.</td></tr>
+<tr><td>Springing covenant</td><td>A covenant tested only when a condition is met, for example when loans are drawn.</td></tr>
+<tr><td>Waiver</td><td>A letter in which the bank forgives a breach for a test date, often with conditions.</td></tr>
+<tr><td>Amended and restated</td><td>A full new agreement that replaces an earlier one.</td></tr>
+<tr><td>Document set</td><td>The agreement with its amendments and waivers, read together to give the covenants in force on a date.</td></tr>
+<tr><td>Event</td><td>A short message to Spring: "job accepted", "result ready", with an increasing number (seq).</td></tr>
+</table>
+</div>
+
+</body>
+</html>

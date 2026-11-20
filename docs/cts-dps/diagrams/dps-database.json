@@ -10,7 +10,7 @@
    "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
    "provider": "github",
    "link_mode": "web",
-   "revision": "ce996d3d33d461c19d0071b3df8aa5b63a77def8"
+   "revision": "1fa0723bb3ca2a401924f30f80edf7be2511740e"
   }
  },
  "layout": {
@@ -162,117 +162,11 @@
    "width": 290
   },
   {
-   "id": "dps_extracted_term",
-   "label": "dps_extracted_term",
-   "sublabel": "ExtractedTerm",
-   "tag": "documents",
-   "row": 2,
-   "col": 0,
-   "attributes": [
-    {
-     "name": "id",
-     "type": "varchar(36)",
-     "key": "pk"
-    },
-    {
-     "name": "document_id",
-     "type": "varchar(36)",
-     "key": "fk",
-     "references": "dps_document.id"
-    },
-    {
-     "name": "metric_raw",
-     "type": "nvarchar(128)"
-    },
-    {
-     "name": "name",
-     "type": "nvarchar(200)"
-    },
-    {
-     "name": "covenant_master_id",
-     "type": "varchar(64)"
-    },
-    {
-     "name": "expression",
-     "type": "nvarchar(2000)"
-    },
-    {
-     "name": "operator",
-     "type": "varchar(4)"
-    },
-    {
-     "name": "threshold",
-     "type": "float"
-    },
-    {
-     "name": "unit",
-     "type": "varchar(32)"
-    },
-    {
-     "name": "frequency",
-     "type": "varchar(16)"
-    },
-    {
-     "name": "category",
-     "type": "varchar(16)"
-    },
-    {
-     "name": "confidence",
-     "type": "float"
-    },
-    {
-     "name": "method",
-     "type": "varchar(8)"
-    },
-    {
-     "name": "status",
-     "type": "varchar(16)"
-    },
-    {
-     "name": "issues_json",
-     "type": "text"
-    },
-    {
-     "name": "page",
-     "type": "integer"
-    },
-    {
-     "name": "quote",
-     "type": "nvarchar(500)"
-    },
-    {
-     "name": "schedule_json",
-     "type": "ntext"
-    },
-    {
-     "name": "reviewed_by",
-     "type": "varchar(255)"
-    },
-    {
-     "name": "review_note",
-     "type": "nvarchar(2000)"
-    },
-    {
-     "name": "created_at",
-     "type": "datetime2"
-    }
-   ],
-   "sources": [
-    {
-     "path": "dps/src/dps/models.py",
-     "line": 352,
-     "end_line": 376,
-     "label": "class ExtractedTerm"
-    }
-   ],
-   "width": 290
-  },
-  {
    "id": "dps_statement_value",
    "label": "dps_statement_value",
    "sublabel": "StatementValue",
    "tag": "documents",
-   "row": 3,
+   "row": 2,
    "col": 0,
    "attributes": [
     {
@@ -348,8 +242,8 @@
    "sources": [
     {
      "path": "dps/src/dps/models.py",
-     "line": 423,
-     "end_line": 448,
+     "line": 373,
+     "end_line": 398,
      "label": "class StatementValue"
     }
    ],
@@ -401,10 +295,6 @@
     {
      "name": "steps_json",
      "type": "text"
-    },
-    {
-     "name": "flow_state_id",
-     "type": "varchar(64)"
     },
     {
      "name": "locked_by",
@@ -666,55 +556,11 @@
    "width": 290
   },
   {
-   "id": "dps_flow_state",
-   "label": "dps_flow_state",
-   "sublabel": "FlowState",
-   "tag": "job queue",
-   "row": 4,
-   "col": 1,
-   "attributes": [
-    {
-     "name": "id",
-     "type": "varchar(36)",
-     "key": "pk"
-    },
-    {
-     "name": "flow_uuid",
-     "type": "varchar(64)"
-    },
-    {
-     "name": "method_name",
-     "type": "varchar(64)"
-    },
-    {
-     "name": "state_json",
-     "type": "text"
-    },
-    {
-     "name": "pending_feedback_json",
-     "type": "text"
-    },
-    {
-     "name": "saved_at",
-     "type": "datetime2"
-    }
-   ],
-   "sources": [
-    {
-     "path": "dps/src/dps/models.py",
-     "line": 555,
-     "end_line": 566,
-     "label": "class FlowState"
-    }
-   ],
-   "width": 290
-  },
-  {
    "id": "dps_run",
    "label": "dps_run",
    "sublabel": "Run",
    "tag": "results + events",
-   "row": 5,
+   "row": 4,
    "col": 1,
    "attributes": [
     {
@@ -766,7 +612,7 @@
    "label": "dps_artifact",
    "sublabel": "Artifact",
    "tag": "results + events",
-   "row": 6,
+   "row": 5,
    "col": 1,
    "attributes": [
     {
@@ -827,7 +673,7 @@
    "label": "dps_event_feed",
    "sublabel": "EventFeed",
    "tag": "results + events",
-   "row": 7,
+   "row": 6,
    "col": 1,
    "attributes": [
     {
@@ -880,59 +726,11 @@
    "width": 290
   },
   {
-   "id": "dps_event_outbox",
-   "label": "dps_event_outbox",
-   "sublabel": "EventOutbox",
-   "tag": "results + events",
-   "row": 8,
-   "col": 1,
-   "attributes": [
-    {
-     "name": "id",
-     "type": "varchar(36)",
-     "key": "pk"
-    },
-    {
-     "name": "type",
-     "type": "varchar(32)"
-    },
-    {
-     "name": "payload_json",
-     "type": "text"
-    },
-    {
-     "name": "created_at",
-     "type": "datetime2"
-    },
-    {
-     "name": "sent_at",
-     "type": "datetime2"
-    },
-    {
-     "name": "attempts",
-     "type": "integer"
-    },
-    {
-     "name": "last_error",
-     "type": "text"
-    }
-   ],
-   "sources": [
-    {
-     "path": "dps/src/dps/models.py",
-     "line": 451,
-     "end_line": 462,
-     "label": "class EventOutbox"
-    }
-   ],
-   "width": 290
-  },
-  {
    "id": "dps_push_cursor",
    "label": "dps_push_cursor",
    "sublabel": "PushCursor",
    "tag": "results + events",
-   "row": 9,
+   "row": 7,
    "col": 1,
    "attributes": [
     {
@@ -964,7 +762,7 @@
    "label": "dps_leader",
    "sublabel": "Leader",
    "tag": "results + events",
-   "row": 10,
+   "row": 8,
    "col": 1,
    "attributes": [
     {
@@ -996,7 +794,7 @@
    "label": "dps_review_decision",
    "sublabel": "ReviewDecision",
    "tag": "review + learning",
-   "row": 4,
+   "row": 3,
    "col": 0,
    "attributes": [
     {
@@ -1064,7 +862,7 @@
    "label": "dps_golden_candidate",
    "sublabel": "GoldenCandidate",
    "tag": "review + learning",
-   "row": 5,
+   "row": 4,
    "col": 0,
    "attributes": [
     {
@@ -1120,7 +918,7 @@
    "label": "dps_label_memory",
    "sublabel": "LabelMemory",
    "tag": "review + learning",
-   "row": 6,
+   "row": 5,
    "col": 0,
    "attributes": [
     {
@@ -1160,69 +958,9 @@
    "sources": [
     {
      "path": "dps/src/dps/models.py",
-     "line": 379,
-     "end_line": 397,
+     "line": 352,
+     "end_line": 370,
      "label": "class LabelMemory"
-    }
-   ],
-   "width": 290
-  },
-  {
-   "id": "dps_learned_wording",
-   "label": "dps_learned_wording",
-   "sublabel": "LearnedWording",
-   "tag": "review + learning",
-   "row": 7,
-   "col": 0,
-   "attributes": [
-    {
-     "name": "id",
-     "type": "varchar(36)",
-     "key": "pk"
-    },
-    {
-     "name": "kind",
-     "type": "varchar(16)"
-    },
-    {
-     "name": "phrase",
-     "type": "nvarchar(300)"
-    },
-    {
-     "name": "key",
-     "type": "varchar(64)"
-    },
-    {
-     "name": "evidence",
-     "type": "integer"
-    },
-    {
-     "name": "active",
-     "type": "bit"
-    },
-    {
-     "name": "added_by",
-     "type": "varchar(255)"
-    },
-    {
-     "name": "added_at",
-     "type": "datetime2"
-    },
-    {
-     "name": "retired_by",
-     "type": "varchar(255)"
-    },
-    {
-     "name": "retired_at",
-     "type": "datetime2"
-    }
-   ],
-   "sources": [
-    {
-     "path": "dps/src/dps/models.py",
-     "line": 400,
-     "end_line": 420,
-     "label": "class LearnedWording"
     }
    ],
    "width": 290
@@ -1312,8 +1050,8 @@
    "sources": [
     {
      "path": "dps/src/dps/models.py",
-     "line": 511,
-     "end_line": 535,
+     "line": 447,
+     "end_line": 471,
      "label": "class AiCall"
     }
    ],
@@ -1380,8 +1118,8 @@
    "sources": [
     {
      "path": "dps/src/dps/models.py",
-     "line": 491,
-     "end_line": 508,
+     "line": 427,
+     "end_line": 444,
      "label": "class AiUsage"
     }
    ],
@@ -1424,8 +1162,8 @@
    "sources": [
     {
      "path": "dps/src/dps/models.py",
-     "line": 477,
-     "end_line": 488,
+     "line": 413,
+     "end_line": 424,
      "label": "class AiCache"
     }
    ],
@@ -1476,8 +1214,8 @@
    "sources": [
     {
      "path": "dps/src/dps/models.py",
-     "line": 538,
-     "end_line": 552,
+     "line": 474,
+     "end_line": 488,
      "label": "class TraceEvent"
     }
    ],
@@ -1524,8 +1262,8 @@
    "sources": [
     {
      "path": "dps/src/dps/models.py",
-     "line": 465,
-     "end_line": 474,
+     "line": 401,
+     "end_line": 410,
      "label": "class AuditEvent"
     }
    ],
@@ -1587,13 +1325,6 @@
   {
    "from": "dps_document",
    "to": "dps_document_cp_link",
-   "fromCardinality": "one",
-   "toCardinality": "many",
-   "label": "document_id FK"
-  },
-  {
-   "from": "dps_document",
-   "to": "dps_extracted_term",
    "fromCardinality": "one",
    "toCardinality": "many",
    "label": "document_id FK"

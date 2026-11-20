@@ -15,7 +15,7 @@ Field names are camelCase, like the bank app. Errors use the bank app's envelope
 ## Lint
 
 ```bash
-npx @redocly/cli@1 lint contracts/dps-api.yaml contracts/dps-jobs-api.yaml --config contracts/redocly.yaml
+npx @redocly/cli@1 lint contracts/dps-jobs-api.yaml contracts/spring-tools.yaml --config contracts/redocly.yaml
 ```
 
 ## Mock server for the Spring team

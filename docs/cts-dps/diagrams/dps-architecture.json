@@ -1,105 +1,614 @@
 {
-  "schema_version": 1,
-  "diagram_type": "architecture",
-  "meta": {
-    "title": "CTS DPS: how a document travels from Spring to a reviewed result",
-    "output": "docs/cts-dps/diagrams/dps-architecture.html",
-    "locale": "en",
-    "quality_profile": "showcase",
-    "repository": {
-      "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
-      "provider": "github",
-      "link_mode": "web",
-      "revision": "ce996d3d33d461c19d0071b3df8aa5b63a77def8"
-    }
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "CTS DPS: how a document travels from Spring to a reviewed result",
+  "output": "docs/cts-dps/diagrams/dps-architecture.html",
+  "locale": "en",
+  "quality_profile": "showcase",
+  "repository": {
+   "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
+   "provider": "github",
+   "link_mode": "web",
+   "revision": "1fa0723bb3ca2a401924f30f80edf7be2511740e"
+  }
+ },
+ "components": [
+  {
+   "id": "ui",
+   "type": "frontend",
+   "label": "CTS UI",
+   "sublabel": "RM screens (other team)",
+   "pos": [
+    40,
+    40
+   ],
+   "size": [
+    170,
+    60
+   ]
   },
-  "components": [
-    { "id": "ui", "type": "frontend", "label": "CTS UI", "sublabel": "RM screens (other team)", "pos": [40, 40], "size": [170, 60] },
-    { "id": "spring", "type": "external", "label": "Spring app (CTS)", "sublabel": "submits jobs, reviews", "pos": [40, 200], "size": [170, 62],
-      "sources": [ { "path": "contracts/dps-jobs-api.yaml", "line": 32, "label": "job API Spring calls" } ] },
-    { "id": "api", "type": "backend", "label": "DPS job API", "sublabel": "dps/src/dps/api/jobs.py", "pos": [310, 200], "size": [180, 62],
-      "sources": [ { "path": "dps/src/dps/api/jobs.py", "line": 312, "end_line": 348, "label": "submit_job" },
-                   { "path": "dps/src/dps/api/jobs.py", "line": 352, "end_line": 368, "label": "job_result" } ] },
-    { "id": "queue", "type": "database", "label": "SQL Server schema dps", "sublabel": "dps_job queue, dps_run results", "pos": [590, 200], "size": [190, 62],
-      "sources": [ { "path": "dps/src/dps/models.py", "line": 128, "end_line": 178, "label": "Job table" },
-                   { "path": "dps/src/dps/models.py", "line": 267, "end_line": 281, "label": "Run table" },
-                   { "path": "dps/src/dps/jobs.py", "line": 85, "end_line": 129, "label": "claim (compare-and-set)" } ] },
-    { "id": "worker", "type": "backend", "label": "Python worker", "sublabel": "dps/src/dps/worker.py", "pos": [880, 200], "size": [180, 62],
-      "sources": [ { "path": "dps/src/dps/worker.py", "line": 131, "end_line": 147, "label": "run_once" },
-                   { "path": "dps/src/dps/worker.py", "line": 195, "end_line": 209, "label": "_process + heartbeat" },
-                   { "path": "dps/src/dps/jobs.py", "line": 54, "end_line": 70, "label": "attempt fence" } ] },
-    { "id": "ingest", "type": "security", "label": "Ingest + sandbox parse", "sublabel": "inspect, OCR, page model", "pos": [1160, 200], "size": [190, 62],
-      "sources": [ { "path": "dps/src/dps/ingest/pipeline.py", "line": 56, "end_line": 84, "label": "page_model" },
-                   { "path": "dps/src/dps/parse/sandbox.py", "line": 157, "end_line": 186, "label": "child process, no network" },
-                   { "path": "dps/src/dps/parse/page_model.py", "line": 30, "end_line": 48, "label": "PDF, Excel, Word readers" } ] },
-    { "id": "dms", "type": "external", "label": "DMS store", "sublabel": "immutable files (read only)", "pos": [1450, 200], "size": [180, 62],
-      "sources": [ { "path": "dps/src/dps/ingest/store.py", "line": 58, "end_line": 121, "label": "store reader" } ] },
-    { "id": "feed", "type": "messagebus", "label": "Event feed", "sublabel": "dps_event_feed, GET /events", "pos": [310, 400], "size": [180, 62],
-      "sources": [ { "path": "dps/src/dps/feed.py", "line": 39, "end_line": 41, "label": "emit_for_job" },
-                   { "path": "contracts/dps-jobs-api.yaml", "line": 333, "label": "GET /dps/v1/events" } ] },
-    { "id": "runner", "type": "backend", "label": "Skill runner", "sublabel": "classify, rules, ledger, score", "pos": [590, 400], "size": [190, 62],
-      "sources": [ { "path": "dps/src/dps/skills/runner.py", "line": 611, "end_line": 661, "label": "run_onboard" },
-                   { "path": "dps/src/dps/skills/runner.py", "line": 391, "end_line": 520, "label": "_extract order" },
-                   { "path": "dps/src/dps/skills/covenants/ledger.py", "line": 146, "end_line": 183, "label": "candidate ledger" } ] },
-    { "id": "flow", "type": "backend", "label": "CrewAI Flow per job", "sublabel": "dps/src/dps/flows/", "pos": [880, 400], "size": [180, 62],
-      "sources": [ { "path": "dps/src/dps/flows/skill_job.py", "line": 27, "end_line": 49, "label": "SkillJobFlow" },
-                   { "path": "dps/src/dps/skills/runner.py", "line": 70, "end_line": 336, "label": "run (skills flow)" } ] },
-    { "id": "derived", "type": "database", "label": "derived/ store", "sublabel": "page models, write-once", "pos": [1160, 400], "size": [190, 62],
-      "sources": [ { "path": "dps/src/dps/ingest/store.py", "line": 58, "end_line": 121, "label": "derived writes" } ] },
-    { "id": "java", "type": "external", "label": "Spring business rules", "sublabel": "formula DSL, library, lookups", "pos": [40, 600], "size": [170, 62],
-      "sources": [ { "path": "contracts/spring-tools.yaml", "line": 27, "label": "formulas/validate" },
-                   { "path": "contracts/spring-tools.yaml", "line": 138, "label": "covenant-library" } ] },
-    { "id": "tools", "type": "backend", "label": "Spring tools client", "sublabel": "Java rules as Python tools", "pos": [310, 600], "size": [180, 62],
-      "sources": [ { "path": "dps/src/dps/integrations/spring_tools.py", "line": 113, "end_line": 237, "label": "SpringTools" },
-                   { "path": "dps/src/dps/integrations/spring_tools.py", "line": 151, "end_line": 161, "label": "batched formula check" } ] },
-    { "id": "agent", "type": "backend", "label": "Document Agent", "sublabel": "one CrewAI agent + 6 tools", "pos": [590, 600], "size": [190, 62],
-      "sources": [ { "path": "dps/src/dps/agent/document_agent.py", "line": 277, "end_line": 286, "label": "make_agent" },
-                   { "path": "dps/src/dps/agent/document_agent.py", "line": 293, "end_line": 318, "label": "read (schema + repair)" } ] },
-    { "id": "gateway", "type": "security", "label": "Model gateway", "sublabel": "budget, retries, masking", "pos": [880, 600], "size": [180, 62],
-      "sources": [ { "path": "dps/src/dps/agent/gateway.py", "line": 242, "end_line": 257, "label": "call_json" },
-                   { "path": "dps/src/dps/agent/gateway.py", "line": 290, "end_line": 298, "label": "from_settings" } ] },
-    { "id": "azure", "type": "cloud", "label": "Bank Azure OpenAI", "sublabel": "gpt-4.1, mini, 4o", "pos": [880, 790], "size": [180, 62],
-      "sources": [ { "path": "deploy/config/routes.example.yaml", "line": 6, "label": "model routes" } ] }
-  ],
-  "boundaries": [
-    { "kind": "region", "label": "DPS: this repository (Python, same VM, own containers)", "wraps": ["api", "queue", "worker", "ingest", "feed", "runner", "flow", "derived", "tools", "agent", "gateway"], "pad": 22 },
-    { "kind": "region", "label": "Spring app (other team)", "wraps": ["spring", "java"], "pad": 16 }
-  ],
-  "connections": [
-    { "from": "ui", "to": "spring", "label": "upload, review" },
-    { "from": "spring", "to": "api", "label": "submit job", "variant": "emphasis" },
-    { "from": "api", "to": "queue", "label": "insert row", "variant": "emphasis" },
-    { "from": "worker", "to": "queue", "label": "claim job", "variant": "emphasis" },
-    { "from": "worker", "to": "ingest", "label": "read file", "variant": "emphasis" },
-    { "from": "ingest", "to": "dms", "label": "SHA-256 read", "variant": "security" },
-    { "from": "ingest", "to": "derived", "label": "page model" },
-    { "from": "worker", "to": "flow", "label": "kickoff", "variant": "emphasis" },
-    { "from": "flow", "to": "runner", "label": "run skills", "variant": "emphasis" },
-    { "from": "runner", "to": "queue", "label": "save run" },
-    { "from": "runner", "to": "feed", "label": "event" },
-    { "from": "runner", "to": "agent", "label": "read pages", "variant": "emphasis" },
-    { "from": "agent", "to": "gateway", "label": "model call" },
-    { "from": "gateway", "to": "azure", "label": "HTTPS", "variant": "security" },
-    { "from": "agent", "to": "tools", "label": "Java tools" },
-    { "from": "tools", "to": "java", "label": "HTTP batch", "variant": "dashed" },
-    { "from": "feed", "to": "spring", "label": "pull events", "variant": "dashed", "fromSide": "left", "toSide": "bottom" }
-  ],
-  "cards": [
-    { "dot": "cyan", "title": "Main path (Miro onboarding board)", "items": [
-      "Spring submits POST /dps/v1/jobs; a duplicate returns the running job (extraction in progress)",
-      "The worker claims the job with a lease, reads the file by version and SHA-256, parses it in a sandbox",
-      "A CrewAI Flow runs the skill: classify, rules, page finder, 4 agent reads, ledger, Java check, codes, score",
-      "The result is saved with its event; Spring pulls it and a person approves" ] },
-    { "dot": "violet", "title": "One agent, many skills", "items": [
-      "Skill packs: dps/src/dps/skills/<name>/ (pack.yaml, prompt.md, schema.json, rules.py)",
-      "Tools: page_text, search_text, find_definition, covenant_library, validate_formula, lookup_identifier",
-      "Every answer must quote its page (dps/src/dps/skills/common.py grounded) or it is dropped" ] },
-    { "dot": "rose", "title": "Safety and trust", "items": [
-      "Parsing runs in a child process with CPU, memory and time limits and no network",
-      "Only selected page text goes to the bank's Azure endpoint, through the gateway's allow-list",
-      "DPS never decides compliance; every high-risk field goes to a person" ] },
-    { "dot": "amber", "title": "Java wrap", "items": [
-      "Business rules stay in Spring (one rule engine); DPS calls them as batched tools",
-      "If Spring is down the field gets SPRING_UNAVAILABLE and goes to review; the job carries on" ] }
-  ]
+  {
+   "id": "spring",
+   "type": "external",
+   "label": "Spring app (CTS)",
+   "sublabel": "submits jobs, reviews",
+   "pos": [
+    40,
+    200
+   ],
+   "size": [
+    170,
+    62
+   ],
+   "sources": [
+    {
+     "path": "contracts/dps-jobs-api.yaml",
+     "line": 32,
+     "label": "job API Spring calls"
+    }
+   ]
+  },
+  {
+   "id": "api",
+   "type": "backend",
+   "label": "DPS job API",
+   "sublabel": "dps/src/dps/api/jobs.py",
+   "pos": [
+    310,
+    200
+   ],
+   "size": [
+    180,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 328,
+     "end_line": 365,
+     "label": "submit_job"
+    },
+    {
+     "path": "dps/src/dps/api/jobs.py",
+     "line": 368,
+     "end_line": 385,
+     "label": "job_result"
+    }
+   ]
+  },
+  {
+   "id": "queue",
+   "type": "database",
+   "label": "SQL Server schema dps",
+   "sublabel": "dps_job queue, dps_run results",
+   "pos": [
+    590,
+    200
+   ],
+   "size": [
+    190,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 128,
+     "end_line": 178,
+     "label": "Job table"
+    },
+    {
+     "path": "dps/src/dps/models.py",
+     "line": 267,
+     "end_line": 281,
+     "label": "Run table"
+    },
+    {
+     "path": "dps/src/dps/jobs.py",
+     "line": 85,
+     "end_line": 129,
+     "label": "claim (compare-and-set)"
+    }
+   ]
+  },
+  {
+   "id": "worker",
+   "type": "backend",
+   "label": "Python worker",
+   "sublabel": "dps/src/dps/worker.py",
+   "pos": [
+    880,
+    200
+   ],
+   "size": [
+    180,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/worker.py",
+     "line": 126,
+     "end_line": 142,
+     "label": "run_once"
+    },
+    {
+     "path": "dps/src/dps/worker.py",
+     "line": 202,
+     "end_line": 216,
+     "label": "_process + heartbeat"
+    },
+    {
+     "path": "dps/src/dps/jobs.py",
+     "line": 54,
+     "end_line": 70,
+     "label": "attempt fence"
+    }
+   ]
+  },
+  {
+   "id": "ingest",
+   "type": "security",
+   "label": "Ingest + sandbox parse",
+   "sublabel": "inspect, OCR, page model",
+   "pos": [
+    1160,
+    200
+   ],
+   "size": [
+    190,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/ingest/pipeline.py",
+     "line": 56,
+     "end_line": 84,
+     "label": "page_model"
+    },
+    {
+     "path": "dps/src/dps/parse/sandbox.py",
+     "line": 157,
+     "end_line": 186,
+     "label": "child process, no network"
+    },
+    {
+     "path": "dps/src/dps/parse/page_model.py",
+     "line": 30,
+     "end_line": 48,
+     "label": "PDF, Excel, Word readers"
+    }
+   ]
+  },
+  {
+   "id": "dms",
+   "type": "external",
+   "label": "DMS store",
+   "sublabel": "immutable files (read only)",
+   "pos": [
+    1450,
+    200
+   ],
+   "size": [
+    180,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/ingest/store.py",
+     "line": 58,
+     "end_line": 121,
+     "label": "store reader"
+    }
+   ]
+  },
+  {
+   "id": "feed",
+   "type": "messagebus",
+   "label": "Event feed",
+   "sublabel": "dps_event_feed, GET /events",
+   "pos": [
+    310,
+    400
+   ],
+   "size": [
+    180,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/feed.py",
+     "line": 40,
+     "end_line": 42,
+     "label": "emit_for_job"
+    },
+    {
+     "path": "contracts/dps-jobs-api.yaml",
+     "line": 333,
+     "label": "GET /dps/v1/events"
+    }
+   ]
+  },
+  {
+   "id": "runner",
+   "type": "backend",
+   "label": "Skill runner",
+   "sublabel": "classify, rules, ledger, score",
+   "pos": [
+    590,
+    400
+   ],
+   "size": [
+    190,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 750,
+     "end_line": 809,
+     "label": "run_onboard"
+    },
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 390,
+     "end_line": 483,
+     "label": "_extract order"
+    },
+    {
+     "path": "dps/src/dps/skills/covenants/ledger.py",
+     "line": 205,
+     "end_line": 249,
+     "label": "candidate ledger"
+    }
+   ]
+  },
+  {
+   "id": "flow",
+   "type": "backend",
+   "label": "CrewAI Flow per job",
+   "sublabel": "dps/src/dps/flows/",
+   "pos": [
+    880,
+    400
+   ],
+   "size": [
+    180,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/flows/skill_job.py",
+     "line": 27,
+     "end_line": 49,
+     "label": "SkillJobFlow"
+    },
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 66,
+     "end_line": 75,
+     "label": "run (skills flow)"
+    }
+   ]
+  },
+  {
+   "id": "derived",
+   "type": "database",
+   "label": "derived/ store",
+   "sublabel": "page models, write-once",
+   "pos": [
+    1160,
+    400
+   ],
+   "size": [
+    190,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/ingest/store.py",
+     "line": 58,
+     "end_line": 121,
+     "label": "derived writes"
+    }
+   ]
+  },
+  {
+   "id": "java",
+   "type": "external",
+   "label": "Spring business rules",
+   "sublabel": "formula DSL, library, lookups",
+   "pos": [
+    40,
+    600
+   ],
+   "size": [
+    170,
+    62
+   ],
+   "sources": [
+    {
+     "path": "contracts/spring-tools.yaml",
+     "line": 27,
+     "label": "formulas/validate"
+    },
+    {
+     "path": "contracts/spring-tools.yaml",
+     "line": 138,
+     "label": "covenant-library"
+    }
+   ]
+  },
+  {
+   "id": "tools",
+   "type": "backend",
+   "label": "Spring tools client",
+   "sublabel": "Java rules as Python tools",
+   "pos": [
+    310,
+    600
+   ],
+   "size": [
+    180,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/integrations/spring_tools.py",
+     "line": 113,
+     "end_line": 237,
+     "label": "SpringTools"
+    },
+    {
+     "path": "dps/src/dps/integrations/spring_tools.py",
+     "line": 151,
+     "end_line": 161,
+     "label": "batched formula check"
+    }
+   ]
+  },
+  {
+   "id": "agent",
+   "type": "backend",
+   "label": "Document Agent",
+   "sublabel": "one CrewAI agent + 6 tools",
+   "pos": [
+    590,
+    600
+   ],
+   "size": [
+    190,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/agent/document_agent.py",
+     "line": 287,
+     "end_line": 296,
+     "label": "make_agent"
+    },
+    {
+     "path": "dps/src/dps/agent/document_agent.py",
+     "line": 303,
+     "end_line": 328,
+     "label": "read (schema + repair)"
+    }
+   ]
+  },
+  {
+   "id": "gateway",
+   "type": "security",
+   "label": "Model gateway",
+   "sublabel": "budget, retries, masking",
+   "pos": [
+    880,
+    600
+   ],
+   "size": [
+    180,
+    62
+   ],
+   "sources": [
+    {
+     "path": "dps/src/dps/agent/gateway.py",
+     "line": 245,
+     "end_line": 260,
+     "label": "call_json"
+    },
+    {
+     "path": "dps/src/dps/agent/gateway.py",
+     "line": 293,
+     "end_line": 301,
+     "label": "from_settings"
+    }
+   ]
+  },
+  {
+   "id": "azure",
+   "type": "cloud",
+   "label": "Bank Azure OpenAI",
+   "sublabel": "gpt-4.1, mini, 4o",
+   "pos": [
+    880,
+    790
+   ],
+   "size": [
+    180,
+    62
+   ],
+   "sources": [
+    {
+     "path": "deploy/config/routes.example.yaml",
+     "line": 6,
+     "label": "model routes"
+    }
+   ]
+  }
+ ],
+ "boundaries": [
+  {
+   "kind": "region",
+   "label": "DPS: this repository (Python, same VM, own containers)",
+   "wraps": [
+    "api",
+    "queue",
+    "worker",
+    "ingest",
+    "feed",
+    "runner",
+    "flow",
+    "derived",
+    "tools",
+    "agent",
+    "gateway"
+   ],
+   "pad": 22
+  },
+  {
+   "kind": "region",
+   "label": "Spring app (other team)",
+   "wraps": [
+    "spring",
+    "java"
+   ],
+   "pad": 16
+  }
+ ],
+ "connections": [
+  {
+   "from": "ui",
+   "to": "spring",
+   "label": "upload, review"
+  },
+  {
+   "from": "spring",
+   "to": "api",
+   "label": "submit job",
+   "variant": "emphasis"
+  },
+  {
+   "from": "api",
+   "to": "queue",
+   "label": "insert row",
+   "variant": "emphasis"
+  },
+  {
+   "from": "worker",
+   "to": "queue",
+   "label": "claim job",
+   "variant": "emphasis"
+  },
+  {
+   "from": "worker",
+   "to": "ingest",
+   "label": "read file",
+   "variant": "emphasis"
+  },
+  {
+   "from": "ingest",
+   "to": "dms",
+   "label": "SHA-256 read",
+   "variant": "security"
+  },
+  {
+   "from": "ingest",
+   "to": "derived",
+   "label": "page model"
+  },
+  {
+   "from": "worker",
+   "to": "flow",
+   "label": "kickoff",
+   "variant": "emphasis"
+  },
+  {
+   "from": "flow",
+   "to": "runner",
+   "label": "run skills",
+   "variant": "emphasis"
+  },
+  {
+   "from": "runner",
+   "to": "queue",
+   "label": "save run"
+  },
+  {
+   "from": "runner",
+   "to": "feed",
+   "label": "event"
+  },
+  {
+   "from": "runner",
+   "to": "agent",
+   "label": "read pages",
+   "variant": "emphasis"
+  },
+  {
+   "from": "agent",
+   "to": "gateway",
+   "label": "model call"
+  },
+  {
+   "from": "gateway",
+   "to": "azure",
+   "label": "HTTPS",
+   "variant": "security"
+  },
+  {
+   "from": "agent",
+   "to": "tools",
+   "label": "Java tools"
+  },
+  {
+   "from": "tools",
+   "to": "java",
+   "label": "HTTP batch",
+   "variant": "dashed"
+  },
+  {
+   "from": "feed",
+   "to": "spring",
+   "label": "pull events",
+   "variant": "dashed",
+   "fromSide": "left",
+   "toSide": "bottom"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "Main path (Miro onboarding board)",
+   "items": [
+    "Spring submits POST /dps/v1/jobs; a duplicate returns the running job (extraction in progress)",
+    "The worker claims the job with a lease, reads the file by version and SHA-256, parses it in a sandbox",
+    "A CrewAI Flow runs the skill: classify, rules, page finder, 4 agent reads, ledger, Java check, codes, score",
+    "The result is saved with its event; Spring pulls it and a person approves"
+   ]
+  },
+  {
+   "dot": "violet",
+   "title": "One agent, many skills",
+   "items": [
+    "Skill packs: dps/src/dps/skills/<name>/ (pack.yaml, prompt.md, schema.json, rules.py)",
+    "Tools: page_text, search_text, find_definition, covenant_library, validate_formula, lookup_identifier",
+    "Every answer must quote its page (dps/src/dps/skills/common.py grounded) or it is dropped"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Safety and trust",
+   "items": [
+    "Parsing runs in a child process with CPU, memory and time limits and no network",
+    "Only selected page text goes to the bank's Azure endpoint, through the gateway's allow-list",
+    "DPS never decides compliance; every high-risk field goes to a person"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Java wrap",
+   "items": [
+    "Business rules stay in Spring (one rule engine); DPS calls them as batched tools",
+    "If Spring is down the field gets SPRING_UNAVAILABLE and goes to review; the job carries on"
+   ]
+  }
+ ]
 }

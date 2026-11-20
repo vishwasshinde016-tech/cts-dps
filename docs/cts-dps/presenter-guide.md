@@ -34,7 +34,7 @@ The page has 4 diagrams. Click a box or a citation to see its source file and li
 | [Architecture](diagrams/dps-complete.html#architecture) | §1 | The DPS inside (11 parts) and outside (CTS UI, Spring, DMS, Java business rules, bank Azure OpenAI), with every connector and the boundary between them. |
 | [Onboarding board](diagrams/dps-complete.html#onboarding) | §2 | The Miro onboarding board as calls: submit, claim, parse, classify, 4 agent reads, Java tools, second read, save, review. |
 | [Amendment board](diagrams/dps-complete.html#amendment) | §2 | The Miro amendment board: the base covenants from Spring, change detection, clause matching, the amended set. |
-| [Database](diagrams/dps-complete.html#database) | §8 | All 25 tables and 262 columns with their SQL Server types, generated from [`dps/src/dps/models.py`](../../dps/src/dps/models.py). |
+| [Database](diagrams/dps-complete.html#database) | §8 | All 21 tables and 217 columns with their SQL Server types, generated from [`dps/src/dps/models.py`](../../dps/src/dps/models.py). |
 
 ---
 
@@ -197,15 +197,15 @@ The sections after this one (§1 to §16) hold the detail behind each stop, if s
 
 | Row | Open | Say |
 |---|---|---|
-| 1 | [`dps/src/dps/api/jobs.py:312`](../../dps/src/dps/api/jobs.py#L312) | "Spring's call lands here. Validation, hash check, duplicate check, then the job row." |
+| 1 | [`dps/src/dps/api/jobs.py:328`](../../dps/src/dps/api/jobs.py#L328) | "Spring's call lands here. Validation, hash check, duplicate check, then the job row." |
 | 3 | [`dps/src/dps/jobs.py:85`](../../dps/src/dps/jobs.py#L85) | "This is the claim. One UPDATE that only succeeds if the job is still free. That is how two workers never take the same job." |
 | 3 | [`dps/src/dps/jobs.py:54`](../../dps/src/dps/jobs.py#L54) | "Every write checks the attempt number. A worker that lost its lease cannot overwrite the new worker's result." |
 | 7 | [`dps/src/dps/parse/sandbox.py:157`](../../dps/src/dps/parse/sandbox.py#L157) | "Parsing runs in a child process with limits and no network. A malicious PDF cannot reach anything." |
-| 11 | [`dps/src/dps/skills/runner.py:611`](../../dps/src/dps/skills/runner.py#L611) | "The onboarding entry point: classify, pick the skill pack, extract." |
-| 15 | [`dps/src/dps/skills/runner.py:391`](../../dps/src/dps/skills/runner.py#L391) | "The whole extraction order in one function. If you read one function, read this one." |
+| 11 | [`dps/src/dps/skills/runner.py:750`](../../dps/src/dps/skills/runner.py#L750) | "The onboarding entry point: classify, pick the skill pack, extract." |
+| 15 | [`dps/src/dps/skills/runner.py:390`](../../dps/src/dps/skills/runner.py#L390) | "The whole extraction order in one function. If you read one function, read this one." |
 | 21 | [`dps/src/dps/skills/common.py:53`](../../dps/src/dps/skills/common.py#L53) | "Grounding. The quote the agent gives must really be on that page, or the answer is dropped. This is how we stop invented values." |
-| 23 | [`dps/src/dps/skills/covenants/ledger.py:146`](../../dps/src/dps/skills/covenants/ledger.py#L146) | "The ledger. Every sentence in the document that looks like a duty gets exactly one state: found, covered, not a covenant, or unresolved. Unresolved goes to a person, so nothing disappears silently." |
-| 29 | [`dps/src/dps/skills/runner.py:557`](../../dps/src/dps/skills/runner.py#L557) | "Save the result and its event in one transaction." |
+| 23 | [`dps/src/dps/skills/covenants/ledger.py:205`](../../dps/src/dps/skills/covenants/ledger.py#L205) | "The ledger. Every sentence in the document that looks like a duty gets exactly one state: found, covered, not a covenant, or unresolved. Unresolved goes to a person, so nothing disappears silently." |
+| 29 | [`dps/src/dps/skills/runner.py:716`](../../dps/src/dps/skills/runner.py#L716) | "Save the result and its event in one transaction." |
 
 **Say at the end:** "The code panels at the bottom of the page show these functions with line numbers, if you want to read them on the big screen."
 
@@ -256,7 +256,7 @@ The sections after this one (§1 to §16) hold the detail behind each stop, if s
 **Say:**
 > "Production uses the SQL Server schema `dps`, and a laptop uses SQLite. The code is the same; only `DPS_DATABASE_URL` changes. Alembic migrations create the tables.
 >
-> There are 25 tables, and the diagram shows every column. The main path is:
+> There are 21 tables, and the diagram shows every column. The main path is:
 > - `dps_job` is the queue.
 > - `dps_job_attempt` keeps each try.
 > - `dps_run` keeps each result. It is never changed: a review makes a new run.
@@ -313,7 +313,7 @@ code run.txt
 ```
 
 **Say:**
-> "Each `->` line is a function the document entered, with its file and line. Indentation shows who called whom. The `=== 1. PARSE`, `=== 2. ONBOARD` and `=== 3. RESULT` lines mark the stages. A saved copy is in [`docs/cts-dps/sample-run-AGR-001.txt`](sample-run-AGR-001.txt)."
+> "Each `->` line is a function the document entered, with its file and line. Indentation shows who called whom. The `=== 1. PARSE`, `=== 2. ONBOARD` and `=== 3. RESULT` lines mark the stages."
 
 **Step 3. Real agreements from the architect's list.**
 
@@ -448,8 +448,8 @@ The size limit is 100 MB per file (`DPS_MAX_FILE_MB`). Encrypted, corrupt, macro
 
 **Say:**
 
-1. **Upload.** "The RM uploads the agreement in CTS. Spring stores it in the DMS, which keeps one unchangeable copy per version, and sends DPS a job: the file's reference, its SHA-256, and context such as CP, borrower and facility IDs." ([`dps/src/dps/api/jobs.py:312`](../../dps/src/dps/api/jobs.py#L312))
-2. **Queue.** "DPS checks the request, checks the file's hash and stops duplicates. Then it writes one row in the `dps_job` table and answers 'accepted'. Nothing heavy happens in the API." ([`dps/src/dps/api/jobs.py:240`](../../dps/src/dps/api/jobs.py#L240))
+1. **Upload.** "The RM uploads the agreement in CTS. Spring stores it in the DMS, which keeps one unchangeable copy per version, and sends DPS a job: the file's reference, its SHA-256, and context such as CP, borrower and facility IDs." ([`dps/src/dps/api/jobs.py:328`](../../dps/src/dps/api/jobs.py#L328))
+2. **Queue.** "DPS checks the request, checks the file's hash and stops duplicates. Then it writes one row in the `dps_job` table and answers 'accepted'. Nothing heavy happens in the API." ([`dps/src/dps/api/jobs.py:254`](../../dps/src/dps/api/jobs.py#L254))
 3. **Claim.** "A Python worker polls the table and claims the job with an atomic update. It keeps a lease and a heartbeat, so a crashed worker's job is picked up by another." ([`dps/src/dps/jobs.py:85`](../../dps/src/dps/jobs.py#L85))
 4. **Read and check the file.** "The worker reads the exact version from the DMS and compares its hash. It checks the real file type and refuses encrypted, broken or macro files." ([`dps/src/dps/ingest/inspect.py:63`](../../dps/src/dps/ingest/inspect.py#L63))
 5. **Parse.** "A separate child process with no network turns the file into a **page model**: for every page, its text, its lines and where each line sits.
@@ -459,8 +459,8 @@ The size limit is 100 MB per file (`DPS_MAX_FILE_MB`). Encrypted, corrupt, macro
    ([`dps/src/dps/parse/page_model.py:30`](../../dps/src/dps/parse/page_model.py#L30), [`dps/src/dps/parse/sandbox.py:157`](../../dps/src/dps/parse/sandbox.py#L157))
 6. **Store the parse.** "The page model is saved once in `derived/` and listed in `dps_artifact`. If the same file comes again, it is reused, not parsed again. The original file is never changed."
 7. **Start the flow.** "The worker starts one CrewAI Flow for this job, which is the job's own context. The Flow saves its state after each step." ([`dps/src/dps/flows/skill_job.py:27`](../../dps/src/dps/flows/skill_job.py#L27))
-8. **Classify.** "Rules score the first pages for each document type: agreement, sanction letter, amendment, statement, certificate. If the rules are sure, that is the type. If not, the agent gives a second opinion and must quote the lines that prove it." ([`dps/src/dps/analyze/classify.py:294`](../../dps/src/dps/analyze/classify.py#L294))
-9. **Choose the skill.** "The type picks the skill pack: a loan agreement gets `covenants`, a sanction letter gets `sanction`, an amendment gets `amendment_diff`. That mapping is one line, `ONBOARD_PACKS`. For other job types, the job type picks the pack whose `pack.yaml` lists it." ([`dps/src/dps/skills/runner.py:608`](../../dps/src/dps/skills/runner.py#L608), [`dps/src/dps/skills/__init__.py:80`](../../dps/src/dps/skills/__init__.py#L80))
+8. **Classify.** "Rules score the first pages for each document type: agreement, sanction letter, amendment, statement, certificate. If the rules are sure, that is the type. If not, the agent gives a second opinion and must quote the lines that prove it." ([`dps/src/dps/analyze/classify.py:333`](../../dps/src/dps/analyze/classify.py#L333))
+9. **Choose the skill.** "The type picks the skill pack: a loan agreement gets `covenants`, a sanction letter gets `sanction`, an amendment gets `amendment_diff`. That mapping is one line, `ONBOARD_PACKS`. For other job types, the job type picks the pack whose `pack.yaml` lists it." ([`dps/src/dps/skills/runner.py:744`](../../dps/src/dps/skills/runner.py#L744), [`dps/src/dps/skills/__init__.py:83`](../../dps/src/dps/skills/__init__.py#L83))
 10. **What the skill pack sets.** "The pack's `pack.yaml` sets the limits for this job:
     - which model route to use;
     - which tools the agent may use;
@@ -469,15 +469,15 @@ The size limit is 100 MB per file (`DPS_MAX_FILE_MB`). Encrypted, corrupt, macro
     - how risky each field is.
 
     `prompt.md` and `schema.json` say what to ask and what shape the answer must have." ([`dps/src/dps/skills/covenants/pack.yaml`](../../dps/src/dps/skills/covenants/pack.yaml))
-11. **Rules first.** "The pack's rules read the whole document without any model: numbered clauses, ratio names, operators like 'not less than', thresholds and units." ([`dps/src/dps/skills/covenants/rules.py:61`](../../dps/src/dps/skills/covenants/rules.py#L61))
+11. **Rules first.** "The pack's rules read the whole document without any model: numbered clauses, ratio names, operators like 'not less than', thresholds and units." ([`dps/src/dps/skills/covenants/rules.py:84`](../../dps/src/dps/skills/covenants/rules.py#L84))
 12. **Choose the pages for the agent.** "The agent does **not** get the whole document. The page finder ranks pages: pages where the rules found something, covenant sections, sentences with duty words such as 'shall maintain', and the definitions they use. It packs them into up to four reads, one per part: financial, undertakings, reporting, events of default. Pages left out are named in the result." ([`dps/src/dps/skills/covenants/pages.py:98`](../../dps/src/dps/skills/covenants/pages.py#L98))
-13. **The agent reads.** "For each read, a fresh CrewAI agent is built with that skill's prompt, schema and tools. It may open another page, search the document, look up a definition, or ask Spring's Java rules. The model call goes through the gateway to the bank's Azure OpenAI. Only these selected pages leave the machine." ([`dps/src/dps/agent/document_agent.py:277`](../../dps/src/dps/agent/document_agent.py#L277), [`dps/src/dps/agent/gateway.py:242`](../../dps/src/dps/agent/gateway.py#L242))
-14. **Check every answer.** "The answer must match the schema, or it gets one repair. Every value must quote its page, and we check that the quote really is on that page; if not, the value is dropped. The number in the field must appear in the quote. Then rules and agent vote." ([`dps/src/dps/skills/common.py:53`](../../dps/src/dps/skills/common.py#L53), [`dps/src/dps/skills/runner.py:64`](../../dps/src/dps/skills/runner.py#L64))
-15. **Make sure nothing is missed.** "The ledger lists every duty-like sentence in the whole document and gives each one a state. Any sentence nobody explained goes back to the agent for a second look. Whatever is still unexplained goes to a person." ([`dps/src/dps/skills/covenants/ledger.py:146`](../../dps/src/dps/skills/covenants/ledger.py#L146), [`dps/src/dps/skills/covenants/omissions.py:82`](../../dps/src/dps/skills/covenants/omissions.py#L82))
+13. **The agent reads.** "For each read, a fresh CrewAI agent is built with that skill's prompt, schema and tools. It may open another page, search the document, look up a definition, or ask Spring's Java rules. The model call goes through the gateway to the bank's Azure OpenAI. Only these selected pages leave the machine." ([`dps/src/dps/agent/document_agent.py:287`](../../dps/src/dps/agent/document_agent.py#L287), [`dps/src/dps/agent/gateway.py:245`](../../dps/src/dps/agent/gateway.py#L245))
+14. **Check every answer.** "The answer must match the schema, or it gets one repair. Every value must quote its page, and we check that the quote really is on that page; if not, the value is dropped. The number in the field must appear in the quote. Then rules and agent vote." ([`dps/src/dps/skills/common.py:53`](../../dps/src/dps/skills/common.py#L53), [`dps/src/dps/skills/runner.py:63`](../../dps/src/dps/skills/runner.py#L63))
+15. **Make sure nothing is missed.** "The ledger lists every duty-like sentence in the whole document and gives each one a state. Any sentence nobody explained goes back to the agent for a second look. Whatever is still unexplained goes to a person." ([`dps/src/dps/skills/covenants/ledger.py:205`](../../dps/src/dps/skills/covenants/ledger.py#L205), [`dps/src/dps/skills/covenants/omissions.py:82`](../../dps/src/dps/skills/covenants/omissions.py#L82))
 16. **Java business rules.** "Formulas are checked by Spring's formula engine, and names are matched to the bank's covenant library. This is one batched call per document." ([`dps/src/dps/integrations/spring_tools.py:151`](../../dps/src/dps/integrations/spring_tools.py#L151))
 17. **Name and score.** "Each covenant gets a taxonomy code such as `FIN_DSCR`. Each field gets a confidence and a route: high-risk or unsure fields always go to review." ([`dps/src/dps/skills/covenants/codes.py:34`](../../dps/src/dps/skills/covenants/codes.py#L34), [`dps/src/dps/scoring/__init__.py:211`](../../dps/src/dps/scoring/__init__.py#L211))
-18. **Save.** "The result, `dps.result/1.0`, is saved in `dps_run`, and an event is written in the same transaction." ([`dps/src/dps/skills/runner.py:557`](../../dps/src/dps/skills/runner.py#L557))
-19. **Spring pulls and a person decides.** "Spring reads the event, pulls the result and shows each field with its page and highlighted quote. The person accepts, edits or rejects. Spring then saves the approved covenants and runs the compliance tests. DPS never decides compliance." ([`dps/src/dps/api/jobs.py:351`](../../dps/src/dps/api/jobs.py#L351), [`dps/src/dps/api/review.py:141`](../../dps/src/dps/api/review.py#L141))
+18. **Save.** "The result, `dps.result/1.0`, is saved in `dps_run`, and an event is written in the same transaction." ([`dps/src/dps/skills/runner.py:716`](../../dps/src/dps/skills/runner.py#L716))
+19. **Spring pulls and a person decides.** "Spring reads the event, pulls the result and shows each field with its page and highlighted quote. The person accepts, edits or rejects. Spring then saves the approved covenants and runs the compliance tests. DPS never decides compliance." ([`dps/src/dps/api/jobs.py:368`](../../dps/src/dps/api/jobs.py#L368), [`dps/src/dps/api/review.py:155`](../../dps/src/dps/api/review.py#L155))
 
 **If someone asks "is the extracted data sent to the agent?", say:** "The parsed text stays on our machine. The agent is shown only the selected pages for its read, through the gateway, to the bank's own Azure endpoint. What comes back is checked by code before anything is saved. The agent never writes anything."
 
@@ -510,7 +510,7 @@ Four files on the list could not be downloaded on 19 Nov 2026: three links retur
 | What if two workers pick the same job? | They cannot. The claim is one UPDATE that only succeeds while the row is free ([`dps/src/dps/jobs.py:85`](../../dps/src/dps/jobs.py#L85)), and every write checks the attempt number ([`:54`](../../dps/src/dps/jobs.py#L54)). |
 | What if a worker crashes mid-job? | Its lease expires and another worker claims the job. The crashed worker's late writes are rejected by the attempt fence. |
 | Can the AI invent a covenant? | Every AI answer must quote its page, and the quote is checked against the page text ([`dps/src/dps/skills/common.py:53`](../../dps/src/dps/skills/common.py#L53)). Anything not found is dropped. A person approves every field. |
-| Can a covenant be missed? | Every duty-like sentence in the whole document gets one state in the ledger. Unresolved ones go to a person ([`dps/src/dps/skills/covenants/ledger.py:146`](../../dps/src/dps/skills/covenants/ledger.py#L146)). |
+| Can a covenant be missed? | Every duty-like sentence in the whole document gets one state in the ledger. Unresolved ones go to a person ([`dps/src/dps/skills/covenants/ledger.py:205`](../../dps/src/dps/skills/covenants/ledger.py#L205)). |
 | What goes to Azure? | Only the selected page text of that job, to the bank's own Azure OpenAI endpoint on the allow-list. Files and OCR stay on the bank's machine. |
 | What if Azure is down? | The job falls back to the rules, and the fields go to review. The job does not fail. |
 | What if Spring's Java tools are down? | The field gets `SPRING_UNAVAILABLE` and goes to review. The job carries on. |
@@ -519,7 +519,7 @@ Four files on the list could not be downloaded on 19 Nov 2026: three links retur
 | How do you add a new document type? | Add a skill folder (`pack.yaml`, `prompt.md`, `schema.json`, `rules.py`) and map the job type in [`dps/src/dps/api/jobs.py:38`](../../dps/src/dps/api/jobs.py#L38). |
 | How is quality measured? | The golden gate over 44 labelled documents (recall 1.0, values 0.9924), about 900 tests at 95% coverage, and runs on real agreements. |
 | Does DPS decide compliance? | No. It proposes values with evidence; Spring and a person decide. |
-| Where are the logs? | JSON app logs per container, document history at `GET /dps/v1/documents/{id}/history`, AI cost at `GET /dps/v1/ai-usage`, and the run log from the demo. |
+| Where are the logs? | JSON app logs per container, document history and AI calls in `scripts\show_job.py <jobId>`, AI cost at `GET /dps/v1/ops/usage`, and the run log from the demo. |
 | How is it deployed? | Containers on the same VM as Spring with CPU and memory limits: [`deploy/docker-compose.cts-dps.yml`](../../deploy/docker-compose.cts-dps.yml). |
 
 ### 0.17 Words you will use (glossary)
@@ -707,49 +707,48 @@ What a job does from submit to result. Open each file as you go.
 
 | # | Stage | What happens | File:line (open at this line) |
 |---|---|---|---|
-| 1 | Submit | Spring calls `POST /dps/v1/jobs`. The request is validated, the stored file's SHA-256 is checked as a stream, a duplicate returns the existing job, and a full queue returns 429 | [`dps/src/dps/api/jobs.py:312`](../../dps/src/dps/api/jobs.py#L312) `submit_job` → [`:166`](../../dps/src/dps/api/jobs.py#L166) `validate_job` → [`:268`](../../dps/src/dps/api/jobs.py#L268) `_input_key` → [`:240`](../../dps/src/dps/api/jobs.py#L240) `create_job` |
-| 2 | Queue | A row in `dps_job` (state `QUEUED`) and the event `dps.job.accepted` | [`dps/src/dps/api/jobs.py:240`](../../dps/src/dps/api/jobs.py#L240) `create_job`, [`dps/src/dps/feed.py:39`](../../dps/src/dps/feed.py#L39) `emit_for_job` |
-| 3 | Claim | The worker loop claims one job (compare-and-set), starts the heartbeat and fences every write by attempt | [`dps/src/dps/worker.py:131`](../../dps/src/dps/worker.py#L131) `run_once` → [`:195`](../../dps/src/dps/worker.py#L195) `_process` → [`:361`](../../dps/src/dps/worker.py#L361) `_start_heartbeat`; [`dps/src/dps/jobs.py:85`](../../dps/src/dps/jobs.py#L85) `claim`, [`:162`](../../dps/src/dps/jobs.py#L162) `renew_lease`, [`:54`](../../dps/src/dps/jobs.py#L54) `guard_attempt` |
-| 4 | Route | The job goes to the right path by flow: SKILL_PACK (every document job) or ANALYZE | [`dps/src/dps/worker.py:211`](../../dps/src/dps/worker.py#L211) `_run`, [`:272`](../../dps/src/dps/worker.py#L272) `_analyze`; job type to flow table [`dps/src/dps/api/jobs.py:38`](../../dps/src/dps/api/jobs.py#L38) `JOB_TYPES` |
-| 5 | Fetch | Read the bytes from the DMS store and check the SHA-256 | [`dps/src/dps/worker.py:330`](../../dps/src/dps/worker.py#L330) `_ingest` → [`dps/src/dps/ingest/pipeline.py:48`](../../dps/src/dps/ingest/pipeline.py#L48) `read` |
+| 1 | Submit | Spring calls `POST /dps/v1/jobs`. The request is validated, the stored file's SHA-256 is checked as a stream, a duplicate returns the existing job, and a full queue returns 429 | [`dps/src/dps/api/jobs.py:328`](../../dps/src/dps/api/jobs.py#L328) `submit_job` → [`:173`](../../dps/src/dps/api/jobs.py#L173) `validate_job` → [`:283`](../../dps/src/dps/api/jobs.py#L283) `_input_key` → [`:254`](../../dps/src/dps/api/jobs.py#L254) `create_job` |
+| 2 | Queue | A row in `dps_job` (state `QUEUED`) and the event `dps.job.accepted` | [`dps/src/dps/api/jobs.py:254`](../../dps/src/dps/api/jobs.py#L254) `create_job`, [`dps/src/dps/feed.py:40`](../../dps/src/dps/feed.py#L40) `emit_for_job` |
+| 3 | Claim | The worker loop claims one job (compare-and-set), starts the heartbeat and fences every write by attempt | [`dps/src/dps/worker.py:126`](../../dps/src/dps/worker.py#L126) `run_once` → [`:202`](../../dps/src/dps/worker.py#L41) `_process` → [`:328`](../../dps/src/dps/worker.py#L41) `_start_heartbeat`; [`dps/src/dps/jobs.py:85`](../../dps/src/dps/jobs.py#L85) `claim`, [`:162`](../../dps/src/dps/jobs.py#L162) `renew_lease`, [`:54`](../../dps/src/dps/jobs.py#L54) `guard_attempt` |
+| 4 | Route | The job goes to the right path by flow: SKILL_PACK (every document job) or ANALYZE | [`dps/src/dps/worker.py:218`](../../dps/src/dps/worker.py#L218) `_run`, [`:227`](../../dps/src/dps/worker.py#L41) `_analyze`; job type to flow table [`dps/src/dps/api/jobs.py:38`](../../dps/src/dps/api/jobs.py#L38) `JOB_TYPES` |
+| 5 | Fetch | Read the bytes from the DMS store and check the SHA-256 | [`dps/src/dps/worker.py:297`](../../dps/src/dps/worker.py#L297) `_ingest` → [`dps/src/dps/ingest/pipeline.py:48`](../../dps/src/dps/ingest/pipeline.py#L48) `read` |
 | 6 | Inspect | Real type vs name; encrypted, corrupt, macros, scripts, zip bombs, size and page limits | [`dps/src/dps/ingest/inspect.py:63`](../../dps/src/dps/ingest/inspect.py#L63) `inspect` |
 | 7 | Parse (sandbox) | A child process with CPU, memory and time limits and no network | [`dps/src/dps/ingest/pipeline.py:56`](../../dps/src/dps/ingest/pipeline.py#L56) `page_model` → [`dps/src/dps/parse/sandbox.py:157`](../../dps/src/dps/parse/sandbox.py#L157) `run` |
-| 8 | Page model | PDF text (pypdf), OCR for pages with no text (RapidOCR), boxes (pdfplumber); Excel and Word readers | [`dps/src/dps/parse/page_model.py:30`](../../dps/src/dps/parse/page_model.py#L30) `build` → [`:53`](../../dps/src/dps/parse/page_model.py#L53) `build_pdf`, [`:142`](../../dps/src/dps/parse/page_model.py#L142) `build_xlsx`, [`:240`](../../dps/src/dps/parse/page_model.py#L240) `build_docx`; [`dps/src/dps/parse/engine.py:127`](../../dps/src/dps/parse/engine.py#L127) `ParserEngine`, [`:71`](../../dps/src/dps/parse/engine.py#L71) `RapidOcrBackend`, [`:207`](../../dps/src/dps/parse/engine.py#L207) `HeavyEngine` |
+| 8 | Page model | PDF text (pypdf), OCR for pages with no text (RapidOCR), boxes (pdfplumber); Excel and Word readers | [`dps/src/dps/parse/page_model.py:30`](../../dps/src/dps/parse/page_model.py#L30) `build` → [`:53`](../../dps/src/dps/parse/page_model.py#L53) `build_pdf`, [`:175`](../../dps/src/dps/parse/page_model.py#L175) `build_xlsx`, [`:280`](../../dps/src/dps/parse/page_model.py#L280) `build_docx`; [`dps/src/dps/parse/engine.py:127`](../../dps/src/dps/parse/engine.py#L127) `ParserEngine`, [`:71`](../../dps/src/dps/parse/engine.py#L71) `RapidOcrBackend`, [`:207`](../../dps/src/dps/parse/engine.py#L207) `HeavyEngine` |
 | 9 | Segment | Split a bundled PDF into its documents | [`dps/src/dps/parse/segment.py:46`](../../dps/src/dps/parse/segment.py#L46) `segment` |
-| 10 | Flow | The CrewAI Flow per job; state saved per step (resume after review) | [`dps/src/dps/flows/skill_job.py:27`](../../dps/src/dps/flows/skill_job.py#L27) `SkillJobFlow` ([`:41`](../../dps/src/dps/flows/skill_job.py#L41) `run_skills`, [`:46`](../../dps/src/dps/flows/skill_job.py#L46) `save_result`); [`dps/src/dps/skills/runner.py:391`](../../dps/src/dps/skills/runner.py#L391); [`dps/src/dps/skills/statement_lines/reader.py:158`](../../dps/src/dps/skills/statement_lines/reader.py#L158); [`dps/src/dps/flows/persistence.py:22`](../../dps/src/dps/flows/persistence.py#L22) |
-| 11 | Onboard entry | Classify, pick the pack, extract, identifiers, cycle checks | [`dps/src/dps/skills/runner.py:611`](../../dps/src/dps/skills/runner.py#L611) `run_onboard`, pack table [`:608`](../../dps/src/dps/skills/runner.py#L608) `ONBOARD_PACKS` |
-| 12 | Classify | Rules score each type; agent second opinion only when unsure | [`dps/src/dps/analyze/classify.py:294`](../../dps/src/dps/analyze/classify.py#L294) `classify` → [`:134`](../../dps/src/dps/analyze/classify.py#L134) `rule_scores` → [`:193`](../../dps/src/dps/analyze/classify.py#L193) `decide_rules` |
-| 13 | Identify | Borrower, facility, account, period, currency, units, issuer; matched in Spring | [`dps/src/dps/analyze/identify.py:153`](../../dps/src/dps/analyze/identify.py#L153) `find_identifiers`, [`:271`](../../dps/src/dps/analyze/identify.py#L271) `match` |
-| 14 | Generic run | Budget, extract, codes, scoring, checks, result JSON | [`dps/src/dps/skills/runner.py:313`](../../dps/src/dps/skills/runner.py#L313) `run` |
-| 15 | Extraction order | The whole order in one function | [`dps/src/dps/skills/runner.py:391`](../../dps/src/dps/skills/runner.py#L391) `_extract` |
-| 16 | Rules | Covenant rules: numbered clauses, metrics, thresholds, non-financial rules | [`dps/src/dps/skills/covenants/rules.py:61`](../../dps/src/dps/skills/covenants/rules.py#L61) `rules` → [`dps/src/dps/extraction/agreement.py:947`](../../dps/src/dps/extraction/agreement.py#L947) `extract_terms`, [`:906`](../../dps/src/dps/extraction/agreement.py#L906) `_non_financial` |
+| 10 | Flow | The CrewAI Flow per job, two steps: run the skill pack, save the result | [`dps/src/dps/flows/skill_job.py:27`](../../dps/src/dps/flows/skill_job.py#L27) `SkillJobFlow` ([`:40`](../../dps/src/dps/flows/skill_job.py#L40) `run_skills`, [`:45`](../../dps/src/dps/flows/skill_job.py#L45) `save_result`); [`dps/src/dps/skills/runner.py:390`](../../dps/src/dps/skills/runner.py#L390); [`dps/src/dps/skills/statement_lines/reader.py:160`](../../dps/src/dps/skills/statement_lines/reader.py#L160) |
+| 11 | Onboard entry | Classify, pick the pack, extract, identifiers, cycle checks | [`dps/src/dps/skills/runner.py:750`](../../dps/src/dps/skills/runner.py#L750) `run_onboard`, pack table [`:744`](../../dps/src/dps/skills/runner.py#L744) `ONBOARD_PACKS` |
+| 12 | Classify | Rules score each type; agent second opinion only when unsure | [`dps/src/dps/analyze/classify.py:333`](../../dps/src/dps/analyze/classify.py#L333) `classify` → [`:156`](../../dps/src/dps/analyze/classify.py#L156) `rule_scores` → [`:230`](../../dps/src/dps/analyze/classify.py#L230) `decide_rules` |
+| 13 | Identify | Borrower, facility, account, period, currency, units, issuer; matched in Spring | [`dps/src/dps/analyze/identify.py:156`](../../dps/src/dps/analyze/identify.py#L156) `find_identifiers`, [`:271`](../../dps/src/dps/analyze/identify.py#L271) `match` |
+| 14 | Generic run | Budget, extract, codes, scoring, checks, result JSON | [`dps/src/dps/skills/runner.py:390`](../../dps/src/dps/skills/runner.py#L390) `run` |
+| 15 | Extraction order | The whole order in one function | [`dps/src/dps/skills/runner.py:390`](../../dps/src/dps/skills/runner.py#L390) `_extract` |
+| 16 | Rules | Covenant rules: numbered clauses, metrics, thresholds, non-financial rules | [`dps/src/dps/skills/covenants/rules.py:84`](../../dps/src/dps/skills/covenants/rules.py#L84) `rules` → [`dps/src/dps/extraction/agreement.py:934`](../../dps/src/dps/extraction/agreement.py#L934) `extract_terms`, [`:893`](../../dps/src/dps/extraction/agreement.py#L893) `_non_financial` |
 | 17 | Page finder | Rule pages, covenant sections, duty sentences, definitions; 4 batches of 25 | [`dps/src/dps/skills/covenants/pages.py:98`](../../dps/src/dps/skills/covenants/pages.py#L98) `covenant_batches`, [`:61`](../../dps/src/dps/skills/covenants/pages.py#L61) `is_duty` |
-| 18 | Agent read (4 parts) | Financial, undertakings, reporting, events of default | [`dps/src/dps/skills/covenants/parts.py:75`](../../dps/src/dps/skills/covenants/parts.py#L75) `read` → [`dps/src/dps/skills/common.py:203`](../../dps/src/dps/skills/common.py#L203) `batched_proposals` → [`:142`](../../dps/src/dps/skills/common.py#L142) `agent_proposals` → [`:126`](../../dps/src/dps/skills/common.py#L126) `prompt_for` ([`:112`](../../dps/src/dps/skills/common.py#L112) `fit_pages`) |
-| 19 | The agent | Fresh CrewAI Agent with the pack's tools; answer schema-checked, one repair | [`dps/src/dps/agent/document_agent.py:277`](../../dps/src/dps/agent/document_agent.py#L277) `make_agent`, [`:293`](../../dps/src/dps/agent/document_agent.py#L293) `read`, [`:50`](../../dps/src/dps/agent/document_agent.py#L50) `GatewayLLM` |
-| 20 | Model gateway | Routes, retries, breaker, budget, masking, call log | [`dps/src/dps/agent/gateway.py:150`](../../dps/src/dps/agent/gateway.py#L150) `Gateway`, [`:242`](../../dps/src/dps/agent/gateway.py#L242) `call_json`, [`:126`](../../dps/src/dps/agent/gateway.py#L126) `JobBudget`; guards [`dps/src/dps/agent/guard.py:144`](../../dps/src/dps/agent/guard.py#L144) `guarded`, [`:71`](../../dps/src/dps/agent/guard.py#L71) `injection_signs` |
+| 18 | Agent read (4 parts) | Financial, undertakings, reporting, events of default | [`dps/src/dps/skills/covenants/parts.py:75`](../../dps/src/dps/skills/covenants/parts.py#L75) `read` → [`dps/src/dps/skills/common.py:206`](../../dps/src/dps/skills/common.py#L206) `batched_proposals` → [`:142`](../../dps/src/dps/skills/common.py#L142) `agent_proposals` → [`:126`](../../dps/src/dps/skills/common.py#L126) `prompt_for` ([`:112`](../../dps/src/dps/skills/common.py#L112) `fit_pages`) |
+| 19 | The agent | Fresh CrewAI Agent with the pack's tools; answer schema-checked, one repair | [`dps/src/dps/agent/document_agent.py:287`](../../dps/src/dps/agent/document_agent.py#L287) `make_agent`, [`:303`](../../dps/src/dps/agent/document_agent.py#L303) `read`, [`:52`](../../dps/src/dps/agent/document_agent.py#L52) `GatewayLLM` |
+| 20 | Model gateway | Routes, retries, breaker, budget, masking, call log | [`dps/src/dps/agent/gateway.py:153`](../../dps/src/dps/agent/gateway.py#L153) `Gateway`, [`:245`](../../dps/src/dps/agent/gateway.py#L245) `call_json`, [`:128`](../../dps/src/dps/agent/gateway.py#L128) `JobBudget`; guards [`dps/src/dps/agent/guard.py:144`](../../dps/src/dps/agent/guard.py#L144) `guarded`, [`:71`](../../dps/src/dps/agent/guard.py#L71) `injection_signs` |
 | 21 | Grounding | Quote must be on its page | [`dps/src/dps/skills/common.py:53`](../../dps/src/dps/skills/common.py#L53) `grounded` |
-| 22 | Clean + vote | Library names, mechanics dropped; rules vs agent | [`dps/src/dps/skills/covenants/names.py:132`](../../dps/src/dps/skills/covenants/names.py#L132) `clean`; [`dps/src/dps/skills/runner.py:223`](../../dps/src/dps/skills/runner.py#L223) `_vote_covenants`, [`:163`](../../dps/src/dps/skills/runner.py#L163) `_agent_only` |
-| 23 | Ledger | Every covenant-shaped sentence gets one state; qualifiers and references | [`dps/src/dps/skills/covenants/ledger.py:121`](../../dps/src/dps/skills/covenants/ledger.py#L121) `candidates`, [`:146`](../../dps/src/dps/skills/covenants/ledger.py#L146) `settle`, [`:186`](../../dps/src/dps/skills/covenants/ledger.py#L186) `attach`, [`:228`](../../dps/src/dps/skills/covenants/ledger.py#L228) `review_items`, [`:257`](../../dps/src/dps/skills/covenants/ledger.py#L257) `summary` ([`:64`](../../dps/src/dps/skills/covenants/ledger.py#L64) `qualifiers`, [`:103`](../../dps/src/dps/skills/covenants/ledger.py#L103) `references`) |
+| 22 | Clean + vote | Library names, mechanics dropped; rules vs agent | [`dps/src/dps/skills/covenants/names.py:132`](../../dps/src/dps/skills/covenants/names.py#L132) `clean`; [`dps/src/dps/skills/runner.py:281`](../../dps/src/dps/skills/runner.py#L281) `_vote_covenants`, [`:198`](../../dps/src/dps/skills/runner.py#L240) `_agent_only` |
+| 23 | Ledger | Every covenant-shaped sentence gets one state; qualifiers and references | [`dps/src/dps/skills/covenants/ledger.py:168`](../../dps/src/dps/skills/covenants/ledger.py#L168) `candidates`, [`:205`](../../dps/src/dps/skills/covenants/ledger.py#L205) `settle`, [`:252`](../../dps/src/dps/skills/covenants/ledger.py#L252) `attach`, [`:294`](../../dps/src/dps/skills/covenants/ledger.py#L294) `review_items`, [`:335`](../../dps/src/dps/skills/covenants/ledger.py#L335) `summary` ([`:111`](../../dps/src/dps/skills/covenants/ledger.py#L111) `qualifiers`, [`:150`](../../dps/src/dps/skills/covenants/ledger.py#L150) `references`) |
 | 24 | Second read | The agent looks again at unexplained duty sentences | [`dps/src/dps/skills/covenants/omissions.py:82`](../../dps/src/dps/skills/covenants/omissions.py#L82) `read` |
-| 25 | Java check | Formula validation, covenant library | [`dps/src/dps/skills/runner.py:116`](../../dps/src/dps/skills/runner.py#L116) `verify_with_spring` → [`dps/src/dps/integrations/spring_tools.py:151`](../../dps/src/dps/integrations/spring_tools.py#L151) `validate_formulas`, [`:221`](../../dps/src/dps/integrations/spring_tools.py#L221) `covenant_library` |
+| 25 | Java check | Formula validation, covenant library | [`dps/src/dps/skills/runner.py:151`](../../dps/src/dps/skills/runner.py#L151) `verify_with_spring` → [`dps/src/dps/integrations/spring_tools.py:151`](../../dps/src/dps/integrations/spring_tools.py#L151) `validate_formulas`, [`:221`](../../dps/src/dps/integrations/spring_tools.py#L221) `covenant_library` |
 | 26 | Codes | Taxonomy code and category; suggestion only for missing values | [`dps/src/dps/skills/covenants/codes.py:34`](../../dps/src/dps/skills/covenants/codes.py#L34) `stamp`; [`dps/src/dps/skills/covenants/taxonomy/__init__.py:107`](../../dps/src/dps/skills/covenants/taxonomy/__init__.py#L107) `code_for`, [`:128`](../../dps/src/dps/skills/covenants/taxonomy/__init__.py#L128) `more_specific` |
 | 27 | Score + route | Confidence per field, risk thresholds, 3% QA sample | [`dps/src/dps/scoring/__init__.py:211`](../../dps/src/dps/scoring/__init__.py#L211) `Scorer`, [`:193`](../../dps/src/dps/scoring/__init__.py#L193) `route` |
-| 28 | Checks | Number in quote, page outcomes, zero findings, budget warning | [`dps/src/dps/skills/runner.py:64`](../../dps/src/dps/skills/runner.py#L64) `check_numbers`, [`:86`](../../dps/src/dps/skills/runner.py#L86) `page_accounting`, [`:52`](../../dps/src/dps/skills/runner.py#L52) `budget_warning` |
-| 29 | Save + event | Result in `dps_run` and event in the same transaction | [`dps/src/dps/skills/runner.py:557`](../../dps/src/dps/skills/runner.py#L557) `finish`; [`dps/src/dps/feed.py:39`](../../dps/src/dps/feed.py#L39) `emit_for_job` |
-| 30 | Spring pulls | Events, then the result | `GET /dps/v1/events`; [`dps/src/dps/api/jobs.py:352`](../../dps/src/dps/api/jobs.py#L352) `job_result`; older flows' results [`dps/src/dps/results.py:145`](../../dps/src/dps/results.py#L145) `build` |
-| 31 | Review | A person accepts, edits or rejects each field; a new run is saved | [`dps/src/dps/api/review.py:141`](../../dps/src/dps/api/review.py#L141) `submit_review` |
+| 28 | Checks | Number in quote, page outcomes, zero findings, budget warning | [`dps/src/dps/skills/runner.py:63`](../../dps/src/dps/skills/runner.py#L63) `check_numbers`, [`:121`](../../dps/src/dps/skills/runner.py#L151) `page_accounting`, [`:66`](../../dps/src/dps/skills/runner.py#L78) `budget_warning` |
+| 29 | Save + event | Result in `dps_run` and event in the same transaction | [`dps/src/dps/skills/runner.py:716`](../../dps/src/dps/skills/runner.py#L716) `finish`; [`dps/src/dps/feed.py:40`](../../dps/src/dps/feed.py#L40) `emit_for_job` |
+| 30 | Spring pulls | Events, then the result | `GET /dps/v1/events`; [`dps/src/dps/api/jobs.py:368`](../../dps/src/dps/api/jobs.py#L368) `job_result`; older flows' results [`dps/src/dps/results.py:42`](../../dps/src/dps/results.py#L42) `build` |
+| 31 | Review | A person accepts, edits or rejects each field; a new run is saved | [`dps/src/dps/api/review.py:155`](../../dps/src/dps/api/review.py#L155) `submit_review` |
 
-**Agreement Intake flow** (`EXTRACT_AGREEMENT`):
-- [`dps/src/dps/skills/runner.py:391`](../../dps/src/dps/skills/runner.py#L391) `parse_document`;
-- `:103` `extract` (rules + safety net [`dps/src/dps/extraction/safety_net.py:136`](../../dps/src/dps/extraction/safety_net.py#L136), then the AI reader [`dps/src/dps/extraction/agreement_ai.py:296`](../../dps/src/dps/extraction/agreement_ai.py#L296) `read_with_skill`);
-- `:127` `_account_for_every_duty` (ledger and second read);
-- `:188` `normalize_terms`;
-- `:233` `validate_proposals`;
-- `:246` `publish_proposals`.
+**Agreement extraction** (`EXTRACT_AGREEMENT`, one pipeline: the covenants skill in the skills flow):
+- [`dps/src/dps/skills/runner.py:499`](../../dps/src/dps/skills/runner.py#L499) `_extract`: the whole order;
+- rules first: [`dps/src/dps/skills/covenants/rules.py:84`](../../dps/src/dps/skills/covenants/rules.py#L84) `rules` (agreement extractor + safety net [`dps/src/dps/extraction/safety_net.py:136`](../../dps/src/dps/extraction/safety_net.py#L136));
+- the agent in 4 focused parts: [`dps/src/dps/skills/covenants/parts.py:75`](../../dps/src/dps/skills/covenants/parts.py#L75) `read`;
+- rules vs agent: [`dps/src/dps/skills/runner.py:281`](../../dps/src/dps/skills/runner.py#L281) `_vote_covenants`;
+- every duty sentence accounted for: [`dps/src/dps/skills/covenants/ledger.py:205`](../../dps/src/dps/skills/covenants/ledger.py#L205) `settle`, then the residual read.
 
 **Amendment rules:** [`dps/src/dps/skills/amendment_diff/rules.py:56`](../../dps/src/dps/skills/amendment_diff/rules.py#L56) `rules`, [`:145`](../../dps/src/dps/skills/amendment_diff/rules.py#L145) `amended_set`.
 
-**Statement flow:** [`dps/src/dps/skills/statement_lines/reader.py:158`](../../dps/src/dps/skills/statement_lines/reader.py#L158) `validate` (records the lines not found, [`dps/src/dps/catalog.py:65`](../../dps/src/dps/catalog.py#L65)), [`:468`](../../dps/src/dps/catalog.py#L468) `report_values`.
+**Statement flow:** [`dps/src/dps/skills/statement_lines/reader.py:468`](../../dps/src/dps/skills/statement_lines/reader.py#L468) `_validate` (records the lines not found, [`dps/src/dps/catalog.py:65`](../../dps/src/dps/catalog.py#L65)), [`:535`](../../dps/src/dps/skills/statement_lines/reader.py#L535) `publish` (stores the approved figures after review).
 
 **Agent tools:** [`dps/src/dps/agent/document_agent.py`](../../dps/src/dps/agent/document_agent.py):
 - `:145` `page_text`;
@@ -760,8 +759,8 @@ What a job does from submit to result. Open each file as you go.
 - `:243` `lookup_identifier`.
 
 **Process entry points:**
-- API: [`dps/src/dps/main.py:28`](../../dps/src/dps/main.py#L28) `create_app`.
-- Worker: [`dps/src/dps/worker.py:580`](../../dps/src/dps/worker.py#L580) `main`, and [`:481`](../../dps/src/dps/worker.py#L481) `build_runners` (wires the flows, the gateway and the second read).
+- API: [`dps/src/dps/main.py:25`](../../dps/src/dps/main.py#L25) `create_app`.
+- Worker: [`dps/src/dps/worker.py:463`](../../dps/src/dps/worker.py#L463) `main`, and [`:463`](../../dps/src/dps/worker.py#L438) `build_runners` (wires the flows, the gateway and the second read).
 
 Line numbers are for `main` on 19 Nov 2026. A new commit can move them by a few lines; the function names stay.
 
@@ -862,7 +861,7 @@ If the model is down, the job does not fail: it falls back to the rules, and the
 - **Bounded:** timeout, retries and a circuit breaker.
 - **Degrading:** if Spring is down, the field gets `SPRING_UNAVAILABLE` and goes to review; the job carries on.
 
-DPS's own identity for these calls: [`dps/src/dps/integrations/service_auth.py`](../../dps/src/dps/integrations/service_auth.py). Other Core calls: [`dps/src/dps/integrations/spring.py`](../../dps/src/dps/integrations/spring.py). Tests run against a stand-in Spring: [`dps/tests/stub_spring.py`](../../dps/tests/stub_spring.py).
+DPS's own identity for these calls: [`dps/src/dps/integrations/service_auth.py`](../../dps/src/dps/integrations/service_auth.py). Other Spring reads (loan currency, borrower profile, countries, FX): [`dps/src/dps/integrations/spring.py`](../../dps/src/dps/integrations/spring.py). Tests run against a stand-in Spring: [`dps/tests/stub_spring.py`](../../dps/tests/stub_spring.py).
 
 ---
 
@@ -874,14 +873,12 @@ DPS's own identity for these calls: [`dps/src/dps/integrations/service_auth.py`]
 | Page models (parsed text, boxes, tables) | `derived/<tenant>/<version>/page-model/…/page-model.json.gz`, listed in `dps_artifact` | Write-once; reused when the same bytes and pipeline come again |
 | Jobs, attempts, batches | `dps_job`, `dps_job_attempt`, `dps_batch` | Queue and history |
 | Results | `dps_run` (one `dps.result/1.0` JSON per run) | A review creates a new run; old runs never change |
-| Agreement terms (EXTRACT_AGREEMENT flow) | `dps_extracted_term` | Review states per term |
 | Statement values | `dps_statement_value` | Served to Spring through `POST /api/data/values` |
-| Events for Spring | `dps_event_feed` (+ `dps_event_outbox`) | Written in the same transaction as the change |
+| Events for Spring | `dps_event_feed` | Written in the same transaction as the change; the only event channel |
 | Review decisions | `dps_review_decision` | Feeds the learning loop and calibration |
 | AI calls and cost | `dps_ai_call`, `dps_ai_usage`, `dps_ai_cache` | Prompt text stored only where allowed |
 | Audit trail | `dps_audit_event`, daily hash-chain seal `dps_audit_seal` + `audit-seals/` folder | Tamper evidence |
-| History shown per document | `dps_trace_event` | `GET /dps/v1/documents/{id}/history` |
-| Flow state (resume after review) | `dps_flow_state` | [`dps/src/dps/flows/persistence.py`](../../dps/src/dps/flows/persistence.py) |
+| History shown per document | `dps_trace_event` | shown by `scripts\show_job.py <jobId>` (section 8) |
 | What goes to Azure | Only the selected page text of the job (and page images for the vision route) | Allowed hosts only; nothing stored there |
 
 The database is a SQL Server schema `dps` in production, set by `DPS_DATABASE_URL`, and SQLite on a laptop. Migrations: [`dps/migrations/versions/`](../../dps/migrations/versions).
@@ -905,7 +902,6 @@ erDiagram
   dps_job ||--o{ dps_event_feed : "events"
   dps_job ||--o{ dps_review_decision : "reviews"
   dps_batch ||--o{ dps_job : "bulk items"
-  dps_document ||--o{ dps_extracted_term : "agreement terms"
   dps_document ||--o{ dps_statement_value : "statement lines"
   dps_document ||--o{ dps_trace_event : "history"
   dps_job ||--o{ dps_ai_call : "model calls"
@@ -919,7 +915,6 @@ erDiagram
 | `dps_document` | One record per job's document | `external_version_id` (DMS version), `object_key`, `sha256`, `type`, `tenant_id`, `as_of_date`, `status` |
 | `dps_document_cp_link` | Document ↔ CP links | `document_id`, `cp_id` |
 | `dps_run` | Each result, immutable | `job_id`, `run_no`, `result_json`, `superseded_by` |
-| `dps_extracted_term` | Agreement-flow terms | `metric_raw`, `operator`, `threshold`, `unit`, `page`, `quote`, `status`, `issues_json`, `covenant_master_id` |
 | `dps_statement_value` | Statement figures | `cp_id`, `key`, `value`, `unit`, `as_of_date`, `page`, `cell` |
 | `dps_event_feed` | Events Spring reads | `seq`, `event_id`, `type`, `job_id`, `payload_json` |
 | `dps_review_decision` | What reviewers decided | `job_id`, `field_id`, `action`, `old_value_json`, `new_value_json` |
@@ -927,8 +922,7 @@ erDiagram
 | `dps_ai_call` / `dps_ai_usage` | Model calls and cost | `purpose`, `model`, `prompt_tokens`, `completion_tokens`, `cost`, `job_id` |
 | `dps_audit_event` / `dps_audit_seal` | Audit and daily seal | `actor`, `action`, `target_id` / `head_hash` |
 | `dps_trace_event` | Document history | `step`, `actor`, `summary` |
-| `dps_flow_state` | Saved CrewAI Flow state | `flow_uuid`, `state_json` |
-| `dps_label_memory`, `dps_learned_wording`, `dps_golden_candidate` | Learning loop | – |
+| `dps_label_memory`, `dps_golden_candidate` | Learning loop: statement labels per borrower, golden-set candidates from corrections | – |
 | `dps_tenant_limit`, `dps_leader`, `dps_push_cursor` | Limits, scheduler leader, push cursor | – |
 
 ---
@@ -999,7 +993,7 @@ The same schemas ship inside the package: [`dps/src/dps/contract/`](../../dps/sr
 1. **The result is saved** (`dps_run`) and **an event is written** (`dps_event_feed`) in the same transaction ([`dps/src/dps/feed.py`](../../dps/src/dps/feed.py)).
 2. **Spring reads** `GET /dps/v1/events?after=<seq>`, then `GET /dps/v1/jobs/{id}/result`, and shows the fields on its review screen. Each field carries its page, quote and box, so the reviewer sees the exact spot.
 3. **A person decides.** `POST /dps/v1/jobs/{id}/review` accepts, edits or rejects each field ([`dps/src/dps/api/review.py`](../../dps/src/dps/api/review.py)). Every review saves a new run; old runs never change.
-4. **DPS learns.** Review decisions feed `dps_review_decision`. Confirmed wordings can be promoted to rules by an administrator ([`dps/src/dps/learning.py`](../../dps/src/dps/learning.py)). Calibration data is collected for the scorer ([`dps/src/dps/scoring/__init__.py`](../../dps/src/dps/scoring/__init__.py)).
+4. **DPS learns.** Review decisions feed `dps_review_decision`. Corrections become golden-set candidates (`dps_golden_candidate`), and confirmed statement labels are remembered per borrower (`dps_label_memory`). Calibration data is collected for the scorer ([`dps/src/dps/scoring/__init__.py`](../../dps/src/dps/scoring/__init__.py)).
 5. **Spring decides everything else:**
    - approve and persist the covenants as immutable;
    - update the schedule;
@@ -1015,12 +1009,12 @@ The AI agent is used *during* extraction (steps 9–17 in §3), never after it, 
 
 | Log | What it shows | How to see it |
 |---|---|---|
-| **Run log (demo trace)** | Every DPS function a document passes through, with its file and line, plus DPS log lines | `.venv\Scripts\python scripts\demo_onboard.py <file> --trace run.log`. Sample: [`docs/cts-dps/sample-run-AGR-001.txt`](sample-run-AGR-001.txt) |
+| **Run log (demo trace)** | Every DPS function a document passes through, with its file and line, plus DPS log lines | `.venv\Scripts\python scripts\demo_onboard.py <file> --trace run.log`. |
 | App logs | One JSON line per event, with request id, user, job and document | Console of `dps-api` / `dps-worker`; format in [`dps/src/dps/ops/observability.py`](../../dps/src/dps/ops/observability.py) |
 | Daily log file | All containers, one readable file per day | `python -m dps.ops.logcollector` ([`dps/src/dps/ops/logcollector.py`](../../dps/src/dps/ops/logcollector.py)) |
-| Document history | What DPS read and found, what the AI said, what people decided | `GET /dps/v1/documents/{id}/history` ([`dps/src/dps/history.py`](../../dps/src/dps/history.py)) |
+| Document history | What DPS read and found, what the AI said, what people decided | table `dps_trace_event`, shown by `scripts\show_job.py <jobId>` ([`dps/src/dps/history.py`](../../dps/src/dps/history.py)) |
 | Job steps | Each step and attempt of a job, incl. the coverage step | `GET /dps/v1/jobs/{id}` (`steps`) |
-| AI calls and cost | Each model call: purpose, model, tokens, cost, seconds | `GET /dps/v1/ai-usage`, `GET /dps/v1/ops/usage` |
+| AI calls and cost | Each model call: purpose, model, tokens, cost, seconds | `GET /dps/v1/ops/usage`; per job in `scripts\show_job.py <jobId>` |
 | Operations | Queues, review backlog, scaling signals, go-live readiness, audit seals | `GET /dps/v1/ops/queues`, `/ops/scaling`, `/ops/go-live`, `/ops/audit-seals` |
 | Alerts | Queue age, DEAD jobs, review backlog, AI failures | [`deploy/alerts/cts-dps-alerts.yaml`](../../deploy/alerts/cts-dps-alerts.yaml); runbook [`docs/cts-dps/runbook.md`](runbook.md) |
 
@@ -1075,7 +1069,7 @@ First install: [`docs/cts-dps/install-and-demo.md`](install-and-demo.md). Then, 
    - the full test suite, `.venv\Scripts\pytest -q`, with about 900 tests at 95% coverage;
    - the golden gate (commands in `install-and-demo.md` §3).
 
-**Numbers you can quote** (measured; details in [`docs/cts-dps/dps-review-2026-11-19.md`](dps-review-2026-11-19.md)):
+**Numbers you can quote** (measured):
 
 | What | Number |
 |---|---|
@@ -1126,7 +1120,7 @@ cts-dps/
     src/dps/
       main.py, worker.py          the API process and the worker process
       settings.py, db.py, models.py, errors.py, jobs.py, feed.py, results.py
-      api/                        jobs (CTS job API), documents, review, evidence, auth, access, ratelimit
+      api/                        jobs (CTS job API), review, evidence, auth, access, deps
       ingest/                     DMS store reader, upload store, inspection, ingest pipeline
       parse/                      engine (pypdf, RapidOCR, Docling), page model, sandbox, segmentation
       analyze/                    classification, identifiers, key pages, cycle checks
@@ -1148,7 +1142,7 @@ cts-dps/
 
 Each excerpt is copied from the file at the line shown. Open the file at that line and read it with the team.
 
-### [`dps/src/dps/api/jobs.py:312`](../../dps/src/dps/api/jobs.py#L312) `submit_job`
+### [`dps/src/dps/api/jobs.py:328`](../../dps/src/dps/api/jobs.py#L328) `submit_job`
 
 Spring submits a job: idempotency, same-input duplicate, queue limit, create.
 
@@ -1256,7 +1250,7 @@ Every write is fenced: a worker that lost its job can no longer publish a result
   70          raise LeaseLost(job_id)
 ```
 
-### [`dps/src/dps/skills/runner.py:611`](../../dps/src/dps/skills/runner.py#L611) `run_onboard`
+### [`dps/src/dps/skills/runner.py:750`](../../dps/src/dps/skills/runner.py#L750) `run_onboard`
 
 The Miro onboarding job: classify, pick the skill pack, extract, identifiers, cycle checks.
 
@@ -1322,7 +1316,7 @@ No invented values: an AI quote must be on the page it names.
   69      return before is not None and q in f"{_flat(before.get('text'))} {here}"
 ```
 
-### [`dps/src/dps/agent/document_agent.py:277`](../../dps/src/dps/agent/document_agent.py#L277) `make_agent`
+### [`dps/src/dps/agent/document_agent.py:287`](../../dps/src/dps/agent/document_agent.py#L287) `make_agent`
 
 One Document Agent per read, with the skill's role and only its tools.
 
@@ -1339,7 +1333,7 @@ One Document Agent per read, with the skill's role and only its tools.
  286                   max_execution_time=max_seconds, max_retry_limit=0, verbose=False)
 ```
 
-### [`dps/src/dps/skills/covenants/ledger.py:146`](../../dps/src/dps/skills/covenants/ledger.py#L146) `settle`
+### [`dps/src/dps/skills/covenants/ledger.py:205`](../../dps/src/dps/skills/covenants/ledger.py#L205) `settle`
 
 The ledger: each covenant-shaped sentence ends found, covered, dismissed or unresolved.
 
@@ -1441,7 +1435,7 @@ Taxonomy codes on every covenant; a missing value is only suggested.
       ... (8 more lines, to line 75)
 ```
 
-### [`dps/src/dps/skills/runner.py:64`](../../dps/src/dps/skills/runner.py#L64) `check_numbers`
+### [`dps/src/dps/skills/runner.py:63`](../../dps/src/dps/skills/runner.py#L63) `check_numbers`
 
 The threshold must be written in its own quote.
 
