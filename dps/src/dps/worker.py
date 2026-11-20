@@ -1,6 +1,7 @@
 """Background workers (03-flows-design.md §4). Run: ``python -m dps.worker`` (``DPS_WORKER_POOL=HEAVY`` for Docling).
 
-Each loop: send pending C5 events, then claim one job and run its flow. Transient failures (Core down,
+Each loop: the leader's scheduler tasks (event push, queue ageing, reaper, audit seal), then claim one job and run
+it in the one pipeline (full review WP7): ANALYZE, or the job type's skill pack. Transient failures (Core down,
 file store hiccup) put the job back in the queue until ``worker_max_attempts``; deterministic outcomes
 (FAILED, NEEDS_REVIEW) end the attempt.
 """
@@ -8,7 +9,6 @@ file store hiccup) put the job back in the queue until ``worker_max_attempts``; 
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import signal
 import threading
@@ -26,33 +26,29 @@ from dps.db import Database, require_snapshot_isolation
 from dps.ingest.file_store import FileStore
 from dps.ingest.pipeline import QUARANTINE, IngestFailed, Ingestor
 from dps.integrations.core import CoreClient, CoreUnavailable
-from dps.models import Document, EventOutbox, Job, utcnow
+from dps.models import Document, Job, utcnow
 from dps.ops import observability as obs
 from dps.profiles import currency_words
 from dps.settings import Settings, get_settings, llm_allowed
+from dps.skills.statement_lines.reader import ContentFailed, NeedsHeavyPool
 
 log = logging.getLogger(__name__)
 
-# flow name → callable(job, settings) -> outcome ("PUBLISHED" | "REPORTED" | "NEEDS_REVIEW" | "FAILED" | "HEAVY")
-FlowRunner = Callable[[Job], tuple[str, str, str]]  # (outcome, flow_state_id, error)
-
-OUTCOME_TO_STATUS = {"PUBLISHED": jobs.DONE, "REPORTED": jobs.DONE, "NEEDS_REVIEW": jobs.NEEDS_REVIEW,
-                     "FAILED": jobs.FAILED}
-# What the AI reader of each flow is recorded as in dps_ai_usage / dps_ai_call.
-AI_PURPOSE = {"AGREEMENT_INTAKE": "AGREEMENT_READ", "STATEMENT_PROCESSING": "STATEMENT_READ"}
+# Jobs queued before the one pipeline (full review WP7) name their old flow; they run in the skills flow too.
+SKILL_FLOWS = ("SKILL_PACK", "AGREEMENT_INTAKE", "STATEMENT_PROCESSING")
 ACTOR = "dps-worker"
 
 
 class Worker:
     def __init__(self, settings: Settings, session_factory: sessionmaker[Session], core: CoreClient,
-                 runners: dict[str, FlowRunner], ingestor: Ingestor | None = None,
+                 runners: dict | None = None, ingestor: Ingestor | None = None,
                  page_models: dict[str, dict] | None = None,
                  analyzer: Callable[[Session, Job, dict], None] | None = None,
                  pack_runner: Callable[[Session, Job, dict | None, bytes | None], None] | None = None) -> None:
         self.settings = settings
         self.session_factory = session_factory
         self.core = core
-        self.runners = runners
+        self.runners = runners or {}  # unused since the one pipeline (full review WP7); kept for callers
         self.ingestor = ingestor
         # sha256 -> page model built by the ingest step; the flows' parser reads it instead of parsing again.
         self.page_models = page_models if page_models is not None else {}
@@ -131,7 +127,6 @@ class Worker:
     def run_once(self) -> bool:
         """Scheduler tasks (leader only), then at most one job. Returns True when a job was processed."""
         if self._is_leader():
-            self.send_events()
             self.push_events()
             self._age_queue()
             self._reap()
@@ -225,67 +220,15 @@ class Worker:
         if job.flow == "ANALYZE":
             self._analyze(db, job, doc)
             return
-        if job.flow == "SKILL_PACK":
+        if job.flow in SKILL_FLOWS:
             self._analyze(db, job, doc, runner=self.pack_runner)
             return
-        runner = self.runners.get(job.flow)
-        if runner is None:
-            jobs.finish(db, job, jobs.FAILED, f"No flow registered for {job.flow}", "UNSUPPORTED_JOB_TYPE")
-            return
-        if job.cancel_requested:
-            jobs.finish(db, job, jobs.CANCELLED, "Cancelled before it started", "JOB_CANCELLED")
-            return
-        if not self._ingest(db, job, doc):
-            return
-        jobs.record_step(db, job, "START", attempt=job.attempts, worker=self.settings.worker_id)
-        obs.event("JOB_START", f"{job.flow} attempt {job.attempts} on {self.settings.worker_id} "
-                  f"({self.settings.worker_pool} pool)", flow=job.flow, pool=self.settings.worker_pool)
-        started = time.monotonic()
-        usage.begin()
-        try:
-            outcome, state_id, error = runner(job)
-        except jobs.LeaseLost:
-            raise
-        except (CoreUnavailable, httpx.HTTPError, OSError) as ex:
-            log.warning("Job %s attempt %d failed: %s", job.id, job.attempts, type(ex).__name__)
-            db.refresh(job)
-            jobs.record_step(db, job, "RETRY", error=str(ex)[:500])
-            code = "STORAGE_UNAVAILABLE" if isinstance(ex, OSError) else "SPRING_UNAVAILABLE"
-            jobs.release_for_retry(db, job, str(ex)[:2000], self.settings.worker_max_attempts, code,
-                                   self.settings.worker_retry_base_seconds, self.settings.worker_retry_max_seconds)
-            self._sync_document(db, job)
-            return
-        except Exception as ex:  # a bug: retry once, then DEAD; the worker stays alive either way
-            log.exception("Job %s crashed", job.id)
-            db.refresh(job)
-            message = f"{type(ex).__name__}: {str(ex)[:1900]}"
-            jobs.record_step(db, job, "RETRY", error=message[:500])
-            jobs.release_for_retry(db, job, message, min(2, self.settings.worker_max_attempts), "INTERNAL_ERROR",
-                                   self.settings.worker_retry_base_seconds, self.settings.worker_retry_max_seconds)
-            self._sync_document(db, job)
-            return
-        finally:
-            # The AI readers' calls for this document (AGREEMENT_READ / STATEMENT_READ), even when the job failed.
-            usage.record(db, self.settings, AI_PURPOSE.get(job.flow, job.flow[:24]),
-                         doc.uploaded_by if doc else ACTOR, document_id=job.document_id, job_id=job.id)
-        db.refresh(job)
-        job.flow_state_id = state_id
-        seconds = round(time.monotonic() - started, 2)
-        jobs.record_step(db, job, "END", outcome=outcome, seconds=seconds)
-        obs.event("JOB_END", f"{job.flow} {outcome} in {seconds} s" + (f": {error}" if error else ""),
-                  flow=job.flow, outcome=outcome, seconds=seconds)
-        obs.count("dps.documents.processed", 1, flow=job.flow, outcome=outcome, pool=self.settings.worker_pool)
-        obs.observe("dps.document.duration", seconds, flow=job.flow, pool=self.settings.worker_pool)
-        if outcome == "HEAVY":
-            jobs.move_to_pool(db, job, "HEAVY")
-            return
-        status = OUTCOME_TO_STATUS.get(outcome, jobs.FAILED)
-        jobs.finish(db, job, status, error or None, "CONTENT_FAILED" if status == jobs.FAILED else None)
+        jobs.finish(db, job, jobs.FAILED, f"No flow registered for {job.flow}", "UNSUPPORTED_JOB_TYPE")
 
     def _analyze(self, db: Session, job: Job, doc: Document | None, runner=None) -> None:
         """Phase 3 ANALYZE (page model -> classification and identifiers -> run + dps.analysis.completed) and
         Phase 4 skill packs (page model -> generic flow -> run + extraction event)."""
-        pack_job = job.flow == "SKILL_PACK"
+        pack_job = job.flow in SKILL_FLOWS
         if job.cancel_requested:
             jobs.finish(db, job, jobs.CANCELLED, "Cancelled before it started", "JOB_CANCELLED")
             return
@@ -319,6 +262,18 @@ class Worker:
                     target(db, job, self.page_models[doc.sha256])
         except jobs.LeaseLost:
             raise
+        except NeedsHeavyPool as ex:  # a statement the standard reader cannot read: the HEAVY pool reads it
+            db.rollback()
+            db.refresh(job)
+            obs.event("MOVED_HEAVY", f"{ex}: moved to the HEAVY pool", code="NEEDS_HEAVY")
+            jobs.move_to_pool(db, job, "HEAVY")
+            return
+        except ContentFailed as ex:  # no readable lines: a content failure, not a crash
+            db.rollback()
+            db.refresh(job)
+            jobs.finish(db, job, jobs.FAILED, str(ex)[:2000] or "No line items found", "CONTENT_FAILED")
+            self._sync_document(db, job)
+            return
         except (CoreUnavailable, httpx.HTTPError, OSError) as ex:
             db.rollback()
             db.refresh(job)
@@ -396,37 +351,10 @@ class Worker:
                 doc.status = "FAILED"
                 db.commit()
 
-    def send_events(self, limit: int = 20) -> int:
-        """C5 transactional outbox: delivers unsent events in order; stops at the first transient error."""
-        sent = 0
-        with self.session_factory() as db:
-            pending = db.scalars(select(EventOutbox).where(EventOutbox.sent_at.is_(None),
-                                                           EventOutbox.attempts < 50)
-                                 .order_by(EventOutbox.created_at).limit(limit)).all()
-            for event in pending:
-                event.attempts += 1
-                payload = json.loads(event.payload_json)
-                if not payload.get("dataSourceId"):
-                    payload["dataSourceId"] = self.settings.core_data_source_id
-                try:
-                    self.core.send_data_event(payload)
-                except CoreUnavailable as ex:
-                    event.last_error = str(ex)[:2000]
-                    db.commit()
-                    break
-                except httpx.HTTPStatusError as ex:  # 4xx: will not succeed on retry
-                    event.last_error = f"HTTP {ex.response.status_code}: {ex.response.text[:500]}"
-                    event.attempts = 50
-                    db.commit()
-                    continue
-                event.sent_at = utcnow()
-                db.commit()
-                sent += 1
-        return sent
-
 
 class PageModelFirst:
-    """The flows' parser: the page model the ingest step built for these bytes, else the given parser."""
+    """The statement reader's parser: the page model the ingest step built for these bytes, else the given
+    parser."""
 
     def __init__(self, fallback, page_models: dict[str, dict]) -> None:
         self.fallback, self.page_models = fallback, page_models
@@ -471,93 +399,23 @@ def build_analyzer(settings: Settings, database: Database) -> Callable[[Session,
     return run
 
 
-def build_pack_runner(settings: Settings, database: Database):
-    """Phase 4: the generic flow for EXTRACT_SANCTION, EXTRACT_CERTIFICATE, EXTRACT_AMENDMENT, DRAFT_COMMENTARY."""
-    from dps.agent.gateway import from_settings
-    from dps.integrations.spring_tools import SpringTools
-    from dps.skills import runner as skills
-
-    gateway = from_settings(settings, database.session_factory) if llm_allowed(settings) else None
-    tools = SpringTools.from_settings(settings)
-
-    def run(db: Session, job: Job, model: dict | None, raw: bytes | None) -> None:
-        from dps.flows.skill_job import run_skill_job
-
-        run_skill_job(job.id, job.job_type,
-                      lambda: skills.run_job(job, model, gateway, tools, db, settings.pipeline_version, raw,
-                                             scorer_dir=settings.scorer_dir),
-                      lambda result: skills.finish(db, job, result))
-
-    return run
-
-
-def build_runners(settings: Settings, database: Database, store: FileStore, core: CoreClient,
-                  page_models: dict[str, dict] | None = None) -> dict[str, FlowRunner]:
-    """Wires the flows with their dependencies (imported here so the API process never loads CrewAI)."""
+def statement_deps(settings: Settings, database: Database, core: CoreClient,
+                   page_models: dict[str, dict] | None = None, gateway=None):
+    """The statement reader's dependencies: the DMS store, the parser (the ingest step's page model first), the
+    table reader with OCR, the AI second reader, and Core's loan currency, FX rate and borrower profile."""
     from dps.extraction.statement_pdf import read_pdf_statement
-    from dps.flows.intake import AgreementIntakeFlow, IntakeDeps
-    from dps.flows.statement import StatementDeps, StatementProcessingFlow
     from dps.parse.engine import DoclingConverter, HeavyEngine, ParserEngine, RapidOcrBackend
+    from dps.skills.statement_lines.reader import StatementDeps
 
     heavy = settings.worker_pool == "HEAVY"
     ocr = RapidOcrBackend() if settings.ocr_enabled else None
     parser = HeavyEngine(ParserEngine(ocr), DoclingConverter()) if heavy else ParserEngine(ocr)
     if page_models is not None:
         parser = PageModelFirst(parser, page_models)
+    store = FileStore(settings.storage_dir)
 
     def read_file(doc: Document) -> bytes:
         return store.path(doc.storage_path).read_bytes()
-
-    gateway = None
-    if llm_allowed(settings):  # pragma: no cover - only if the bank ever approves an LLM
-        from dps.agent.gateway import from_settings
-
-        gateway = from_settings(settings, database.session_factory)  # every model call goes through the gateway
-
-    ai_covenants = None
-    if settings.agreement_ai_check and gateway is not None:  # pragma: no cover - live model
-        from dps.extraction.agreement_ai import read_with_skill
-        from dps.integrations.spring_tools import SpringTools
-
-        # The agreement's AI reader is the Document Agent running the covenants skill (the same pack, page finder,
-        # tools, grounding and library names as ONBOARD), with the Java covenant tools.
-        spring = SpringTools.from_settings(settings)
-
-        from dps.skills import load as load_pack
-
-        covenant_budget = load_pack("covenants").limits.get("token_budget")
-
-        def ai_covenants(pages, terms):
-            gateway.begin_job(covenant_budget)
-            try:
-                return read_with_skill(pages, terms, gateway, spring)
-            finally:
-                gateway.end_job()
-
-    residual = None
-    if settings.agreement_ai_check and gateway is not None:  # pragma: no cover - live model
-        from dps.skills.covenants import omissions
-
-        def residual(entries, pages):
-            # its own budget: the second read of what the first one left unexplained
-            gateway.begin_job(covenant_budget)
-            try:
-                return omissions.read(gateway, entries, pages)
-            finally:
-                gateway.end_job()
-
-    def learn() -> None:
-        # Phase 4: the wordings an administrator promoted (and not retired) apply to every new document.
-        from dps import learning
-
-        with database.session_factory() as db:
-            learning.apply(db)
-
-    def run_intake(job: Job) -> tuple[str, str, str]:
-        deps = IntakeDeps(database.session_factory, read_file, parser, core, settings.review_confidence, heavy,
-                          ai_covenants, settings.default_currency, residual)
-        learn()
-        return _kickoff(AgreementIntakeFlow(deps), job)
 
     second_reader = None
     if settings.statement_ai_check and gateway is not None:  # pragma: no cover - live model
@@ -569,25 +427,38 @@ def build_runners(settings: Settings, database: Database, store: FileStore, core
         def second_reader(text, values, scale=1.0, entity=None):
             return check(text, values, completion, entity or settings.statement_entity, scale)
 
-    def run_statement(job: Job) -> tuple[str, str, str]:
-        deps = StatementDeps(database.session_factory, read_file, parser, settings.core_data_source_id, heavy,
-                             lambda data, entity=None: read_pdf_statement(
-                                 data, ocr, entity=entity or settings.statement_entity),
-                             second_reader, settings.statement_entity, settings.fiscal_year_end_month,
-                             core.cp_currency, core.fx_rate, settings.default_currency,
-                             core.cp_profile, lambda: currency_words(core.country_profiles()))
-        learn()
-        return _kickoff(StatementProcessingFlow(deps), job)
-
-    return {"AGREEMENT_INTAKE": run_intake, "STATEMENT_PROCESSING": run_statement}
+    return StatementDeps(database.session_factory, read_file, parser, settings.core_data_source_id, heavy,
+                         lambda data, entity=None: read_pdf_statement(
+                             data, ocr, entity=entity or settings.statement_entity),
+                         second_reader, settings.statement_entity, settings.fiscal_year_end_month,
+                         core.cp_currency, core.fx_rate, settings.default_currency,
+                         core.cp_profile, lambda: currency_words(core.country_profiles()),
+                         settings.report_derived_values)
 
 
-def _kickoff(flow, job: Job) -> tuple[str, str, str]:
-    inputs = {"job_id": job.id, "document_id": job.document_id}
-    if job.flow_state_id:
-        inputs["id"] = job.flow_state_id  # resume the saved run (after review or a heavy hand-off)
-    flow.kickoff(inputs=inputs)
-    return flow.state.outcome, flow.state.id, flow.state.error
+def build_pack_runner(settings: Settings, database: Database, core: CoreClient | None = None,
+                      page_models: dict[str, dict] | None = None):
+    """The one pipeline (full review WP7): every job type that reads a document runs its skill pack in the skills
+    flow (EXTRACT_AGREEMENT, EXTRACT_STATEMENT, EXTRACT_SANCTION, EXTRACT_CERTIFICATE, EXTRACT_AMENDMENT,
+    EXTRACT_WAIVER, ONBOARD, RECONCILE_SET, DRAFT_COMMENTARY)."""
+    from dps.agent.gateway import from_settings
+    from dps.integrations.spring_tools import SpringTools
+    from dps.skills import runner as skills
+
+    gateway = from_settings(settings, database.session_factory) if llm_allowed(settings) else None
+    tools = SpringTools.from_settings(settings)
+    statements = statement_deps(settings, database, core or CoreClient.from_settings(settings), page_models,
+                                gateway)
+
+    def run(db: Session, job: Job, model: dict | None, raw: bytes | None) -> None:
+        from dps.flows.skill_job import run_skill_job
+
+        run_skill_job(job.id, job.job_type,
+                      lambda: skills.run_job(job, model, gateway, tools, db, settings.pipeline_version, raw,
+                                             scorer_dir=settings.scorer_dir, statement_deps=statements),
+                      lambda result: skills.finish(db, job, result))
+
+    return run
 
 
 def main() -> None:  # pragma: no cover - process entry point
@@ -601,10 +472,8 @@ def main() -> None:  # pragma: no cover - process entry point
     core = CoreClient.from_settings(settings)
     page_models: dict[str, dict] = {}
     ingestor = build_ingestor(settings) if settings.ingest_enabled else None
-    worker = Worker(settings, database.session_factory, core,
-                    build_runners(settings, database, FileStore(settings.storage_dir), core, page_models),
-                    ingestor, page_models, build_analyzer(settings, database),
-                    build_pack_runner(settings, database))
+    worker = Worker(settings, database.session_factory, core, {}, ingestor, page_models,
+                    build_analyzer(settings, database), build_pack_runner(settings, database, core, page_models))
     stop = {"flag": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(flag=True))
     log.info("DPS worker %s started (pool=%s)", settings.worker_id, settings.worker_pool)

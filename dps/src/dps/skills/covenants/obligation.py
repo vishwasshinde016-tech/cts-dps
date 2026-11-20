@@ -26,6 +26,7 @@ from dps.extraction.schedule import DATE, parse_date
 from dps.skills.common import issue
 
 COVENANT_GROUPS = ("FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "INFO_COVENANT", "POSSIBLE_COVENANT")
+BASIS_WORDS = {"CONSOLIDATED": "group figures (consolidated)", "STANDALONE": "company figures (standalone)"}
 AI_KEYS = ("obligor", "facilityRefs", "conditions", "firstTestDate", "equityCure", "baskets")
 OPEN = ("AUTO_ACCEPTED", "NEEDS_REVIEW")
 
@@ -360,6 +361,10 @@ def enrich(fields: list[dict], pages: list[dict] | None = None, ctx: dict | None
             continue  # a person already decided (or the proven flow did): the new values are shown, nothing else
         if found:
             _flag(f, "CONDITIONAL", "applies only when: " + "; ".join(c["text"] for c in found)[:240])
+        expected = ctx.get("basis")  # whose figures this borrower's statements are read for (Spring's context)
+        if f.get("group") == "FINANCIAL_COVENANT" and basis and expected and basis != expected:
+            _flag(f, "ENTITY_DIFFERS", f"the agreement tests this on {BASIS_WORDS[basis]}; this borrower's "
+                                       f"statements are read for {BASIS_WORDS[expected]}")
         if f.get("group") == "FINANCIAL_COVENANT" and confidence == "UNKNOWN":
             _flag(f, "SCOPE_UNKNOWN", "the clause does not say whose figures are tested; set the company")
         if len(stated) > 1:

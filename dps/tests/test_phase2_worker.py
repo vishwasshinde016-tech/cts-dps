@@ -42,14 +42,16 @@ def make_worker(app, settings, tmp_path, calls: list, parse=None):
 
     page_models: dict = {}
 
-    def runner(job: Job):
+    def runner(db, job: Job, model, raw):
+        from dps import jobs
+
         calls.append(job.id)
-        return "PUBLISHED", "state-1", ""
+        jobs.finish(db, job, jobs.DONE)
 
     ingestor = Ingestor(store, settings.pipeline_version,
                         lambda req, hint: in_process(req.__class__(req.data, req.fmt, req.sha256, req.version_id,
                                                                     False, False), hint), ocr=False)
-    w = Worker(settings, app.state.db.session_factory, object(), {"AGREEMENT_INTAKE": runner}, ingestor, page_models)
+    w = Worker(settings, app.state.db.session_factory, object(), {}, ingestor, page_models, pack_runner=runner)
     return w, counted, page_models, store
 
 

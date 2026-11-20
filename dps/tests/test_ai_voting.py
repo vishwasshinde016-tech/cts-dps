@@ -105,27 +105,6 @@ def test_model_outage_or_nothing_to_read_leaves_the_rules_alone():
     assert covenant_pages([OTHER], []) == []
 
 
-def test_flow_a_uses_the_ai_reader_when_configured(tmp_path):
-    from test_flows import FakeCore, FakeParser, add_document, terms
-
-    from dps.db import Database
-    from dps.flows.intake import AgreementIntakeFlow, IntakeDeps
-    from dps.models import Base
-
-    db = Database(f"sqlite:///{tmp_path / 'ai.db'}")
-    Base.metadata.create_all(db.engine)
-    completion = model([{"name": "Consolidated Leverage Ratio", "family": "LEVERAGE", "dir": "max",
-                         "threshold": 5.5, "page": 7,
-                         "quote": "permit the Consolidated Leverage Ratio as at the last day of any Test Period to "
-                                  "exceed 5.50"}])
-    deps = IntakeDeps(db.session_factory, lambda d: b"pdf", FakeParser([OTHER, COVENANTS]), FakeCore([]), 0.8,
-                      False, lambda pages, found: read(pages, found, completion))
-    doc_id = add_document(db)
-    AgreementIntakeFlow(deps).kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    stored = terms(db, doc_id)
-    assert stored["DEBT_TO_EBITDA"].method == "REGEX+AI" and stored["DEBT_TO_EBITDA"].confidence == 0.97
-
-
 def test_percent_coverage_is_times_and_forms_and_formulas_are_not_covenants():
     page = Page(7, "The Borrower shall maintain at all times a Cash Flow Coverage of not less than one hundred twenty "
                    "five percent (125%), calculated quarterly.\nAs of the Quarter-Annual Date, Guarantor's Leverage "

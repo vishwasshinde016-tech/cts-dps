@@ -128,7 +128,7 @@ def test_submit_queues_a_job_and_emits_accepted(client, app):
     with app.state.db.session_factory() as s:
         job = s.get(Job, body["jobId"])
         assert (job.job_type, job.flow, job.priority, job.correlation_id) == (
-            "EXTRACT_AGREEMENT", "AGREEMENT_INTAKE", 1, "corr-1")
+            "EXTRACT_AGREEMENT", "SKILL_PACK", 1, "corr-1")
         doc = s.get(Document, job.document_id)
         assert doc.external_version_id == "dv-1" and doc.active_cp_ids() == ["CP-1"]
         assert [e.type for e in s.query(EventFeed)] == ["dps.job.accepted"]
@@ -165,7 +165,6 @@ def test_same_input_under_two_keys_is_processed_once(client, app):
     ({"sha256": "0" * 64}, 400, "INTEGRITY_MISMATCH"),
     ({"objectKey": "../../etc/passwd"}, 400, "INVALID_INPUT"),
     ({"objectKey": "ab/missing.pdf"}, 400, "INVALID_INPUT"),
-    ({"mediaType": "text/csv"}, 400, "UNSUPPORTED_FORMAT"),
     ({"versionId": None}, 400, "INVALID_INPUT"),
 ])
 def test_submit_refuses_bad_requests(client, app, change, status, code):
@@ -213,6 +212,7 @@ def test_result_waits_then_matches_the_contract(client, app):
     assert r.status_code == 404 and r.json()["code"] == "RESULT_NOT_READY"
     with app.state.db.session_factory() as s:
         job = s.get(Job, job_id)
+        job.flow = "AGREEMENT_INTAKE"  # a job read before the one pipeline (WP7): its result is in the old tables
         s.add(ExtractedTerm(document_id=job.document_id, metric_raw="DSCR", covenant_master_id="m1",
                             expression="DSCR >= 1.25", operator=">=", threshold=1.25, frequency="QUARTERLY",
                             category="FINANCIAL", confidence=0.95, status="PUBLISHED", page=3,
@@ -236,6 +236,7 @@ def test_statement_result_lists_values_with_cells(client, app):
     job_id = submit(client, request_body(app, job_type="EXTRACT_STATEMENT")).json()["jobId"]
     with app.state.db.session_factory() as s:
         job = s.get(Job, job_id)
+        job.flow = "STATEMENT_PROCESSING"  # a job read before the one pipeline (WP7): its result is in the old tables
         s.add(StatementValue(cp_id="CP-1", key="EBITDA", value=50.0, unit="INR_CR", as_of_date=date(2026, 3, 31),
                              source_type="DOCUMENT", document_id=job.document_id, cell="BS!C14"))
         jobs.finish(s, job, jobs.DONE)
@@ -250,6 +251,7 @@ def test_statement_lines_not_found_are_listed_never_dropped(client, app):
     job_id = submit(client, request_body(app, job_type="EXTRACT_STATEMENT")).json()["jobId"]
     with app.state.db.session_factory() as s:
         job = s.get(Job, job_id)
+        job.flow = "STATEMENT_PROCESSING"  # a job read before the one pipeline (WP7): its result is in the old tables
         s.add(StatementValue(cp_id="CP-1", key="EBITDA", value=50.0, unit="INR_CR", as_of_date=date(2026, 3, 31),
                              source_type="DOCUMENT", document_id=job.document_id, cell="BS!C14"))
         jobs.record_step(s, job, "coverage", lines=lines_not_found(["EBITDA", "TOTAL_DEBT", "NET_WORTH"]))
@@ -451,7 +453,7 @@ def test_retry_waits_longer_each_time_then_goes_dead(app):
 
 def test_a_file_that_kills_its_worker_twice_is_set_aside(app):
     with app.state.db.session_factory() as s:
-        job_id = _queued(s)
+        job_id = _queued(s, age_minutes=1)  # older, so it is claimed first (the same clock tick was a coin toss)
         other = _queued(s, age_minutes=0)
         for crash in range(2):
             job = s.get(Job, job_id)

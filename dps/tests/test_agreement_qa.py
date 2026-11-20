@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from conftest import h
-from test_api import upload
-
 from dps.advisory.agreement_qa import answer, best_pages, quote
 from dps.parse.engine import Page
 
@@ -54,27 +51,6 @@ def test_a_failing_model_falls_back_to_rules():
         raise RuntimeError("down")
 
     assert answer("dividends", PAGES, broken)["method"] == "RULES"
-
-
-def test_endpoint_reads_the_agreement_and_checks_access(client):
-    doc = upload(client, data=GOLDEN.read_bytes(), name="AGR-003.pdf").json()["documentId"]
-    r = client.post(f"/dps/v1/documents/{doc}/ask", json={"question": "What is the minimum DSCR?"}, headers=h())
-    assert r.status_code == 200
-    body = r.json()
-    assert body["advisory"] and isinstance(body["citations"], list)
-    assert client.post(f"/dps/v1/documents/{doc}/ask", json={"question": "DSCR?"},
-                       headers=h("rm-other", "RM")).status_code == 404
-
-    statement = upload(client, type_="FINANCIAL_STATEMENT", name="s.csv", data=b"EBITDA,1",
-                       as_of="2026-09-30").json()["documentId"]
-    bad = client.post(f"/dps/v1/documents/{statement}/ask", json={"question": "What is EBITDA?"}, headers=h())
-    assert bad.json()["code"] == "NOT_AN_AGREEMENT"
-
-
-def test_endpoint_reports_an_unreadable_agreement(client):
-    doc = upload(client).json()["documentId"]
-    r = client.post(f"/dps/v1/documents/{doc}/ask", json={"question": "What is the minimum DSCR?"}, headers=h())
-    assert r.status_code in (200, 422)
 
 
 PLANTED = [Page(1, "Clause 9 Financial Covenants\n"

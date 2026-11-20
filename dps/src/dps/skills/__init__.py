@@ -31,7 +31,7 @@ class Pack:
     page_selection: dict
     prompt: str
     schema: dict
-    engine: str = "generic"  # generic | legacy_flow (covenants and statement lines keep their proven flows)
+    engine: str = "generic"  # every pack runs in the skills pipeline (full review WP7)
     tools: tuple[str, ...] = field(default_factory=tuple)
     thresholds: dict = field(default_factory=dict)  # phase 5 routing: {MEDIUM: 0.95, LOW: 0.90}; HIGH always reviewed
 

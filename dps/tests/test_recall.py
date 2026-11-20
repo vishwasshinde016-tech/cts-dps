@@ -294,7 +294,7 @@ def test_a_spreadsheet_statement_reaches_the_ai_checker_with_its_units_line(tmp_
 
     database = Database(f"sqlite:///{tmp_path / 'stmt.db'}")
     Base.metadata.create_all(database.engine)
-    from dps.flows.statement import StatementDeps, StatementProcessingFlow
+    from statement_shim import StatementDeps, StatementProcessingFlow
 
     csv = (b"Amounts in INR crore,\nRevenue from operations,100\nEBITDA,50\nTotal debt,120\nTotal equity,300\n")
     seen = []

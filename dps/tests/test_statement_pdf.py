@@ -165,7 +165,7 @@ def test_outflows_are_stored_as_positive_amounts():
 
 # ---------- Flow B ----------
 def flow_with_reader(database, reader, name="fs.pdf", pages=None):
-    from dps.flows.statement import StatementDeps, StatementProcessingFlow
+    from statement_shim import StatementDeps, StatementProcessingFlow
 
     doc_id = add_document(database, "FINANCIAL_STATEMENT", name, date(2026, 3, 31), ("CP-1",))
     deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser(pages or []), "ds-dps", False, reader)

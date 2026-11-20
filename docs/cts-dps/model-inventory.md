@@ -1,8 +1,10 @@
 # CTS DPS model inventory (for the model risk team)
 
 **Decision (17 Nov 2026): DPS uses the architect's Document Agent on the bank's Azure OpenAI deployments (GPT).**
-Rules always read first. The agent proposes values with page and quote; rules, a second model, Java business rules
-and a person decide. Only the pages a job needs are sent, only to the bank's own Azure endpoint.
+Rules always read first. The agent proposes values with page and quote; the rules, the page-text check, Java business
+rules and a person decide (there is no second model checking the first since 18 Nov 2026). Only the pages a job needs
+are sent, only to the bank's own Azure endpoint. Every job type that reads a document runs in one pipeline, the
+skills flow, with one skill pack per job type (20 Nov 2026).
 
 | Component | Used for | Runs where | Sends data out? | Owner |
 | --- | --- | --- | --- | --- |
@@ -41,7 +43,19 @@ and a person decide. Only the pages a job needs are sent, only to the bank's own
 - **Vote:** rules and agent agree → higher confidence; disagree → a person sees both; agent-only
   values on high-risk fields and every agent-only covenant → a person. There is no second-model re-read (removed 18 Nov 2026).
 - **Numbers:** the LLM never decides compliance or calculates; formulas are validated by the Spring app (Java).
-- **Prompt injection:** document text is marked as data, not instructions; suspicious text is flagged.
+- **Prompt injection:** document text is marked as data, not instructions; text that addresses an AI model is
+  flagged on every value and blocks the job until a person acknowledges it (`PROMPT_INJECTION_SUSPECTED`), for every
+  job type. A document in a language the rules cannot read waits for a person when the agent is off
+  (`LANGUAGE_NOT_READ`).
+- **Skill packs and their prompts (20 Nov 2026):** `covenants` 3.1.0 (agreements, guarantees, amended and restated
+  agreements; asks for the company, facility, conditions, first test date, equity cure and baskets of each covenant,
+  each checked against the quote: a condition the agent gives that is not in the quote is dropped); `waiver` 1.0.0
+  (waiver and consent letters, always reviewed); `amendment_diff`, `sanction`, `certificate`, `schedule_terms`,
+  `statement_lines` (its statement reader and AI second reader), `commentary`; `reconcile_set` uses no model (it
+  builds the covenants in force from earlier runs). Each result names the pack versions and prompt hashes it used
+  (`pipeline.packs`).
+- **Derived figures:** DPS reports statement figures as printed; totals and twelve-month figures are worked out by
+  Spring's formula engine (`DPS_REPORT_DERIVED_VALUES=false`, the default).
 - **Outage and cost:** retries, circuit breaker and rate limits per route; per-job token budget and monthly
   budget. If the model is down or over budget the job is read by rules only and sent to review; it never fails.
 - **Telemetry:** CrewAI telemetry and tracing are off in code and in the image (`CREWAI_DISABLE_TELEMETRY`).

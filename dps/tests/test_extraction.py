@@ -337,34 +337,6 @@ def test_golden_agreement_parses_to_publishable_proposals():
     assert {p.metric_raw for p in props} >= {"DSCR", "ICR", "DEBT_TO_EBITDA", "EBITDA_TO_EMI", "NEGATIVE_PLEDGE"}
 
 
-def test_info_facts_dates_cure_ltm_and_steps():
-    from dps.extraction.terms_info import extract_info, parse_date
-
-    pages = [Page(1, "LOAN AGREEMENT\nDated: 1st May 2025\nEffective Date of this facility: 15 Jun 2025\n"
-                     "The final maturity date shall be 30 October 2028.\n"
-                     "The first test date is 30 September 2025.\n", "TEXT", 1.0),
-             Page(2, "Ratios are tested on the last twelve months basis.\nThe DSCR floor shall step down to 1.1 "
-                     "from 2027.\nAny breach not remedied within thirty (30) days is an Event of Default.\n"
-                     "Dated: 31 Foo 2025\n", "TEXT", 1.0)]
-    facts = {t.metric: t for t in extract_info(pages)}
-    assert facts["AGREEMENT_DATE"].definition == "2025-05-01"
-    assert facts["EFFECTIVE_DATE"].definition == "2025-06-15"
-    assert facts["MATURITY_DATE"].definition == "2028-10-30"
-    assert facts["FIRST_TEST_DATE"].definition == "2025-09-30" and facts["FIRST_TEST_DATE"].page == 1
-    assert (facts["CURE_PERIOD_DAYS"].threshold, facts["CURE_PERIOD_DAYS"].page) == (30.0, 2)
-    assert facts["TESTING_BASIS"].definition == "LTM"
-    assert "step down" in facts["STEP_SCHEDULE"].quote
-    assert extract_info([Page(1, " ", "NONE", 0.0)]) == []
-    assert parse_date("31", "Foo", "2025") is None
-    assert extract_info([Page(1, "Dated: 31 February 2025", "TEXT", 1.0)]) == []
-
-    props = {p.metric_raw: p for p in normalize(list(facts.values()), MASTERS)}
-    assert props["MATURITY_DATE"].expression == "2028-10-30" and props["MATURITY_DATE"].name == "Maturity date"
-    assert props["CURE_PERIOD_DAYS"].expression == "30 days"
-    assert validate(pages, list(props.values()), lambda e: ["never called for INFO"], 0.5) == NEEDS_REVIEW
-    assert all(not p.issues for p in props.values())  # INFO terms: no formula checked
-
-
 def test_statement_units_and_debt_found_by_the_golden_set():
     """Golden-set findings: plain-rupee statements were read as crore; one-part debt gave no TOTAL_DEBT."""
     from dps.extraction.statement import extract_values

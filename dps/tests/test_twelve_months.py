@@ -171,7 +171,7 @@ def test_a_reported_half_year_statement_builds_its_twelve_months(database):  # n
     put(database, "CP-1", "EBITDA", 500.0, date(2025, 9, 30), 6)
     csv = (b"Amounts in INR crore,30 September 2026\nEBITDA,600\nShort-term borrowings,300\n"
            b"Long-term borrowings,700\nTotal equity,2000\n")
-    flow, doc_id = statement(database, csv, "h1.csv", as_of=date(2026, 9, 30))
+    flow, doc_id = statement(database, csv, "h1.csv", as_of=date(2026, 9, 30), derived=True)
     assert flow.state.outcome == "REPORTED"
     with database.session_factory() as s:
         ttm = s.scalar(select(StatementValue).where(StatementValue.key == "EBITDA_TTM",

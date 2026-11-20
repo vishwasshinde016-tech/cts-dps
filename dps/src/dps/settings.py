@@ -78,9 +78,9 @@ class Settings(BaseSettings):
     # networks it may call from (comma separated, e.g. "10.20.0.0/24,127.0.0.1/32"). Both are required.
     service_token_sha256: str = ""
     service_allowed_networks: str = ""
-    # The old Covenexa routes (own upload, term review and publish, spreads, ask): off in CTS, where the DMS owns
-    # upload and Spring owns approval (full review G12). On only for the old Covenexa screens.
-    legacy_api: bool = False
+    # Full review G22: the figures DPS works out from a statement (total debt, EBITDA from its parts, trailing twelve
+    # months) are not reported; Spring's formula engine works them out from the printed figures. On: the old way.
+    report_derived_values: bool = False
 
     # Covenant Core, used for CP ownership checks and C5 data-events.
     core_base_url: str = "http://localhost:9310"
@@ -146,10 +146,6 @@ class Settings(BaseSettings):
     # Money for any country: the currency of a loan when Core cannot say (no "currency" or facility unit on the CP).
     # Amounts are kept in crore for INR and in millions for any other currency.
     default_currency: str = Field(default="INR", pattern=r"^[A-Z]{3}$")
-    # Loan agreements: the model also lists the covenants with a verbatim quote; a quote not on its page is dropped,
-    # agreement with the rules confirms, a different number or a covenant only the model found goes to a person
-    # (extraction/agreement_ai.py). Needs ai_model; off by default (cost).
-    agreement_ai_check: bool = True
     # Model price per 1,000 tokens (the bank's Azure OpenAI rates); empty leaves the recorded cost empty.
     ai_prompt_cost_per_1k: float | None = None
     ai_completion_cost_per_1k: float | None = None

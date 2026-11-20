@@ -1,7 +1,7 @@
 """CTS job API, Phase 1 (contracts/dps-jobs-api.yaml): submit and follow jobs, batches, event feed, catalogue, ops.
 
-Callers are the CTS Spring app and its DMS with a service token. Everything here only adds to the older routes in
-``api/documents.py``: the Covenexa screens keep working on the same queue.
+Callers are the CTS Spring app and its DMS with a service token. This is the only way into DPS: the old Covenexa
+routes (their own upload, review and publish) were deleted in the full review (G12, WP7).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from dps import feed, jobs, results, services
 from dps.api.auth import ADMIN, SERVICE, SUPPORT, require_roles
-from dps.api.documents import DB, User, job_view
+from dps.api.deps import DB, User, job_view
 from dps.errors import ApiError, not_found
 from dps.models import Batch, Document, DocumentCpLink, Job, TenantLimit, utcnow
 from dps.settings import Settings, llm_allowed
@@ -36,8 +36,9 @@ SCHEMA_NAMES = ("job-request", "job-status", "result", "page-model", "event", "r
 
 # What each job type needs today. Types not listed answer 422 UNSUPPORTED_JOB_TYPE until their phase.
 JOB_TYPES = {
-    "EXTRACT_AGREEMENT": {"flow": "AGREEMENT_INTAKE", "document_type": "LOAN_AGREEMENT", "phase": 1},
-    "EXTRACT_STATEMENT": {"flow": "STATEMENT_PROCESSING", "document_type": "FINANCIAL_STATEMENT", "phase": 1},
+    # One pipeline (full review WP7): every job type that reads a document runs in the skills flow.
+    "EXTRACT_AGREEMENT": {"flow": "SKILL_PACK", "document_type": "LOAN_AGREEMENT", "phase": 1},
+    "EXTRACT_STATEMENT": {"flow": "SKILL_PACK", "document_type": "FINANCIAL_STATEMENT", "phase": 1},
     "ANALYZE": {"flow": "ANALYZE", "document_type": "UNKNOWN", "phase": 3},
     # Phase 4: skill packs run by the generic flow (dps.skills.runner).
     "EXTRACT_SANCTION": {"flow": "SKILL_PACK", "document_type": "SANCTION_LETTER", "phase": 4},
@@ -190,8 +191,6 @@ def validate_job(store, body: JobRequest, settings: Settings) -> dict:
     if body.jobType == "EXTRACT_AMENDMENT" and not (body.context.baseCovenants or body.context.amendsVersionId):
         raise ApiError(400, "BASE_REQUIRED", "context.baseCovenants (preferred) or context.amendsVersionId is "
                                              "required for EXTRACT_AMENDMENT.")
-    if spec["document_type"] == "LOAN_AGREEMENT" and body.document.mediaType != "application/pdf":
-        raise ApiError(400, "UNSUPPORTED_FORMAT", "A loan agreement must be a PDF.")
     if spec["document_type"] == "FINANCIAL_STATEMENT" and body.context.asOfDate is None:
         raise ApiError(400, "INVALID_INPUT", "context.asOfDate (period end) is required for statements.")
     if body.document.sizeBytes > settings.max_upload_mb * 1024 * 1024:
@@ -386,10 +385,42 @@ def job_result(job_id: str, request: Request, db: DB, user: User) -> Response:
     return Response(raw, media_type="application/json", headers={"ETag": etag})
 
 
+@router.get("/health")
+def health(request: Request) -> dict:
+    """Liveness with the database and the version (the load balancer's check)."""
+    from dps import __version__
+
+    db_status = "UP"
+    try:
+        with request.app.state.db.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:  # noqa: BLE001 - reported, not raised
+        db_status = "DOWN"
+    return {"status": "UP" if db_status == "UP" else "DEGRADED", "database": db_status, "version": __version__}
+
+
+@router.get("/dps/v1/jobs")
+def list_jobs(db: DB, user: User, status: str | None = None, limit: int = 100) -> list[dict]:
+    """Job operations for support (contract listJobs): newest first, optionally one status (e.g. FAILED), this
+    deployment's tenant only (G2), with the file name and CPs that say which upload it is."""
+    from dps.api.access import tenant
+
+    require_roles(user, SUPPORT, ADMIN)
+    q = select(Job).order_by(Job.created_at.desc()).limit(max(1, min(limit, 500)))
+    if tenant():
+        q = q.where(Job.tenant_id == tenant())
+    if status:
+        q = q.where(Job.status == status.upper())
+    found = list(db.scalars(q))
+    ids = sorted({j.document_id for j in found})
+    docs = {d.id: d for d in db.scalars(select(Document).where(Document.id.in_(ids)))} if ids else {}
+    return [{**job_view(j), "fileName": docs[j.document_id].file_name if j.document_id in docs else None,
+             "cpIds": docs[j.document_id].active_cp_ids() if j.document_id in docs else []} for j in found]
+
+
 @router.get("/dps/v1/jobs/{job_id}")
 def get_job_status(job_id: str, db: DB, user: User) -> dict:
-    """Job status for Spring (contract getJob). With DPS_LEGACY_API on, the older route of the same path answers
-    first, with its per-CP access check; in CTS (legacy off) this one does (found in the local end-to-end run)."""
+    """Job status for Spring (contract getJob)."""
     require_roles(user, SERVICE, ADMIN, SUPPORT)
     return job_view(_job_or_404(db, job_id))
 
@@ -658,8 +689,59 @@ def ready(request: Request) -> JSONResponse:
                 workers = "UP" if until >= utcnow() else "DOWN"
         except Exception:  # noqa: BLE001 - informational only
             workers = "UNKNOWN"
-    return JSONResponse({"status": "UP" if up else "DOWN", **checks, "workers": workers},
+    settings = _settings(request)
+    return JSONResponse({"status": "UP" if up else "DOWN", **checks, "workers": workers,
+                         "parser": _parser_state(settings.parser_socket),
+                         "model": _model_state(request, settings) if checks["database"] == "UP" else "UNKNOWN"},
                         status_code=200 if up else 503)
+
+
+MODEL_WINDOW_SECONDS = 300  # the model's recent calls that say whether it answers
+
+
+def _parser_state(socket_path: str) -> str:
+    """G5: the parser container's socket answers (UP), is gone (DOWN), or the worker parses in a child process
+    (IN_PROCESS, no socket configured). Informational, like the workers: the API itself does not parse."""
+    if not socket_path:
+        return "IN_PROCESS"
+    import socket
+
+    family = getattr(socket, "AF_UNIX", None)
+    if family is None:
+        return "UNKNOWN"
+    sock = socket.socket(family, socket.SOCK_STREAM)
+    sock.settimeout(0.5)
+    try:
+        sock.connect(socket_path)
+        return "UP"
+    except OSError:
+        return "DOWN"
+    finally:
+        sock.close()
+
+
+def _model_state(request: Request, settings: Settings) -> str:
+    """G5: the model routes as the workers last saw them: OFF (switched off), IDLE (no call in the last 5 minutes),
+    UP, DEGRADED (some calls failed: the breaker may open) or DOWN (every recent call failed). From the call log,
+    because the breakers live in the workers."""
+    if not llm_allowed(settings):
+        return "OFF"
+    from datetime import timedelta
+
+    from dps.models import AiCall
+
+    try:
+        with request.app.state.db.session_factory() as db:
+            recent = list(db.scalars(select(AiCall.status).where(
+                AiCall.at >= utcnow() - timedelta(seconds=MODEL_WINDOW_SECONDS)).order_by(AiCall.at.desc()).limit(20)))
+    except Exception:  # noqa: BLE001 - informational only
+        return "UNKNOWN"
+    if not recent:
+        return "IDLE"
+    failed = sum(1 for s in recent if s != "OK")
+    if failed == len(recent) and failed >= 3:
+        return "DOWN"
+    return "DEGRADED" if failed else "UP"
 
 
 @router.get("/dps/v1/ops/scaling")

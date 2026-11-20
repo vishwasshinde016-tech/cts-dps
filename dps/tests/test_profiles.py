@@ -8,13 +8,13 @@ from datetime import date
 
 import pytest
 from conftest import reviewed_if_clean
+from statement_shim import StatementDeps, StatementProcessingFlow
 from test_bug_hunt import terms_of
 from test_flows import FakeParser, add_document, doc_status, values, xlsx_bytes
 
 from dps.db import Database
 from dps.extraction.mapping import normalize
 from dps.extraction.statement import detect_number_style, number_style, parse_number, rows_from_csv
-from dps.flows.statement import StatementDeps, StatementProcessingFlow
 from dps.models import Base
 from dps.money import detect_currency
 from dps.profiles import LoanProfile, currency_words

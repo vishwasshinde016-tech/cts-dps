@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import date
-
-from conftest import h
 
 from dps.advisory.advisor import ADVISORY, Advisor, deterministic
-from dps.models import Document, DocumentCpLink, StatementValue
 
 COVS = [
     {"appliedCovenantId": "a1", "latestResult": "COMPLIANT"},
@@ -77,24 +73,3 @@ def test_the_narrative_names_the_figures_own_currency():
     assert "(LKR million)" in seen[0]
     assert (describe_unit("INR_CR"), describe_unit("x"), describe_unit(None)) == ("INR crore", "x", "")
 
-
-def test_api_suggestions_and_narrative(client, app):
-    req = {"cpId": "CP-1", "covenants": COVS}
-    out = client.post("/dps/v1/ai-suggestions", json=req, headers=h("core", "SERVICE")).json()
-    assert {r["appliedCovenantId"] for r in out} == {"a1", "a2", "a3"}
-
-    with app.state.db.session_factory() as s:
-        d = Document(type="FINANCIAL_STATEMENT", file_name="fs.xlsx", storage_path="x", sha256="n", size_bytes=1,
-                     uploaded_by="u", as_of_date=date(2026, 3, 31))
-        s.add(d)
-        s.flush()
-        s.add(DocumentCpLink(document_id=d.id, cp_id="CP-1", linked_by="u"))
-        for key, value, superseded in (("EBITDA", 50, False), ("INTEREST_PAID", 10, False),
-                                       ("EBITDA", 1, True)):
-            s.add(StatementValue(cp_id="CP-1", key=key, value=value, unit="INR_CR", as_of_date=d.as_of_date,
-                                 source_type="DOCUMENT", document_id=d.id, superseded=superseded))
-        s.commit()
-        doc_id = d.id
-    body = client.get(f"/dps/v1/documents/{doc_id}/narrative", headers=h()).json()
-    assert body["text"] == "EBITDA covers interest 5.00 times." and body["advisory"] == ADVISORY
-    assert client.get(f"/dps/v1/documents/{doc_id}/narrative", headers=h("rm-other")).status_code == 404

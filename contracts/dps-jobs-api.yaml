@@ -404,7 +404,11 @@ paths:
       operationId: ready
       x-phase: 1
       security: []
-      summary: Database and storage reachable
+      summary: Database and storage reachable (status); workers, parser and model reported for operations
+      description: >
+        status is UP when the database and the storage are reachable. Also reported, not part of status:
+        workers (UP while a worker holds the scheduler lock), parser (UP, DOWN, or IN_PROCESS when no parser socket
+        is configured) and model (OFF, IDLE, UP, DEGRADED or DOWN, from the model calls of the last 5 minutes).
       responses:
         "200": { description: Ready }
         "503": { description: Not ready }
@@ -802,6 +806,13 @@ components:
       properties:
         from: { type: string, format: date }
         to: { type: string, format: date }
+        budget:
+          type: object
+          description: This month's model tokens against DPS_AI_MONTHLY_TOKEN_BUDGET (0 = no budget)
+          properties:
+            budgetTokens: { type: integer }
+            usedTokens: { type: integer }
+            exhausted: { type: boolean }
         rows:
           type: array
           items:

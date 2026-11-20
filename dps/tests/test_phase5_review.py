@@ -185,6 +185,7 @@ def test_statement_review_rederives_and_learns_labels(client, app, settings, tmp
     job_id = r.json()["jobId"]
     with app.state.db.session_factory() as s:
         job = s.get(Job, job_id)
+        job.flow = "STATEMENT_PROCESSING"  # a job read before the one pipeline (WP7): its result is in the old tables
         doc = s.get(Document, job.document_id)
         from datetime import date
 
@@ -286,6 +287,7 @@ def test_held_statement_shows_its_values_for_review(client, app, settings):
     job_id = r.json()["jobId"]
     with app.state.db.session_factory() as s:
         job = s.get(Job, job_id)
+        job.flow = "STATEMENT_PROCESSING"  # a job read before the one pipeline (WP7): its result is in the old tables
         job.flow_state_id = "flow-held-1"
         s.add(FlowState(flow_uuid="flow-held-1", method_name="hold", state_json=json.dumps({
             "issues": ["UNIT_UNCLEAR: no unit header"],

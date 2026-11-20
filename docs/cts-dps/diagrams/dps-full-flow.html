@@ -6334,7 +6334,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <li>jobs.py:85 claim: one UPDATE &#39;set RUNNING, owned by me, only if still QUEUED&#39; (compare-and-set), so two workers never take one job</li>
           <li>jobs.py:162 renew_lease: heartbeat keeps locked_until alive; a dead worker&#39;s lease expires and another worker takes the job</li>
           <li>jobs.py:54 guard_attempt: every write checks the attempt number; a stale worker gets LeaseLost and cannot overwrite</li>
-          <li>worker.py:211 _run routes by flow (api/jobs.py:38 JOB_TYPES): SKILL_PACK, AGREEMENT_INTAKE, STATEMENT_PROCESSING or ANALYZE</li>
+          <li>worker.py:211 _run routes by flow (api/jobs.py:38 JOB_TYPES): SKILL_PACK (every document job) or ANALYZE</li>
           <li>Errors: transient means retry with a growing wait (jobs.py:224); a file that crashes the parser repeatedly means DEAD + event</li>
         </ul>
       </div>
@@ -6484,8 +6484,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </div>
         <ul>
           <li>Amendment: skills/amendment_diff/rules.py:56 ADD / CHANGE / DELETE; :145 amended_set</li>
-          <li>Statement: flows/statement.py:133 lines + derived totals; catalog.py:65 lines not found</li>
-          <li>Agreement intake: flows/intake.py:70; certificate: skills/certificate/</li>
+          <li>Statement: skills/statement_lines/reader.py:158 lines + derived totals; catalog.py:65 lines not found</li>
+          <li>Agreement intake: skills/runner.py:391; certificate: skills/certificate/</li>
         </ul>
       </div>
 

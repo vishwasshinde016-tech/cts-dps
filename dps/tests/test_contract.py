@@ -1,86 +1,55 @@
-"""T12 provider contract tests: real DPS responses must validate against contracts/dps-api.yaml (C1, C2, C3).
+"""Provider contract tests: real DPS responses must validate against the bank app's compatibility contracts
+(contracts/schemas/compat-data-values.json, compat-covenant-status.json; listed in contracts/dps-jobs-api.yaml).
 
-Core's consumer side is covered by its WebClient tests, which parse these same payload shapes.
+The old Covenexa contract (contracts/dps-api.yaml: C1 recommendations, C3 AI suggestions, documents and terms) was
+deleted with the Covenexa routes in the full review (G12, WP7).
 """
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 
 import jsonschema
 import pytest
-import yaml
 from conftest import h
 
-from dps.models import Document, DocumentCpLink, ExtractedTerm, StatementValue
+from dps.models import StatementValue
 
-CONTRACT = Path(__file__).resolve().parents[2] / "contracts" / "dps-api.yaml"
+SCHEMAS = Path(__file__).resolve().parents[2] / "contracts" / "schemas"
 
-pytestmark = pytest.mark.skipif(not CONTRACT.exists(), reason="contracts/ not present")
-
-
-@pytest.fixture(scope="module")
-def spec() -> dict:
-    return yaml.safe_load(CONTRACT.read_text(encoding="utf-8"))
+pytestmark = pytest.mark.skipif(not SCHEMAS.exists(), reason="contracts/ not present")
 
 
-def response_schema(spec: dict, path: str, method: str = "post") -> dict:
-    schema = spec["paths"][path][method]["responses"]["200"]["content"]["application/json"]["schema"]
-    # Resolve "#/components/..." refs against the whole document (OpenAPI 3.1 = JSON Schema 2020-12).
-    return {**schema, "components": spec["components"]}
+def schema(name: str, part: str) -> dict:
+    whole = json.loads((SCHEMAS / f"{name}.json").read_text(encoding="utf-8"))
+    return {**whole["$defs"][part], "$defs": whole["$defs"]}
 
 
-def validate(spec: dict, path: str, body, method: str = "post") -> None:
-    schema = response_schema(spec, path, method)
-    jsonschema.validate(body, schema, cls=jsonschema.Draft202012Validator)
+def validate(name: str, part: str, body) -> None:
+    jsonschema.validate(body, schema(name, part), cls=jsonschema.Draft202012Validator)
 
 
-def seed(app) -> None:
+def test_data_values_match_the_contract(client, app):
     with app.state.db.session_factory() as s:
-        agreement = Document(type="LOAN_AGREEMENT", file_name="a.pdf", storage_path="x", sha256="c1", size_bytes=1,
-                             uploaded_by="u", status="PUBLISHED")
-        statement = Document(type="FINANCIAL_STATEMENT", file_name="fs.xlsx", storage_path="y", sha256="c2",
-                             size_bytes=1, uploaded_by="u", as_of_date=date(2026, 3, 31), status="PUBLISHED")
-        s.add_all([agreement, statement])
-        s.flush()
-        for d in (agreement, statement):
-            s.add(DocumentCpLink(document_id=d.id, cp_id="CP-1", linked_by="u"))
-        s.add(ExtractedTerm(document_id=agreement.id, metric_raw="DSCR", covenant_master_id="m1",
-                            expression="DSCR >= 1.25", operator=">=", threshold=1.25, frequency="QUARTERLY",
-                            category="FINANCIAL", confidence=0.95, status="PUBLISHED", page=3, quote="not less"))
-        s.add(ExtractedTerm(document_id=agreement.id, metric_raw="NEGATIVE_PLEDGE", category="NON_FINANCIAL",
-                            confidence=0.8, status="PUBLISHED", page=4, quote="shall not"))
         s.add(StatementValue(cp_id="CP-1", key="EBITDA", value=50.0, unit="INR_CR", as_of_date=date(2026, 3, 31),
-                             source_type="DOCUMENT", document_id=statement.id))
+                             source_type="DOCUMENT"))
         s.commit()
-
-
-def test_c1_recommendations_match_contract(spec, client, app):
-    seed(app)
-    body = client.post("/dps/v1/recommendations", json={"cpId": "CP-1"}, headers=h("core", "SERVICE")).json()
-    assert len(body) == 2
-    validate(spec, "/dps/v1/recommendations", body)
-
-
-def test_c2_values_match_contract(spec, client, app):
-    seed(app)
     req = {"cpId": "CP-1", "to": "2026-06-30", "keys": ["EBITDA", "NET_WORTH"]}
-    body = client.post("/dps/v1/values", json=req, headers=h("core", "SERVICE")).json()
-    assert body["missingKeys"] == ["NET_WORTH"]
-    validate(spec, "/dps/v1/values", body)
+    validate("compat-data-values", "request", req)
+    body = client.post("/api/data/values", json=req, headers=h("core", "SERVICE")).json()
+    assert body["missingKeys"] == ["NET_WORTH"] and body["points"][0]["values"] == {"EBITDA": 50.0}
+    validate("compat-data-values", "response", body)
 
 
-def test_c3_ai_suggestions_match_contract(spec, client):
-    req = {"cpId": "CP-1", "covenants": [
-        {"appliedCovenantId": "a1", "latestResult": "COMPLIANT"},
-        {"appliedCovenantId": "a2", "latestResult": "BREACHED", "computedValue": "1.1",
-         "conditionExpression": "DSCR >= 1.25"}]}
-    body = client.post("/dps/v1/ai-suggestions", json=req, headers=h("core", "SERVICE")).json()
-    assert len(body) == 2
-    validate(spec, "/dps/v1/ai-suggestions", body)
+def test_covenant_status_matches_the_contract(client):
+    req = {"cpId": "CP-1", "covenants": [{"appliedCovenantId": "a1"}, {"appliedCovenantId": "a2"}]}
+    validate("compat-covenant-status", "request", req)
+    body = client.post("/api/v1/ai/covenant-status", json=req, headers=h("core", "SERVICE")).json()
+    validate("compat-covenant-status", "response", body)
 
 
-def test_contract_rejects_a_wrong_shape(spec):
+def test_contract_rejects_a_wrong_shape():
     with pytest.raises(jsonschema.ValidationError):
-        validate(spec, "/dps/v1/values", {"cpId": "CP-1", "points": [{"values": {}}]})
+        validate("compat-data-values", "response", {"cpId": "CP-1", "points": [{"values": {}}]})

@@ -320,9 +320,9 @@ def test_disagreements_on_plain_value_maps_still_work():
 
 
 def test_flow_b_holds_a_statement_the_second_reader_disagrees_with(database):
+    from statement_shim import StatementDeps, StatementProcessingFlow
+
     from dps.extraction.statement_ai import SecondReading
-    from dps.flows.statement import StatementDeps, StatementProcessingFlow
-    from dps.models import Document
 
     rows = [("Revenue", 100.0, 1, None), ("EBITDA", 50.5, 1, None), ("Total debt", 120.0, 1, None),
             ("Net worth", 300.0, 1, None)]
@@ -343,8 +343,9 @@ def test_flow_b_holds_a_statement_the_second_reader_disagrees_with(database):
     assert seen == ["=== Page 4 ===\npage one\n\n=== Page 5 ===\npage two"]
     assert flow.state.outcome == "NEEDS_REVIEW"
     assert flow.state.issues == ["SECOND_READER_DIFFERS: REVENUE read 100.0, second reader 110.0"]
-    with database.session_factory() as s:
-        review = json.loads(s.get(Document, doc_id).review_json)
+    from statement_shim import review_of
+
+    review = review_of(flow)
     assert review["confirmed"] == ["NET_WORTH"] and review["likely"][0]["source"] == "second reader"
 
 
@@ -471,19 +472,20 @@ def Proposal_like(metric, op):  # noqa: N802 - reads like the constructor it sta
 
 
 def test_statement_review_reasons_and_unit_are_stored_on_the_document(database):
-    import json as _json
 
-    from dps.flows.statement import StatementDeps, StatementProcessingFlow
-    from dps.models import Document
+    from statement_shim import StatementDeps, StatementProcessingFlow
+
 
     rows = [("Revenue", 100.0, 1, None), ("EBITDA", 50.5, 1, None), ("Total debt", 120.0, 1, None),
             ("Net worth", 300.0, 1, None)]
     doc_id = add_document(database, "FINANCIAL_STATEMENT", "fs.pdf", date(2026, 3, 31), ("CP-1",))
     deps = StatementDeps(database.session_factory, lambda d: b"%PDF", FakeParser([]), "ds-dps", False,
                          lambda d: PdfStatement(rows, "Rs. in lakhs", [1], 0.95, ["p"]))
-    StatementProcessingFlow(deps).kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    with database.session_factory() as db:
-        review = _json.loads(db.get(Document, doc_id).review_json)
+    from statement_shim import review_of
+
+    flow = StatementProcessingFlow(deps)
+    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
+    review = review_of(flow)  # result.statement: what the reviewer sees about the whole statement
     assert review == {"issues": ["LOW_OCR_QUALITY: scanned pages read at 95% confidence"], "unitScale": "lakh",
                       "likely": [], "confirmed": [], "remembered": [],
                       "currency": "INR", "loanCurrency": "INR", "fxRate": None, "fiscalYearEndMonth": 3,

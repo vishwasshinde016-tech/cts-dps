@@ -19,11 +19,10 @@ from test_phase2_ingest import text_pdf, xls_bytes, xlsx_bytes
 from test_phase4_skills import AMENDMENT, CERTIFICATE, SANCTION, submit
 
 from dps import jobs
-from dps.ingest.file_store import FileStore
 from dps.integrations.core import CoreClient
 from dps.models import Document, EventOutbox, Job, StatementValue, utcnow
 from dps.skills import load, runner
-from dps.worker import Worker, build_analyzer, build_ingestor, build_pack_runner, build_runners
+from dps.worker import Worker, build_analyzer, build_ingestor, build_pack_runner
 
 
 def test_same_document_with_different_business_contexts_creates_separate_jobs(client, app):
@@ -112,10 +111,8 @@ def _worker(app, settings, tmp_path, monkeypatch):
     settings.staging_dir = tmp_path / "staging"
     db = app.state.db
     page_models = {}
-    store = FileStore(settings.storage_dir)
-    return Worker(settings, db.session_factory, core,
-                  build_runners(settings, db, store, core, page_models), build_ingestor(settings), page_models,
-                  build_analyzer(settings, db), build_pack_runner(settings, db))
+    return Worker(settings, db.session_factory, core, {}, build_ingestor(settings), page_models,
+                  build_analyzer(settings, db), build_pack_runner(settings, db, core, page_models))
 
 
 def _docx() -> bytes:

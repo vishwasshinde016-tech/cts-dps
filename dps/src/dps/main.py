@@ -8,14 +8,11 @@ import uuid
 from fastapi import FastAPI, Request
 
 from dps import __version__, errors
-from dps.advisory import ask
 from dps.advisory.advisor import Advisor
 from dps.api.access import CoreCpAccessChecker, CpAccessChecker
 from dps.api.auth import Authenticator
-from dps.api.documents import router
 from dps.api.evidence import router as evidence_router
 from dps.api.jobs import router as job_router
-from dps.api.ratelimit import RateLimiter
 from dps.api.review import router as review_router
 from dps.db import Base, Database, require_snapshot_isolation
 from dps.ingest.file_store import FileStore
@@ -26,8 +23,7 @@ CORRELATION_HEADER = "X-Correlation-Id"
 
 
 def create_app(settings: Settings | None = None, *, cp_checker: CpAccessChecker | None = None,
-               create_schema: bool = False, advisor: Advisor | None = None,
-               core_fetch: ask.Fetch | None = None) -> FastAPI:
+               create_schema: bool = False, advisor: Advisor | None = None) -> FastAPI:
     settings = settings or get_settings()
     obs.setup("dps-api")
     app = FastAPI(title="Document Processing Service", version=__version__)
@@ -35,7 +31,6 @@ def create_app(settings: Settings | None = None, *, cp_checker: CpAccessChecker 
     app.state.db = Database(settings.database_url)
     require_snapshot_isolation(app.state.db.engine)
     app.state.store = FileStore(settings.storage_dir)
-    app.state.limiter = RateLimiter()
     app.state.authenticator = Authenticator(settings)
 
     @app.middleware("http")
@@ -56,7 +51,6 @@ def create_app(settings: Settings | None = None, *, cp_checker: CpAccessChecker 
 
         completion = from_settings(settings, app.state.db.session_factory).completion("strong")
     app.state.advisor = advisor or Advisor(completion)
-    app.state.core_fetch = core_fetch or ask.core_fetch(settings.core_base_url, settings.core_timeout_seconds)
     if create_schema:  # tests / local only; production uses Alembic migrations
         Base.metadata.create_all(app.state.db.engine)
 
@@ -80,10 +74,6 @@ def create_app(settings: Settings | None = None, *, cp_checker: CpAccessChecker 
         return response
 
     errors.install(app)
-    if settings.legacy_api:  # G12: the old Covenexa routes; off in CTS (the DMS uploads, Spring approves)
-        app.include_router(router)
-    else:
-        app.add_api_route("/health", lambda: {"status": "UP"}, methods=["GET"])
     app.include_router(job_router)  # CTS job API (contracts/dps-jobs-api.yaml)
     app.include_router(evidence_router)  # page images, runs, ask, usage, /api/data/values
     app.include_router(review_router)  # review, reclassify, quality, /api/v1/ai/covenant-status

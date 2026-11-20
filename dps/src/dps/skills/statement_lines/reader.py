@@ -1,25 +1,38 @@
-"""Flow B: Periodic Assessment (data side) — Parse → Extract → Calculate → Validate → Report (03 §3).
+"""The statement reader of the statement_lines skill (full review WP7: one pipeline).
 
-Report stores versioned values (a new upload for the same CP, key and period supersedes the old one) and
-queues a C5 data-event per linked CP so Core re-assesses at once. Compliance is still decided by Core.
+EXTRACT_STATEMENT runs in the skills flow like every other job type. This module holds the statement reading that
+used to be its own CrewAI flow (Flow B), unchanged in what it reads and checks:
+
+1. **read** the file: the table reader for PDFs (OCR quality, periods, comparative columns), the text lines
+   otherwise; XLSX, XLS and CSV rows; the number style the document itself uses; prompt-injection signs;
+2. **extract**: borrower label memory, the loan profile (currency, financial-year end, group or company figures,
+   number style), the statement's currency and the bank's FX rate, the lines and their months, unit jumps against
+   the previous period, the assessment cycle's expectations (period, basis, entity, currency, units), the language,
+   and the optional AI second reader;
+3. **route**: a file the standard reader cannot read goes to the HEAVY pool; a file with no lines fails; everything
+   else is a proposal for a person (a statement is never reported unreviewed: G21).
+
+What changed (full review G9, G21, G22): nothing is written to the values table and no event goes to Core while
+reading. ``publish`` writes the figures a person approved, when the review of the job is complete. Figures DPS
+works out itself (total debt, EBITDA from its parts, trailing twelve months) are not reported unless
+``DPS_REPORT_DERIVED_VALUES`` is on: Spring's formula engine calculates them from the printed figures.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
 from typing import Literal
 
-from crewai.flow.flow import Flow, listen, router, start
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field
 from sqlalchemy import false, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from dps import history, jobs, services
+from dps import history, services
 from dps.agent.guard import injection_signs
 from dps.extraction.statement import (
     FLOW_KEYS,
@@ -43,17 +56,16 @@ from dps.extraction.statement import (
 )
 from dps.extraction.statement_ai import SecondReading, mark_pages
 from dps.extraction.statement_pdf import PdfStatement
-from dps.flows.persistence import SqlFlowPersistence
 from dps.language import detect as detect_language
 from dps.language import name as language_name
-from dps.models import Document, EventOutbox, Job, StatementValue, utcnow
+from dps.models import Document, Job, StatementValue
 from dps.money import currency_of, detect_currency, money_unit, to_money_unit
 from dps.parse.engine import ParseError, needs_heavy
 from dps.profiles import LoanProfile
 
-ACTOR = "dps-flow-b"
-# Holds a person clears outside the statement (an FX rate, a borrower setting, relinking): "Review done" reads the
-# statement again rather than publishing what was read.
+ACTOR = "dps-statement"
+# Holds a person clears outside the statement (an FX rate, a borrower setting, relinking): the statement is read
+# again with them before anything is approved.
 REREAD = ("CURRENCY_DIFFERS", "CURRENCY_MIXED", "LOAN_CURRENCY_UNKNOWN", "LOANS_DIFFER")
 # Lines compared with the CP's previous period, and the change that means a unit misread (lakhs read as crore is
 # 100 times, rupees read as thousands 1,000 times; a real business rarely moves 20 times in a year).
@@ -65,12 +77,20 @@ OCR_REVIEW_QUALITY = 0.97
 log = logging.getLogger(__name__)
 
 
+class NeedsHeavyPool(Exception):
+    """The standard reader cannot read this statement; the HEAVY pool (Docling) reads it."""
+
+
+class ContentFailed(Exception):
+    """The statement has no readable lines (or the file is not a statement DPS can read)."""
+
+
 @dataclass
 class StatementDeps:
     session_factory: sessionmaker[Session]
     read_file: Callable[[Document], bytes]
     parser: object
-    data_source_id: str
+    data_source_id: str  # the bank app's data-source id (kept for callers; nothing is pushed to Core any more)
     heavy_pool: bool
     # Table-aware PDF reader (extraction.statement_pdf.read_pdf_statement); None: plain text lines only.
     pdf_reader: Callable[[bytes], PdfStatement] | None = None
@@ -84,10 +104,13 @@ class StatementDeps:
     loan_currency: Callable[[str], str | None] | None = None
     fx_rate: Callable[[str, str, date], float | None] | None = None
     default_currency: str = "INR"
-    # Phase 2: what applies to each borrower (Core: country profile and borrower settings; wins over loan_currency,
-    # entity and fiscal_year_end_month) and the currency words of every country profile.
+    # What applies to each borrower (Core: country profile and borrower settings; wins over loan_currency, entity
+    # and fiscal_year_end_month) and the currency words of every country profile.
     loan_profile: Callable[[str], LoanProfile | None] | None = None
     currency_words: Callable[[], list] | None = None
+    # Full review G22: report the figures DPS works out (total debt, EBITDA from its parts, twelve months).
+    # Off: Spring's formula engine works them out from the printed figures.
+    report_derived_values: bool = False
 
 
 class StatementState(BaseModel):
@@ -106,9 +129,7 @@ class StatementState(BaseModel):
     net_interest_confirmed: bool = False  # this borrower's interest wording was confirmed by a person before
     issues: list[str] = Field(default_factory=list)
     route: str = ""
-    # A person pressed "Review done" and the statement was read again (FX rate added, borrower relinked ...): a clean
-    # re-read is reported at once instead of waiting for a second "Review done" (full review G21).
-    review_done: bool = False
+    review_done: bool = False  # read again after a person cleared a hold (an FX rate added, a borrower relinked)
     parse_issues: list[str] = Field(default_factory=list)
     # 12-month covenants: each page's period in months, and the comparative columns (last year's same period, the
     # last full year and the month it ended, "YYYY-MM") read beside this period's.
@@ -123,46 +144,39 @@ class StatementState(BaseModel):
     currency: str = ""
     loan_currency: str = ""
     fx_rate: float = 1.0
-    # Phase 2: the borrower's financial-year end, the figures read (group or company) and the number style used.
     fiscal_month: int = 0
     entity: str = ""
     number_style: str = ""
     profile_issues: list[str] = Field(default_factory=list)
-    language: str = "en"  # Phase 3b-2: ISO 639-1 code of the statement's language
+    language: str = "en"
+    lines: dict = Field(default_factory=dict)  # catalogue lines: expected, found, notFound
+    not_found: list[str] = Field(default_factory=list)  # catalogue lines the statement did not give
     error: str = ""
     outcome: Literal["", "REPORTED", "NEEDS_REVIEW", "FAILED", "HEAVY"] = ""
 
 
-class StatementProcessingFlow(Flow[StatementState]):
-    _deps: StatementDeps = PrivateAttr()
-    _raw_text: str = PrivateAttr(default="")  # the document's text, to tell its number style (not saved)
+class StatementReader:
+    """Reads one statement for one job. ``read`` never writes the values table (``publish`` does, after review)."""
 
-    def __init__(self, deps: StatementDeps, **kwargs) -> None:
-        kwargs.setdefault("suppress_flow_events", True)  # workers log job steps; no console panels
-        super().__init__(persistence=SqlFlowPersistence(deps.session_factory), **kwargs)
+    def __init__(self, deps: StatementDeps) -> None:
         self._deps = deps
+        self._raw_text = ""
+        self.state = StatementState()
 
-    def _checkpoint(self, step: str) -> None:
-        self.persistence.save_state(self.state.id, step, self.state)
+    def read(self, job_id: str, document_id: str, review_done: bool = False) -> StatementState:
+        self.state = StatementState(id=str(uuid.uuid4()), job_id=job_id, document_id=document_id,
+                                    review_done=review_done)
+        self._parse_document()
+        self._extract_and_calculate()
+        self._validate()
+        return self.state
 
-    @start()
-    def begin(self) -> str:
-        return self.state.outcome
+    # ---------- 1. read ----------
 
-    @router(begin)
-    def entry(self) -> Literal["resume", "parse"]:
-        if self.state.outcome == "NEEDS_REVIEW" and any(i.startswith(REREAD) for i in self.state.issues):
-            # "Review done" after adding the FX rate, relinking, or setting the borrower's currency or country:
-            # read it again with them.
-            self.state.review_done = True
-            return "parse"
-        return "resume" if self.state.outcome == "NEEDS_REVIEW" else "parse"
-
-    @listen("parse")
-    def parse_document(self) -> None:
+    def _parse_document(self) -> None:
         with self._deps.session_factory() as db:
             doc = db.get(Document, self.state.document_id)
-            data, ext = self._deps.read_file(doc), Path(doc.file_name).suffix.lower()
+            data, ext = self._deps.read_file(doc), _suffix(doc.file_name)
         self.state.file_kind = ext.lstrip(".")
         self.state.profile_issues = self._profile()
         style = self.state.number_style
@@ -182,7 +196,6 @@ class StatementProcessingFlow(Flow[StatementState]):
             with number_style(seen):
                 rows = self._parse(data, ext)
         self.state.rows = [list(r) for r in rows]
-        self._checkpoint("parse")
 
     def _parse(self, data: bytes, ext: str) -> list[tuple]:
         entity = self.state.entity or self._deps.entity
@@ -225,7 +238,7 @@ class StatementProcessingFlow(Flow[StatementState]):
                 raise ParseError(f"{ext} statements are not supported; upload PDF, XLSX, XLS or CSV")
         except ParseError as ex:
             self.state.error, rows = str(ex), []
-        except Exception as ex:  # corrupt workbook / CSV
+        except Exception as ex:  # noqa: BLE001 - a corrupt workbook or CSV is a content failure, not a crash
             self.state.error, rows = f"Unreadable statement: {type(ex).__name__}", []
         return rows
 
@@ -236,12 +249,13 @@ class StatementProcessingFlow(Flow[StatementState]):
             if entity != self._deps.entity:
                 return self._deps.pdf_reader(data, entity=entity)  # the borrower's figures: group or company
             return self._deps.pdf_reader(data)
-        except Exception as ex:  # an odd PDF: the plain-text reader below still gets a go
+        except Exception as ex:  # noqa: BLE001 - an odd PDF: the plain-text reader below still gets a go
             log.warning("Table reader failed, using text lines: %s", type(ex).__name__)
             return None
 
-    @listen(parse_document)
-    def extract_and_calculate(self) -> None:
+    # ---------- 2. extract ----------
+
+    def _extract_and_calculate(self) -> None:
         rows, memory_issues = self._recall([tuple(r) for r in self.state.rows])
         money_issues = self._money()
         ccy, rate = self.state.loan_currency, self.state.fx_rate
@@ -263,7 +277,7 @@ class StatementProcessingFlow(Flow[StatementState]):
         found = {v.key for v in result.values if not v.derived}
         factor = to_money_unit(1.0, result.unit_scale, ccy, rate)
         self.state.likely = likely_lines([tuple(r) for r in self.state.rows], found, factor) if result.values else []
-        # Phase 3b-2: the rules read English labels; a statement in another language is read by the AI reader.
+        # The rules read English labels; a statement in another language is read by the AI reader.
         lang = detect_language(" ".join((self.state.header_text, self.state.page_text[:20000],
                                          " ".join(str(r[0]) for r in self.state.rows[:200]))))
         self.state.language = lang
@@ -290,7 +304,6 @@ class StatementProcessingFlow(Flow[StatementState]):
             # A line the second reader found, on the page it cited, is a better hint than a word match.
             by_ai = {s["key"] for s in reading.suggestions}
             self.state.likely = reading.suggestions + [x for x in self.state.likely if x["key"] not in by_ai]
-        self._checkpoint("calculate")
 
     def _cycle_mismatches(self) -> list[str]:
         """Spec Flow 3: the statement against what its cycle expects (period, basis, legal entity, currency, units),
@@ -310,8 +323,8 @@ class StatementProcessingFlow(Flow[StatementState]):
         return [f"{w['code']}: {w['message']}" for w in obligations.check(ctx, find_identifiers(model), basis, model)]
 
     def _ai_values(self, result: StatementResult, suggestions: list[dict], ccy: str) -> StatementResult:
-        """Phase 3b-2: the lines the AI reader read from a statement in another language, each on the page it cites
-        (the grounding check), become the statement's figures with their totals; a person checks every one."""
+        """The lines the AI reader read from a statement in another language, each on the page it cites (the
+        grounding check), become the statement's figures with their totals; a person checks every one."""
         found = {v.key for v in result.values if not v.derived}
         unit = money_unit(ccy)
         added = [LineValue(s["key"], float(s["value"]), unit, False, s.get("page"), None,
@@ -326,7 +339,7 @@ class StatementProcessingFlow(Flow[StatementState]):
         # checks on the figures as now read.
         self.state.issues = [i for i in self.state.issues if i not in result.issues] + ai.issues + [
             f"READ_BY_AI: {len(added)} figures of this {language_name(self.state.language)} statement were read by "
-            "the AI reader, each found on its page; check every figure before Review done"]
+            "the AI reader, each found on its page; check every figure before approving"]
         return ai
 
     def _money(self) -> list[str]:
@@ -347,14 +360,14 @@ class StatementProcessingFlow(Flow[StatementState]):
             else:
                 issues.append(f"CURRENCY_DIFFERS: the statement is in {printed}, the loan in {loan}, and there is no "
                               f"{printed} to {loan} rate for {as_of.isoformat()}; add it in Settings (FX rates), "
-                              "then retry")
+                              "then submit the statement again")
         self.state.currency, self.state.loan_currency, self.state.fx_rate = printed, loan, rate
         return issues
 
     def _profile(self) -> list[str]:
-        """Phase 2: what applies to the linked borrowers (Core: borrower settings over the country profile): the
-        loan currency, the financial-year end, group or company figures and the number style. Linked loans must
-        agree on all four; a loan whose currency nobody knows (the CP service did not answer) waits."""
+        """What applies to the linked borrowers (Core: borrower settings over the country profile): the loan
+        currency, the financial-year end, group or company figures and the number style. Linked loans must agree on
+        all four; a loan whose currency nobody knows (the CP service did not answer) waits."""
         with self._deps.session_factory() as db:
             cp_ids = db.get(Document, self.state.document_id).active_cp_ids()
         d = self._deps
@@ -415,7 +428,7 @@ class StatementProcessingFlow(Flow[StatementState]):
             if hit is None:
                 out.append(row)
                 continue
-            key, confirmed = hit
+            key, _confirmed = hit
             now = match_key(label)
             if now == key == "INTEREST_PAID":
                 self.state.net_interest_confirmed = True  # a person confirmed this interest line for the CP
@@ -447,157 +460,148 @@ class StatementProcessingFlow(Flow[StatementState]):
                 out.append(f"SCALE_JUMP: {v.key} {v.value} against {before[0]} for {before[1].isoformat()}{words}")
         return out
 
-    @router(extract_and_calculate)
-    def validate(self) -> Literal["report", "needs_review", "failed", "heavy"]:
+    # ---------- 3. route ----------
+
+    def _validate(self) -> None:
         if self.state.route == "heavy":
-            return "heavy"
+            self.state.outcome, self.state.route = "HEAVY", ""
+            return
         if self.state.error or not self.state.rows:
-            route = "failed"
-        elif self.state.review_done and not self.state.issues:
-            route = "report"  # a person already pressed "Review done"; the re-read is clean
-        else:
-            # Figures reach Core only after a person reviewed them (architect Flow 3: "Checker approves/rejects";
-            # full review 19 Nov 2026, G21). A clean statement waits too; "Review done" reports it (finish_review).
-            route = "needs_review"
-        self.state.route = route
-        if route != "failed":  # every catalogue line not found is listed, never dropped silently
-            from dps.catalog import lines_not_found
+            self.state.error = self.state.error or "No line items found in the statement"
+            self.state.outcome = "FAILED"
+            return
+        # Figures reach the values table only after a person reviewed them (architect Flow 3: "Checker approves or
+        # rejects"; full review G21). Every catalogue line not found is listed, never dropped silently.
+        from dps.catalog import lines_not_found
 
-            with self._deps.session_factory() as db:
-                job = db.get(Job, self.state.job_id)
-                if job is not None:
-                    jobs.record_step(db, job, "coverage", lines=lines_not_found(v["key"] for v in self.state.values))
-        self._checkpoint("validate")
-        return route
-
-    @listen("report")
-    def report_values(self) -> None:
-        self._report()
-        self.state.outcome = "REPORTED"
-        self._checkpoint("report")
-
-    @listen("needs_review")
-    def hold(self) -> None:
-        with self._deps.session_factory() as db:
-            jobs.guard_attempt(db)
-            doc = db.get(Document, self.state.document_id)
-            doc.status = "NEEDS_REVIEW"
-            doc.review_json = self._review_json()
-            services.audit(db, ACTOR, "STATEMENT_NEEDS_REVIEW", "document", doc.id, issues=self.state.issues)
-            self._history(db, "NEEDS_REVIEW", f"{len(self.state.issues)} issue(s) for a person")
-            db.commit()
+        self.state.lines = lines_not_found(v["key"] for v in self.state.values)
+        self.state.not_found = list(self.state.lines["notFound"])
         self.state.outcome = "NEEDS_REVIEW"
-        self._checkpoint("hold")
 
-    @listen("resume")
-    def finish_review(self) -> None:
-        """A reviewer looked at the issues (and may have entered manual values): report what was read."""
-        self._report(reviewed=True)
-        self.state.outcome = "REPORTED"
-        self._checkpoint("resume")
 
-    @listen("failed")
-    def fail(self) -> None:
-        self.state.error = self.state.error or "No line items found in the statement"
-        with self._deps.session_factory() as db:
-            jobs.guard_attempt(db)
-            db.get(Document, self.state.document_id).status = "FAILED"
-            history.result(db, self.state.document_id, self.state.job_id, "FAILED", self.state.error)
-            db.commit()
-        self.state.outcome = "FAILED"
-        self._checkpoint("fail")
+def _suffix(name: str) -> str:
+    dot = name.rfind(".")
+    return name[dot:].lower() if dot != -1 else ""
 
-    @listen("heavy")
-    def hand_to_heavy_pool(self) -> None:
-        with self._deps.session_factory() as db:
-            jobs.guard_attempt(db)
-            history.result(db, self.state.document_id, self.state.job_id, "SENT TO DOCLING READER",
-                           "too many pages the standard reader could not read")
-            db.commit()
-        self.state.route = ""
-        self.state.outcome = "HEAVY"
-        self._checkpoint("heavy")
 
-    def _history(self, db, outcome: str, reason: str) -> None:
-        history.statement_found(db, self.state.document_id, self.state.job_id, self.state.values, self.state.likely,
-                                self.state.issues, self.state.confirmed, self.state.unit_scale)
-        history.result(db, self.state.document_id, self.state.job_id, outcome, reason)
+# ---------- the statement as result fields ----------
 
-    def _review_json(self) -> str:
-        return json.dumps({"issues": self.state.issues, "unitScale": self.state.unit_scale or None,
-                           "currency": self.state.currency or None, "loanCurrency": self.state.loan_currency or None,
-                           "fxRate": self.state.fx_rate if self.state.fx_rate != 1.0 else None,
-                           "fiscalYearEndMonth": self.state.fiscal_month or None,
-                           "entity": self.state.entity or None, "numberStyle": self.state.number_style or None,
-                           "language": self.state.language,
-                           "likely": self.state.likely, "confirmed": self.state.confirmed,
-                           "remembered": self.state.remembered})
+def as_result(state: StatementState, as_of: date | None, report_derived: bool = False) -> tuple[list, list, dict]:
+    """(fields, warnings, extra) for dps.result: one STATEMENT_LINE per figure read, every one for a person; the
+    statement's issues as warnings; what ``publish`` needs later (currencies, comparatives) in ``extra``."""
+    from dps.skills.common import issue, make_field
 
-    def _report(self, reviewed: bool = False) -> None:
-        """Idempotent: re-running for the same document replaces its own values, never duplicates them."""
-        with self._deps.session_factory() as db:
-            job = db.get(Job, self.state.job_id)
-            if job is not None and job.rollout == "SHADOW":
-                # The checkpoint retains extracted values for comparison. Never affect the active series.
-                return
-        values = [LineValue(**v) for v in self.state.values]
-        loan = money_unit(self.state.loan_currency) if self.state.loan_currency else None
-        if loan and any(v.unit != loan for v in values):
-            # "Review done" on a statement in another currency with no rate: nothing is sent until it is retried.
-            raise ValueError(f"The figures are in {self.state.currency}, the loan in {self.state.loan_currency}: "
-                             "add the FX rate in Settings, then retry the statement")
-        loan_ccy = self.state.loan_currency or self._deps.default_currency  # G23: no silent INR
-        net = any(i.startswith("INTEREST_IS_NET") for i in self.state.issues)
-        interest = next((v for v in values if v.key == "INTEREST_PAID" and not v.derived), None)
-        with self._deps.session_factory() as db:
-            jobs.guard_attempt(db)
-            doc = db.get(Document, self.state.document_id)
-            cp_ids = doc.active_cp_ids()
-            for cp in cp_ids:
-                corrected = set()
-                for old in db.scalars(select(StatementValue).where(
-                        StatementValue.cp_id == cp, StatementValue.as_of_date == doc.as_of_date,
-                        StatementValue.key.in_([v.key for v in values]), StatementValue.superseded == false())):
-                    if old.document_id == doc.id and old.source_type == "USER":
-                        # Bug hunt (8 November 2026): "Review done" after a correction re-stored the figure as read
-                        # and deleted the reviewer's. A person's figure for this statement stays.
-                        corrected.add(old.key)
-                    elif old.document_id == doc.id:
-                        db.delete(old)
-                    else:
-                        old.superseded = True
-                db.flush()
-                for v in values:
-                    if v.key in corrected:
-                        continue
-                    db.add(StatementValue(cp_id=cp, key=v.key, value=v.value, unit=v.unit,
-                                          currency=currency_of(v.unit) or loan_ccy,
-                                          as_of_date=doc.as_of_date, period_months=v.months, derived=v.derived,
-                                          source_type="DOCUMENT", document_id=doc.id, page=v.page, cell=v.cell))
-                db.flush()
-                months = next((v.months for v in values if v.key in ("PAT", "PBT", "REVENUE") and v.months), None)
-                services.store_comparatives(
-                    db, doc, cp, [LineValue(**v) for v in self.state.prior_values],
-                    [LineValue(**v) for v in self.state.annual_values], self.state.annual_end, months)
-                if corrected:
-                    services._rederive(db, doc, cp, ACTOR)  # totals from the corrected inputs, not the read ones
-                else:
-                    services.build_twelve_months(db, doc, cp,
-                                                 self.state.fiscal_month or self._deps.fiscal_year_end_month)
-                if reviewed and net and interest is not None and "INTEREST_PAID" not in corrected:
-                    # The reviewer kept the net interest: the borrower's next statement is not held for it again.
-                    services.remember_label(db, cp, interest.label, "INTEREST_PAID", doc.id, ACTOR)
-                db.add(EventOutbox(type="DATA_EVENT", payload_json=json.dumps({
-                    "dataSourceId": self._deps.data_source_id, "entityKey": cp, "entityKeyLevel": "CP_ID",
-                    "asOfDate": doc.as_of_date.isoformat(), "changedAt": utcnow().isoformat(),
-                    "documentId": doc.id})))
-            doc.status = "PUBLISHED"
-            doc.review_json = self._review_json()
-            services.audit(db, ACTOR, "STATEMENT_REPORTED", "document", doc.id, values=len(values), cpIds=cp_ids,
-                           issues=self.state.issues)
-            if reviewed:
-                history.result(db, doc.id, self.state.job_id, "REPORTED",
-                               f"after review, {len(values)} figures sent to Core for {', '.join(cp_ids)}")
+    fields = []
+    as_of_text = as_of.isoformat() if as_of else None
+    confirmed = set(state.confirmed)
+    for i, v in enumerate(state.values):
+        if v.get("derived") and not report_derived:
+            continue  # G22: Spring works it out from the printed figures
+        value = {"amount": v.get("value"), "unit": v.get("unit"), "currency": currency_of(v.get("unit")),
+                 "asOfDate": as_of_text, "periodMonths": v.get("months"), "derived": bool(v.get("derived"))}
+        f = make_field("statement_lines", [], "STATEMENT_LINE", v["key"], value, v.get("page"), v.get("label") or None,
+                       "RULES+AI_CONFIRMED" if v["key"] in confirmed else "RULES",
+                       0.95 if v["key"] in confirmed else 0.85, cell_ref=v.get("cell"), key=f"{v['key']}-{i}")
+        f["status"] = "NEEDS_REVIEW"  # a statement is never reported unreviewed (G21)
+        fields.append(f)
+    warnings = []
+    for text in state.issues:
+        code, _, message = str(text).partition(":")
+        warnings.append(issue(code.strip() or "ISSUE", message.strip() or None))
+    if state.not_found:  # visible, not blocking: a person sees which lines the statement did not give
+        warnings.append(issue("LINES_NOT_FOUND", f"{len(state.not_found)} statement line(s) not found: "
+                                                 + ", ".join(state.not_found[:40])))
+    extra = {"statement": {
+        "currency": state.currency or None, "loanCurrency": state.loan_currency or None,
+        "fxRate": state.fx_rate if state.fx_rate != 1.0 else None, "unitScale": state.unit_scale or None,
+        "fiscalYearEndMonth": state.fiscal_month or None, "entity": state.entity or None,
+        "numberStyle": state.number_style or None, "language": state.language, "likely": state.likely,
+        "confirmed": state.confirmed, "remembered": state.remembered,
+        "comparatives": {"prior": state.prior_values, "annual": state.annual_values,
+                         "annualEnd": state.annual_end or None},
+        "derivedReported": report_derived}, "_lines": state.lines}
+    return fields, warnings, extra
+
+
+# ---------- after review: the approved figures ----------
+
+class CurrencyNotSettled(ValueError):
+    """The figures are in another currency than the loans and no rate was applied: nothing is stored."""
+
+
+def publish(db: Session, job: Job, result: dict, report_derived: bool = False, fiscal_year_end_month: int = 3,
+            actor: str = ACTOR) -> int:
+    """Stores the figures a person approved (CONFIRMED, CORRECTED, or left as read when the review completed) in
+    the values table, for the bank app's data-source contract (``/api/data/values``). Idempotent: run again for the
+    same document it replaces its own rows. Returns how many figures were stored.
+
+    Not done here any more: no event to Core (G9: the job's ``dps.extraction.completed`` tells Spring), and no
+    figure DPS works out (G22) unless ``report_derived`` is on."""
+    doc = db.get(Document, job.document_id)
+    if doc is None or doc.as_of_date is None:
+        return 0
+    meta = result.get("statement") or {}
+    lines = [f for f in result.get("fields", []) if f.get("group") == "STATEMENT_LINE"
+             and f.get("status") != "REJECTED" and (f.get("value") or {}).get("amount") is not None]
+    values = [LineValue(f["name"], float(f["value"]["amount"]), f["value"].get("unit") or "",
+                        bool(f["value"].get("derived")), (f.get("source") or {}).get("page"),
+                        (f.get("source") or {}).get("cellRef"), ((f.get("source") or {}).get("quote") or "")[:120],
+                        f["value"].get("periodMonths")) for f in lines]
+    if not report_derived:
+        values = [v for v in values if not v.derived]
+    loan = money_unit(meta["loanCurrency"]) if meta.get("loanCurrency") else None
+    if loan and any(v.unit and v.unit != loan for v in values):
+        raise CurrencyNotSettled(f"The figures are in {meta.get('currency')}, the loan in {meta.get('loanCurrency')}: "
+                                 "add the FX rate, then submit the statement again")
+    loan_ccy = meta.get("loanCurrency") or "INR"
+    corrected_keys = {f["name"] for f in lines if f.get("status") == "CORRECTED"}
+    cp_ids = doc.active_cp_ids()
+    comparatives = meta.get("comparatives") or {}
+    for cp in cp_ids:
+        kept_user = set()
+        for old in db.scalars(select(StatementValue).where(
+                StatementValue.cp_id == cp, StatementValue.as_of_date == doc.as_of_date,
+                StatementValue.key.in_([v.key for v in values]), StatementValue.superseded == false())):
+            if old.document_id == doc.id and old.source_type == "USER":
+                kept_user.add(old.key)  # a person's figure for this statement stays
+            elif old.document_id == doc.id:
+                db.delete(old)
             else:
-                self._history(db, "REPORTED", f"{len(values)} figures sent to Core for {', '.join(cp_ids)}")
-            db.commit()
+                old.superseded = True
+        db.flush()
+        for v in values:
+            if v.key in kept_user:
+                continue
+            db.add(StatementValue(cp_id=cp, key=v.key, value=v.value, unit=v.unit,
+                                  currency=currency_of(v.unit) or loan_ccy, as_of_date=doc.as_of_date,
+                                  period_months=v.months, derived=v.derived,
+                                  source_type="USER" if v.key in corrected_keys else "DOCUMENT",
+                                  document_id=doc.id, page=v.page, cell=v.cell,
+                                  entered_by=actor if v.key in corrected_keys else None))
+        db.flush()
+        months = next((v.months for v in values if v.key in ("PAT", "PBT", "REVENUE") and v.months), None)
+        prior = [LineValue(**x) for x in comparatives.get("prior") or []]
+        annual = [LineValue(**x) for x in comparatives.get("annual") or []]
+        if not report_derived:
+            prior, annual = [x for x in prior if not x.derived], [x for x in annual if not x.derived]
+        services.store_comparatives(db, doc, cp, prior, annual, comparatives.get("annualEnd") or "", months)
+        if report_derived:
+            if corrected_keys:
+                services._rederive(db, doc, cp, actor)  # noqa: SLF001 - totals from the corrected inputs
+            else:
+                services.build_twelve_months(db, doc, cp, meta.get("fiscalYearEndMonth") or fiscal_year_end_month)
+    net = any(w.get("code") == "INTEREST_IS_NET" for w in result.get("warnings") or [])
+    interest = next((v for v in values if v.key == "INTEREST_PAID" and v.label), None)
+    if net and interest is not None:  # the reviewer kept the net interest: the next statement is not held for it
+        for cp in cp_ids:
+            services.remember_label(db, cp, interest.label, "INTEREST_PAID", doc.id, actor)
+    doc.status = "PUBLISHED"
+    # The statement's reading as approved (its year end, units, currency ...): recomputing a corrected statement's
+    # twelve-month figures reads the borrower's year end from here.
+    doc.review_json = json.dumps({**{k: v for k, v in meta.items() if k not in ("comparatives", "derivedReported")},
+                                  "issues": [f"{w.get('code')}: {w.get('message') or ''}".rstrip(": ")
+                                             for w in result.get("warnings") or []]}, default=str)
+    services.audit(db, actor, "STATEMENT_APPROVED", "document", doc.id, values=len(values), cpIds=cp_ids)
+    history.result(db, doc.id, job.id, "APPROVED",
+                   f"after review, {len(values)} figures stored for {', '.join(cp_ids) or 'no CP'}")
+    return len(values)

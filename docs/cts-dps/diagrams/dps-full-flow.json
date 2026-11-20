@@ -1719,7 +1719,7 @@
     "jobs.py:85 claim: one UPDATE 'set RUNNING, owned by me, only if still QUEUED' (compare-and-set), so two workers never take one job",
     "jobs.py:162 renew_lease: heartbeat keeps locked_until alive; a dead worker's lease expires and another worker takes the job",
     "jobs.py:54 guard_attempt: every write checks the attempt number; a stale worker gets LeaseLost and cannot overwrite",
-    "worker.py:211 _run routes by flow (api/jobs.py:38 JOB_TYPES): SKILL_PACK, AGREEMENT_INTAKE, STATEMENT_PROCESSING or ANALYZE",
+    "worker.py:211 _run routes by flow (api/jobs.py:38 JOB_TYPES): SKILL_PACK (every document job) or ANALYZE",
     "Errors: transient means retry with a growing wait (jobs.py:224); a file that crashes the parser repeatedly means DEAD + event"
    ]
   },
@@ -1839,8 +1839,8 @@
    "title": "Other flows, same queue and extraction",
    "items": [
     "Amendment: skills/amendment_diff/rules.py:56 ADD / CHANGE / DELETE; :145 amended_set",
-    "Statement: flows/statement.py:133 lines + derived totals; catalog.py:65 lines not found",
-    "Agreement intake: flows/intake.py:70; certificate: skills/certificate/"
+    "Statement: skills/statement_lines/reader.py:158 lines + derived totals; catalog.py:65 lines not found",
+    "Agreement intake: skills/runner.py:391; certificate: skills/certificate/"
    ]
   },
   {

@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import json
 from datetime import date
 
 import pytest
-from test_flows import FakeParser, add_document, intake, terms
+from test_flows import FakeParser, add_document, agreement_result
 from test_statement_pdf import amounts, header, line
 
 from dps.db import Database
 from dps.extraction.agreement import extract_terms
-from dps.extraction.mapping import normalize
 from dps.extraction.safety_net import looks_like_covenant, possible_covenants
 from dps.extraction.statement import identity_issues, likely_lines
 from dps.extraction.statement_pdf import PdfStatement, rows_from_words
-from dps.models import Base, Document, StatementValue
+from dps.models import Base, StatementValue
 from dps.parse.engine import Page
 
 
@@ -73,7 +71,7 @@ def test_a_likely_line_is_offered_for_a_covenant_input_not_found():
 
 
 def test_a_figure_twenty_times_off_last_period_is_held_for_a_unit_check(database):
-    from dps.flows.statement import StatementDeps, StatementProcessingFlow
+    from statement_shim import StatementDeps, StatementProcessingFlow
 
     with database.session_factory() as s:
         s.add(StatementValue(cp_id="CP-1", key="REVENUE", value=900.36, unit="INR_CR", currency="INR",
@@ -88,8 +86,9 @@ def test_a_figure_twenty_times_off_last_period_is_held_for_a_unit_check(database
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
     assert flow.state.outcome == "NEEDS_REVIEW"
     assert flow.state.issues == ["SCALE_JUMP: REVENUE 9003641728.0 against 900.36 for 2024-03-31 in INR crore"]
-    with database.session_factory() as s:
-        review = json.loads(s.get(Document, doc_id).review_json)
+    from statement_shim import review_of
+
+    review = review_of(flow)
     assert {"key": "LT_DEBT", "label": "Term loans from banks", "value": 30.0, "page": 1,
             "cell": None} in review["likely"]
 
@@ -139,14 +138,11 @@ def test_covenant_shape_needs_a_limit_next_to_a_covenant_word():
                                    "collateral of at least $5,000,000 for letters of credit.")
 
 
-def test_possible_covenants_reach_the_review_and_core_only_when_approved(database):
-    flow = intake(database, [Page(1, UNKNOWN, "TEXT", 1.0)])
-    doc_id = add_document(database)
-    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    [cand] = [t for t in terms(database, doc_id).values() if t.category == "CANDIDATE"]
-    assert cand.status == "NEEDS_REVIEW" and cand.name == "Debt Yield"
-    assert json.loads(cand.issues_json) == ["POSSIBLE_COVENANT_NOT_UNDERSTOOD"]
-    assert cand.metric_raw.startswith("POSSIBLE_COVENANT:1:")
-    pages = [Page(1, UNKNOWN, "TEXT", 1.0)]
-    [p] = normalize(extract_terms(pages) + possible_covenants(pages, [])[0], [])
-    assert p.metric_raw == cand.metric_raw  # stable across runs, so a decision survives reprocessing
+def test_possible_covenants_reach_the_review_only():
+    first = agreement_result([Page(1, UNKNOWN, "TEXT", 1.0)])
+    [cand] = [f for f in first["fields"] if f["group"] == "POSSIBLE_COVENANT" and f["name"] == "Debt Yield"]
+    assert cand["status"] == "NEEDS_REVIEW"
+    assert "POSSIBLE_COVENANT_NOT_UNDERSTOOD" in {i["code"] for i in cand["issues"]}
+    again = agreement_result([Page(1, UNKNOWN, "TEXT", 1.0)])
+    # stable across runs, so a person's decision survives reprocessing
+    assert cand["id"] in {f["id"] for f in again["fields"]}

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from datetime import date
 
-from conftest import h
 from sqlalchemy import select
 from test_api import session
-from test_spread import statement
 
 from dps.extraction.similarity import canonical, nearest, similarity
 from dps.extraction.statement import likely_lines
@@ -37,19 +34,17 @@ def test_a_meaning_match_outranks_a_word_match_for_a_missing_line():
 
 
 def test_a_confirmed_wording_is_remembered_and_used_for_the_next_statement(client, app):
+    from statement_shim import StatementDeps, StatementProcessingFlow, as_result
     from test_flows import add_document
     from test_statement_pdf import FakeParser
 
     from dps.db import Database
     from dps.extraction.statement_pdf import PdfStatement
-    from dps.flows.statement import StatementDeps, StatementProcessingFlow
-    from dps.models import Document
+    from dps.services import remember_label
 
-    first = statement(client)
-    r = client.put(f"/dps/v1/documents/{first}/spread", headers=h(), json={"lines": [
-        {"standardKey": "LT_DEBT", "value": 300.0, "sourceLabel": "Term loans - non-current portion 300.0"},
-        {"standardKey": "CFO", "value": 520.0}]})
-    assert r.status_code == 200
+    with session(app) as s:  # a reviewer confirmed this wording as LT_DEBT for CP-1 (the review API does this)
+        remember_label(s, "CP-1", "Term loans - non-current portion 300.0", "LT_DEBT", None, "rm-anil")
+        s.commit()
     with session(app) as s:
         [memory] = s.scalars(select(LabelMemory)).all()
         assert (memory.cp_id, memory.label, memory.key, memory.confirmed_by) == (
@@ -67,8 +62,8 @@ def test_a_confirmed_wording_is_remembered_and_used_for_the_next_statement(clien
     flow.kickoff(inputs={"job_id": "j2", "document_id": doc_id})
     values = {v["key"]: v["value"] for v in flow.state.values}
     assert values["LT_DEBT"] == 280.0 and flow.state.remembered == ["LT_DEBT"]
-    with database.session_factory() as s:
-        assert json.loads(s.get(Document, doc_id).review_json)["remembered"] == ["LT_DEBT"]
+    fields, _, extra = as_result(flow.state, date(2027, 3, 31))
+    assert extra["statement"]["remembered"] == ["LT_DEBT"]  # the reviewer sees why the line was read so
 
     # Another CP's statement with the same wording learns nothing from CP-1.
     other = add_document(database, "FINANCIAL_STATEMENT", "x.pdf", date(2027, 3, 31), ("CP-2",))
@@ -78,12 +73,12 @@ def test_a_confirmed_wording_is_remembered_and_used_for_the_next_statement(clien
 
 
 def test_memory_that_disagrees_with_the_catalog_holds_the_statement(client, app):
+    from statement_shim import StatementDeps, StatementProcessingFlow
     from test_flows import add_document
     from test_statement_pdf import FakeParser
 
     from dps.db import Database
     from dps.extraction.statement_pdf import PdfStatement
-    from dps.flows.statement import StatementDeps, StatementProcessingFlow
     from dps.services import remember_label
 
     with session(app) as s:
