@@ -7,13 +7,13 @@ from datetime import date
 
 import pytest
 from conftest import reviewed_if_clean
+from statement_shim import StatementDeps, StatementProcessingFlow
 from test_bug_hunt import terms_of
 from test_flows import FakeParser, add_document, doc_status, values, xlsx_bytes
 
 from dps.db import Database
 from dps.extraction.mapping import normalize
 from dps.extraction.statement import extract_values
-from dps.flows.statement import StatementDeps, StatementProcessingFlow
 from dps.models import Base
 from dps.money import currency_of, describe, detect_currency, money_unit, to_money_unit
 
@@ -64,7 +64,7 @@ def run(database, rows, loan="LKR", rate=None, cps=("CP-LK",)):
 
     currencies = loan if isinstance(loan, dict) else dict.fromkeys(cps, loan)
     deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(rows), FakeParser([]), "ds-dps", True,
-                         loan_currency=currencies.get, fx_rate=fx)
+                         loan_currency=currencies.get, fx_rate=fx, report_derived_values=True)
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
     return reviewed_if_clean(flow), doc_id, asked, deps

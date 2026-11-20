@@ -43,7 +43,11 @@ UNREADABLE_QUALITY = 0.3  # below this, OCR could not read the page well enough 
 BLOCKING = frozenset({"NOTHING_FOUND", "NOT_GROUNDED", "VERDICT_NOT_IN_RESULTS", "UNREADABLE_PAGES",
                       "TOTALS_DO_NOT_ADD", "PERIOD_MISMATCH", "BASIS_MISMATCH", "ENTITY_MISMATCH",
                       "CURRENCY_MISMATCH", "UNITS_MISMATCH", "BASE_MISSING", "SET_INCOMPLETE",
-                      "SET_MANIFEST_INVALID"})
+                      "SET_MANIFEST_INVALID",
+                      # a statement's holds a person clears outside it (an FX rate, a borrower setting, relinking)
+                      "CURRENCY_DIFFERS", "CURRENCY_MIXED", "LOAN_CURRENCY_UNKNOWN", "LOANS_DIFFER",
+                      # a document that addresses an AI model, or that the rules cannot read (another language)
+                      "PROMPT_INJECTION_SUSPECTED", "LANGUAGE_NOT_READ"})
 COVENANT_GROUPS = ("FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "INFO_COVENANT", "POSSIBLE_COVENANT")
 # Inspection and reader flags a reviewer must see on an extraction result (full review G15).
 FILE_FLAGS = {"TRACKED_CHANGES": "the text read is with every change accepted",
@@ -92,6 +96,27 @@ def check_numbers(fields: list[dict]) -> None:
         f.setdefault("issues", []).append(issue("NUMBER_NOT_IN_QUOTE", f"the threshold {threshold:g} is not "
                                                                        "written in the quoted text; check the source"))
         f["status"] = "NEEDS_REVIEW"
+
+
+def document_checks(model: dict | None, ai_on: bool) -> list[dict]:
+    """What the old agreement flow checked on the whole document, now for every reading job (one pipeline, WP7):
+    text written to steer an AI model (PROMPT_INJECTION_SUSPECTED), and a document in another language when no AI
+    reader is on (LANGUAGE_NOT_READ: the rules read English only). Both send the job to a person."""
+    from dps.agent.guard import injection_signs
+    from dps.language import detect, name
+
+    text = "\n".join(p.get("text") or "" for p in (model or {}).get("pages", []))
+    if not text.strip():
+        return []
+    out = []
+    signs = injection_signs(text)
+    if signs:
+        out.append(issue("PROMPT_INJECTION_SUSPECTED", f"the document addresses an AI model: '{signs[0][:120]}'"))
+    lang = detect(text)
+    if lang != "en" and not ai_on:
+        out.append(issue("LANGUAGE_NOT_READ", f"the document is in {name(lang)}; the rules read English only. "
+                                              "Switch on the AI reader (DPS_AI_MODEL) or enter its values by hand"))
+    return out
 
 
 def page_accounting(pages: list[dict]) -> dict:
@@ -364,7 +389,8 @@ def base_fields(db: Session, job: Job, pipeline_version: str) -> list[dict]:
 
 
 def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: Session | None = None,
-        pipeline_version: str = "1", raw: bytes | None = None, scorer_dir: str | None = None) -> dict:
+        pipeline_version: str = "1", raw: bytes | None = None, scorer_dir: str | None = None,
+        statement_deps=None) -> dict:
     started = time.monotonic()
     request = json.loads(job.request_json or "{}")
     ctx = dict(request.get("context") or {})
@@ -375,6 +401,8 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
             fields, warnings, extra = _commentary(pack, raw or b"{}", gateway)
         elif pack.name == "reconcile_set":
             fields, warnings, extra = _reconcile(job, raw or b"", db, pipeline_version, ctx)
+        elif pack.name == "statement_lines":
+            fields, warnings, extra = _statement(job, db, statement_deps)
         else:
             fields, warnings, extra = _extract(pack, job, model or {"pages": []}, ctx, gateway, tools, db,
                                                pipeline_version)
@@ -407,6 +435,15 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
                    for p in (model or {}).get("pages", [])}
         Scorer(scorer_dir).apply(fields, pack.name, pack.risk, pack.thresholds, quality)
     check_numbers(fields)  # after scoring: a number not in its own quote always goes to a person
+    if pack.name not in ("commentary", "reconcile_set", "statement_lines"):  # the statement reader checks its own
+        warnings += document_checks(model, gateway is not None)
+    if any(w["code"] == "PROMPT_INJECTION_SUSPECTED" for w in warnings):
+        for f in fields:  # text written to steer an AI model: every value waits for a person, the reason on each
+            if f.get("status") in ("AUTO_ACCEPTED", "NEEDS_REVIEW"):
+                f["status"] = "NEEDS_REVIEW"
+                if not any(i.get("code") == "PROMPT_INJECTION_SUSPECTED" for i in f.get("issues") or []):
+                    f.setdefault("issues", []).append(issue("PROMPT_INJECTION_SUSPECTED",
+                                                            "the document addresses an AI model"))
     if pack.name not in ("commentary", "reconcile_set"):
         extra["_pages"] = page_accounting((model or {}).get("pages", []))
         if not [f for f in fields if f.get("group") != "SCHEDULE_TERM"] \
@@ -437,6 +474,7 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         "classification": None, "identifiers": [], "fields": fields,
         "document": {"confidence": None, "route": route, "reasons": reasons,
                      **({"coverage": extra.pop("_coverage")} if "_coverage" in extra else {}),
+                     **({"lines": extra.pop("_lines")} if "_lines" in extra else {}),
                      **({"pages": extra.pop("_pages")} if "_pages" in extra else {})},
         "warnings": warnings, "timingMs": {"total": round((time.monotonic() - started) * 1000, 1)},
         "usage": {"model_calls": budget.calls, "tokens": budget.used} if budget else None,
@@ -591,6 +629,27 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
         extra["amendedSet"] = amended_set(ctx.get("base") or [], fields)
         extra["effectiveDate"] = next((f["value"]["change"].get("effectiveDate") for f in fields
                                        if f["value"].get("change")), None)
+    return fields, warnings, extra
+
+
+def _statement(job: Job, db: Session | None, deps):
+    """EXTRACT_STATEMENT (full review WP7: one pipeline): the statement reader of the statement_lines skill, then the
+    accounting identities and the restatement diff. Every figure is a proposal; the values table is written only
+    when the review completes (statement_lines.reader.publish)."""
+    from dps import results
+    from dps.models import Document
+    from dps.skills.statement_lines.reader import ContentFailed, NeedsHeavyPool, StatementReader, as_result
+
+    if deps is None:
+        raise RuntimeError("EXTRACT_STATEMENT needs the statement reader's dependencies")
+    state = StatementReader(deps).read(job.id, job.document_id)
+    if state.outcome == "HEAVY":
+        raise NeedsHeavyPool("too many pages the standard reader could not read")
+    if state.outcome == "FAILED":
+        raise ContentFailed(state.error)
+    doc = db.get(Document, job.document_id) if db is not None else None
+    fields, warnings, extra = as_result(state, doc.as_of_date if doc else None, deps.report_derived_values)
+    warnings += statement_warnings(fields, results.approved_figures(db, doc) if db is not None else {})
     return fields, warnings, extra
 
 
@@ -776,8 +835,10 @@ def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | N
 
 
 def run_job(job: Job, model: dict | None, gateway=None, tools=None, db: Session | None = None,
-            pipeline_version: str = "1", raw: bytes | None = None, scorer_dir: str | None = None) -> dict:
-    """The worker's entry point for every SKILL_PACK job."""
+            pipeline_version: str = "1", raw: bytes | None = None, scorer_dir: str | None = None,
+            statement_deps=None) -> dict:
+    """The worker's entry point for every job type that reads a document (one pipeline, full review WP7)."""
     if job.job_type == "ONBOARD":
         return run_onboard(job, model or {"pages": []}, gateway, tools, db, pipeline_version, scorer_dir)
-    return run(pack_for(job.job_type), job, model, gateway, tools, db, pipeline_version, raw, scorer_dir)
+    return run(pack_for(job.job_type), job, model, gateway, tools, db, pipeline_version, raw, scorer_dir,
+               statement_deps)

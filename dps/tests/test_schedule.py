@@ -3,13 +3,9 @@ the figures each covenant is tested on, read from the agreement and carried to C
 
 from __future__ import annotations
 
-import json
-from datetime import date
-
 import pytest
-from test_flows import FakeCore, add_document, intake
+from test_flows import agreement_result
 
-from dps import services
 from dps.db import Database
 from dps.extraction.agreement import extract_terms
 from dps.extraction.mapping import normalize
@@ -23,9 +19,8 @@ from dps.extraction.schedule import (
     step_down,
 )
 from dps.extraction.schedule import test_months as months_tested
-from dps.models import Base, ExtractedTerm
+from dps.models import Base
 from dps.parse.engine import Page
-from dps.profiles import LoanProfile
 
 SENTENCE = ("The Borrower shall not permit the Consolidated Leverage Ratio to exceed 4.00 to 1.00 for any Test Period "
             "ending on or before 31 March 2027, 3.75 to 1.00 for any Test Period ending after 31 March 2027 and on or "
@@ -146,37 +141,15 @@ def test_an_agreement_carries_its_schedule_cure_definitions_and_basis():
     assert p.schedule["cron"] == "0 0 2 1 4,10 ?" and p.schedule["cure"]["days"] == 15
 
 
-class ProfileCore(FakeCore):
-    def __init__(self, entity: str) -> None:
-        super().__init__()
-        self.entity = entity
-
-    def cp_profile(self, cp_id):
-        return LoanProfile("INR", True, 3, self.entity, "INDIAN")
-
-
-def test_intake_flags_a_covenant_tested_on_other_figures_and_sends_the_schedule_through_c1(database):
-    doc_id = add_document(database)
-    flow = intake(database, [Page(1, AGREEMENT, "TEXT", 1.0)], core=ProfileCore("STANDALONE"))
-    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    leverage = next(p for p in flow.state.proposals if p["metric_raw"] == "DEBT_TO_EBITDA")
-    assert any(i.startswith("ENTITY_DIFFERS: the agreement tests this on group figures") for i in leverage["issues"])
-
-    with database.session_factory() as s:
-        for t in s.query(ExtractedTerm).filter(ExtractedTerm.document_id == doc_id):
-            t.status = "PUBLISHED"  # the reviewer approved them
-        s.commit()
-        recs = services.recommendations(s, "CP-1")
-    stepped = next(r for r in recs if r["levels"])
-    assert len(stepped["levels"]) == 2 and stepped["cron"] == "0 0 2 1 4,10 ?"
-    assert stepped["cure"]["kind"] == "EQUITY"
-    with database.session_factory() as s:
-        row = s.query(ExtractedTerm).filter(ExtractedTerm.metric_raw == "DEBT_TO_EBITDA").one()
-        assert json.loads(row.schedule_json)["testMonths"] == [3, 9]
+def test_a_covenant_tested_on_other_figures_than_the_borrowers_is_flagged():
+    """Spring's context says whose figures this borrower's statements are read for (context.basis)."""
+    result = agreement_result([Page(1, AGREEMENT, "TEXT", 1.0)], ctx={"basis": "STANDALONE"})
+    leverage = next(f for f in result["fields"] if f["value"].get("metric") == "DEBT_TO_EBITDA")
+    [issue] = [i for i in leverage["issues"] if i["code"] == "ENTITY_DIFFERS"]
+    assert issue["message"].startswith("the agreement tests this on group figures")
+    assert leverage["status"] == "NEEDS_REVIEW" and len(leverage["value"]["schedule"]) == 2
 
 
-def test_a_borrower_on_group_figures_is_not_flagged(database):
-    doc_id = add_document(database, as_of=date(2026, 3, 31))
-    flow = intake(database, [Page(1, AGREEMENT, "TEXT", 1.0)], core=ProfileCore("CONSOLIDATED"))
-    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    assert not any(i.startswith("ENTITY_DIFFERS") for p in flow.state.proposals for i in p["issues"])
+def test_a_borrower_on_group_figures_is_not_flagged():
+    result = agreement_result([Page(1, AGREEMENT, "TEXT", 1.0)], ctx={"basis": "CONSOLIDATED"})
+    assert not any(i["code"] == "ENTITY_DIFFERS" for f in result["fields"] for i in f["issues"])

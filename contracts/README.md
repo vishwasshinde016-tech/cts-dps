@@ -2,7 +2,6 @@
 
 | File | What it is |
 | --- | --- |
-| `dps-api.yaml` | The Covenexa DPS API used by the Covenexa UI and Core (C1 recommendations, C2 values, C3 AI suggestions, documents, terms) |
 | `core-additions.yaml` | Endpoints DPS needs from Covenexa Core |
 | `dps-jobs-api.yaml` | **CTS job API** (Phase 1 of the CTS DPS design): jobs, batches, event feed, catalogue, ops, plus the 2 bank-app compatibility endpoints |
 | `schemas/*.json` | JSON Schemas of the CTS job API: `job-request`, `job-status`, `result`, `page-model`, `event` |

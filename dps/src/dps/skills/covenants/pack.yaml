@@ -1,8 +1,8 @@
 name: covenants
 version: 3.1.0
-# EXTRACT_AGREEMENT keeps the proven Agreement Intake flow (rules, safety net, AI second reader, voting); this pack's
-# rules are the same extractor, reused by the sanction and amendment packs.
-engine: legacy_flow
+# EXTRACT_AGREEMENT and ONBOARD (a loan agreement, a guarantee, an amended and restated agreement) run this pack in
+# the skills pipeline (full review WP7: one pipeline). Its rules are the agreement extractor, also used by the
+# sanction and amendment packs.
 job_types: [EXTRACT_AGREEMENT]
 routes: {extract: strong, images: vision}
 tools: [page_text, search_text, find_definition, covenant_library, validate_formula]

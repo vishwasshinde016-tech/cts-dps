@@ -49,7 +49,7 @@ flowchart TB
   ROUTE -->|"ONBOARD · EXTRACT_SANCTION ·<br/>EXTRACT_AMENDMENT · EXTRACT_CERTIFICATE"| FS
 
   subgraph FLOWS["CrewAI Flow per job (isolated state)"]
-    FA["Agreement Intake Flow — flows/intake.py<br/>parse → extract → normalize → validate → publish / hold"]
+    FA["covenants skill (skills flow) — skills/runner.py<br/>parse → extract → normalize → validate → publish / hold"]
     FS["Skill Job Flow — flows/skill_job.py<br/>run_skills → save_result"]
     FS --> CLS["Classify — analyze/classify.py<br/>rules first, small model only if unsure"]
     CLS --> PACK["pick skill pack — skills/runner.py<br/>LOAN_AGREEMENT→covenants · SANCTION→sanction · AMENDMENT→amendment_diff"]
@@ -93,7 +93,7 @@ flowchart TB
 | What | Where |
 |---|---|
 | Job endpoint `POST /dps/v1/jobs` (202, `Idempotency-Key`, de-dup on same file + type + pipeline, queue limit → 429) | `dps/src/dps/api/jobs.py` (`submit_job`) |
-| Job types → flow (`EXTRACT_AGREEMENT`→`AGREEMENT_INTAKE`, `ONBOARD`→`SKILL_PACK` …) | `dps/src/dps/api/jobs.py` (job type table at the top) |
+| Job types → flow (`EXTRACT_AGREEMENT`→`SKILL_PACK`, `ONBOARD`→`SKILL_PACK` …) | `dps/src/dps/api/jobs.py` (job type table at the top) |
 | API contract | `contracts/dps-jobs-api.yaml`, `contracts/schemas/job-request.json`, `job-status.json` |
 | Service auth | `dps/src/dps/integrations/service_auth.py`, `api/auth.py` |
 
@@ -126,9 +126,9 @@ Not used: Azure AI Document Intelligence. Parsing and OCR run locally.
 
 | Flow | Used for | Where |
 |---|---|---|
-| **Agreement Intake Flow**: `parse → extract → normalize → validate → publish / hold / heavy`. Its state is saved, so a job held for review resumes. | `EXTRACT_AGREEMENT` | `dps/src/dps/flows/intake.py` |
+| **covenants skill (skills flow)**: `parse → extract → normalize → validate → publish / hold / heavy`. Its state is saved, so a job held for review resumes. | `EXTRACT_AGREEMENT` | `dps/src/dps/skills/runner.py` |
 | **Skill Job Flow**: `run_skills → save_result` | `ONBOARD`, `EXTRACT_SANCTION`, `EXTRACT_AMENDMENT`, `EXTRACT_CERTIFICATE`, `ANALYZE` | `dps/src/dps/flows/skill_job.py` |
-| Statement flow | `EXTRACT_STATEMENT` | `dps/src/dps/flows/statement.py` |
+| Statement flow | `EXTRACT_STATEMENT` | `dps/src/dps/skills/statement_lines/reader.py` |
 | Flow state persistence (`dps_flow_state`) | resume after review | `dps/src/dps/flows/persistence.py` |
 
 For `ONBOARD`, the document is first **classified** (`analyze/classify.py`). Rules decide when they are sure: top score ≥ 0.8 and a lead of ≥ 0.3. Otherwise the small model decides, with quotes. The class then picks the skill pack (`skills/runner.py` `ONBOARD_PACKS`).
@@ -185,7 +185,7 @@ A model problem never fails a job. The job falls back to rules only, and the fie
 
 ### Step 6 — Covenant extraction: rules + AI (the core)
 
-Order of work in `dps/src/dps/skills/runner.py` `_extract()`. The Agreement Intake Flow runs the same reader through `extraction/agreement_ai.py` `read_with_skill()`.
+Order of work in `dps/src/dps/skills/runner.py` `_extract()`. The covenants skill (skills flow) runs the same reader through `extraction/agreement_ai.py` `read_with_skill()`.
 
 | # | Step | What happens | Where |
 |---|---|---|---|
@@ -224,7 +224,7 @@ Order of work in `dps/src/dps/skills/runner.py` `_extract()`. The Agreement Inta
 |---|---|---|
 | Logs, traces, metrics | spans `dps.ingest`, `dps.skill`, `dps.analyze`; trace events table | `ops/observability.py`, `ops/logcollector.py`, `dps_trace_event` |
 | AI cost and usage | per call and per job; monthly budget | `agent/usage.py`, `agent/guard.py`, `dps_ai_usage`, `dps_ai_call` |
-| Prompt injection | text that addresses an AI → every proposal held with `PROMPT_INJECTION_SUSPECTED` | `agent/guard.py`, `flows/intake.py` |
+| Prompt injection | text that addresses an AI → every proposal held with `PROMPT_INJECTION_SUSPECTED` | `agent/guard.py`, `skills/runner.py` |
 | Retries | transient errors (DMS/Spring down) → back to the queue; a crash twice on the same file → DEAD | `worker.py`, `jobs.py` |
 | Audit | sealed audit events | `dps_audit_event`, `dps_audit_seal`, `/dps/v1/ops/audit-seals` |
 | DB | SQL Server in production, SQLite in tests; Alembic migrations | `models.py`, `dps/migrations/` |
@@ -259,7 +259,7 @@ Dependencies are pinned in `dps/pyproject.toml`.
 1. `contracts/dps-jobs-api.yaml`: what Spring calls
 2. `dps/src/dps/api/jobs.py` → `jobs.py` → `worker.py`: job, queue, worker
 3. `dps/src/dps/ingest/pipeline.py` → `ingest/inspect.py` → `parse/sandbox.py` → `parse/page_model.py` → `parse/engine.py`: file to pages
-4. `dps/src/dps/flows/intake.py` and `flows/skill_job.py`: the CrewAI Flows
+4. `dps/src/dps/skills/runner.py` and `flows/skill_job.py`: the CrewAI Flows
 5. `dps/src/dps/skills/covenants/pack.yaml`, `prompt.md`, `schema.json`, `rules.py`: the covenants skill
 6. `dps/src/dps/skills/covenants/pages.py` → `parts.py` → `agent/document_agent.py` → `agent/gateway.py`: page finder, agent, tools, model
 7. `dps/src/dps/integrations/spring_tools.py` + `contracts/spring-tools.yaml`: Java rules as tools

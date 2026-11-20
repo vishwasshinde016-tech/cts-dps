@@ -88,6 +88,7 @@ def test_restated_statement_lists_changed_lines(client, app):
         ids.append(r.json()["jobId"])
         with app.state.db.session_factory() as s:
             job = s.get(Job, ids[-1])
+            job.flow = "STATEMENT_PROCESSING"  # read before the one pipeline (WP7): its result is in the old tables
             for key, value in (("PAT", pat), ("REVENUE", 500.0)):
                 s.add(StatementValue(cp_id="CP-1", key=key, value=value, unit="INR_CR", as_of_date=date(2026, 3, 31),
                                      source_type="DOCUMENT", document_id=job.document_id, page=1))

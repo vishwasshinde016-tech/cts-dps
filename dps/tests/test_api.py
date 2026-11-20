@@ -1,22 +1,18 @@
+"""The service's shared HTTP behaviour: health, sign-in, the data-source contract and job operations.
+
+The old Covenexa routes (upload, documents, terms, spreads, manual values, recommendations, ask) were deleted in the
+full review (G12, WP7); their tests went with them.
+"""
+
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-import pytest
 from conftest import h
 
-from dps.models import Document, ExtractedTerm, Job, StatementValue
+from dps.models import Document, DocumentCpLink, Job, StatementValue
 
 PDF = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF"
-
-
-def upload(client, *, cps=("CP-1",), type_="LOAN_AGREEMENT", data=PDF, name="agreement.pdf",
-           as_of=None, headers=None):
-    form = {"cpIds": list(cps), "type": type_}
-    if as_of:
-        form["asOfDate"] = as_of
-    return client.post("/dps/v1/documents", data=form, files={"file": (name, data, "application/pdf")},
-                       headers=headers or h())
 
 
 def session(app):
@@ -28,7 +24,7 @@ def session(app):
 def test_health_is_public(client):
     r = client.get("/health")
     assert r.status_code == 200
-    assert r.json()["database"] == "UP"
+    assert r.json()["database"] == "UP" and r.json()["version"]
     assert "X-Correlation-Id" in r.headers
 
 
@@ -38,64 +34,22 @@ def test_correlation_id_echoed(client):
 
 
 def test_requires_identity(client):
-    r = client.get("/dps/v1/catalog")
+    r = client.get("/dps/v1/jobs")
     assert r.status_code == 401
     assert r.json()["code"] == "UNAUTHORIZED"
 
 
-def test_catalog(client):
-    cols = client.get("/dps/v1/catalog", headers=h()).json()["columns"]
-    assert {"key": "EBITDA", "label": "EBITDA", "dataType": "NUMBER", "kind": "METRIC"} in cols
-
-
-# ---------- upload ----------
-
-def test_upload_creates_document_link_and_job(client, app):
-    r = upload(client, cps=("CP-1", "CP-2"))
-    assert r.status_code == 202
-    body = r.json()
-    doc = client.get(f"/dps/v1/documents/{body['documentId']}", headers=h()).json()
-    assert doc["cpIds"] == ["CP-1", "CP-2"]
-    assert doc["status"] == "QUEUED"
-    job = client.get(f"/dps/v1/jobs/{body['jobId']}", headers=h()).json()
-    assert job["flow"] == "AGREEMENT_INTAKE" and job["status"] == "QUEUED" and job["pool"] == "STANDARD"
+def test_the_old_covenexa_routes_are_gone(client):
+    """G12: in CTS the DMS uploads and Spring approves; DPS has no upload, publish or spread of its own."""
+    for method, path in (("POST", "/dps/v1/documents"), ("GET", "/dps/v1/documents?cpId=CP-1"),
+                         ("POST", "/dps/v1/values"), ("POST", "/dps/v1/ask"), ("GET", "/dps/v1/catalog"),
+                         ("PATCH", "/dps/v1/terms/t1"), ("POST", "/dps/v1/recommendations")):
+        assert client.request(method, path, headers=h()).status_code in (404, 405), path
 
 
 class _Deadlock(Exception):
     def __str__(self) -> str:
         return "(1205, b'Transaction was deadlocked on lock resources with another process')"
-
-
-def _failing_commits(monkeypatch, failures: int) -> list[int]:
-    """Makes the next ``failures`` commits of the upload raise a SQL Server deadlock."""
-    from sqlalchemy.exc import OperationalError
-    from sqlalchemy.orm import Session
-
-    real = Session.commit
-    calls = []
-
-    def commit(self):
-        calls.append(1)
-        if len(calls) <= failures:
-            raise OperationalError("UPDATE dps_document", {}, _Deadlock())
-        return real(self)
-
-    monkeypatch.setattr(Session, "commit", commit)
-    return calls
-
-
-def test_upload_retries_once_after_a_deadlock(client, monkeypatch):
-    calls = _failing_commits(monkeypatch, 1)
-    r = upload(client, data=PDF + b"%retry")
-    assert r.status_code == 202 and len(calls) == 2
-    assert client.get(f"/dps/v1/documents/{r.json()['documentId']}", headers=h()).status_code == 200
-
-
-def test_a_second_deadlock_answers_busy_not_500(client, monkeypatch):
-    _failing_commits(monkeypatch, 2)
-    r = upload(client, data=PDF + b"%busy")
-    assert r.status_code == 503 and r.headers["Retry-After"] == "2"
-    assert r.json()["code"] == "BUSY_RETRY"
 
 
 def test_lock_conflicts_are_recognised():
@@ -115,215 +69,7 @@ def test_string_parameters_are_sent_as_varchar_on_sql_server():
     assert "CAST(" in sql and "AS VARCHAR(64))" in sql
 
 
-def test_a_pdf_over_the_page_limit_is_refused(client, app):
-    import io
-
-    from pypdf import PdfWriter
-
-    w = PdfWriter()
-    for _ in range(3):
-        w.add_blank_page(width=200, height=200)
-    buf = io.BytesIO()
-    w.write(buf)
-    app.state.settings.max_pages = 2
-    r = upload(client, data=buf.getvalue(), name="long.pdf")
-    assert r.status_code == 400 and r.json()["code"] == "TOO_MANY_PAGES"
-    assert "3 pages" in r.json()["message"]
-
-
-def test_a_failed_document_tells_the_rm_why(client, app):
-    from dps.api.documents import failure_reason
-
-    doc_id = upload(client, data=PDF + b"%locked").json()["documentId"]
-    with session(app) as db:
-        doc = db.get(Document, doc_id)
-        doc.status = "FAILED"
-        db.get(Job, doc.latest_job_id).error = "Unreadable PDF: FileNotDecryptedError"
-        db.commit()
-    assert "password-protected" in client.get(f"/dps/v1/documents/{doc_id}", headers=h()).json()["failureReason"]
-    listed = client.get("/dps/v1/documents?cpId=CP-1", headers=h()).json()
-    assert "password-protected" in next(d for d in listed if d["id"] == doc_id)["failureReason"]
-    assert failure_reason(None) is None
-    assert "damaged" in failure_reason("Unreadable statement: BadZipFile")
-    assert ".xls" in failure_reason("Unreadable .xls statement: Unsupported format, or corrupt file")
-    assert "support" in failure_reason("something else")
-
-
-def test_upload_is_idempotent_and_adds_links(client):
-    first = upload(client, cps=("CP-1",)).json()
-    second = upload(client, cps=("CP-2",)).json()
-    assert first["duplicate"] is False and second["duplicate"] is True  # the UI says it was not read again
-    same = ("documentId", "jobId", "fileName", "status")  # uploadedAt: SQL Server stores it to a coarser precision
-    assert [second[k] for k in same] == [first[k] for k in same]
-    doc = client.get(f"/dps/v1/documents/{first['documentId']}", headers=h()).json()
-    assert doc["cpIds"] == ["CP-1", "CP-2"]
-
-
-def test_upload_validation(client):
-    assert upload(client, name="x.exe").json()["code"] == "UNSUPPORTED_FILE_TYPE"
-    assert upload(client, data=b"").json()["code"] == "EMPTY_FILE"
-    assert upload(client, data=b"x" * (1024 * 1024 + 1)).status_code == 413
-    assert upload(client, type_="FINANCIAL_STATEMENT").json()["code"] == "AS_OF_DATE_REQUIRED"
-    assert upload(client, cps=(" ",)).json()["code"] == "CP_REQUIRED"
-    assert upload(client, type_="BOGUS").status_code == 400
-    assert upload(client, name="fs.csv", data=b"Revenue,100").json()["code"] == "AGREEMENT_NOT_PDF"
-    assert upload(client, name="fake.pdf", data=b"Revenue,100").json()["code"] == "NOT_A_PDF"
-
-
-def test_upload_to_foreign_cp_is_hidden(client):
-    r = upload(client, cps=("CP-9",))
-    assert r.status_code == 404
-    assert r.json()["code"] == "CP_NOT_FOUND"
-
-
-def test_statement_and_evidence_upload(client):
-    st = upload(client, type_="FINANCIAL_STATEMENT", name="fs.xlsx", data=b"PK\x03\x04data",
-                as_of="2026-03-31").json()
-    job = client.get(f"/dps/v1/jobs/{st['jobId']}", headers=h()).json()
-    assert job["flow"] == "STATEMENT_PROCESSING"
-    ev = upload(client, type_="EVIDENCE", name="cert.pdf", data=PDF + b"ev").json()
-    assert ev["jobId"] is None
-    assert client.get(f"/dps/v1/documents/{ev['documentId']}", headers=h()).json()["status"] == "PUBLISHED"
-
-
-def test_list_documents_scoped(client):
-    upload(client, cps=("CP-1",))
-    assert len(client.get("/dps/v1/documents", params={"cpId": "CP-1"}, headers=h()).json()) == 1
-    assert client.get("/dps/v1/documents", params={"cpId": "CP-1"},
-                      headers=h("rm-other")).status_code == 404
-
-
-def test_other_user_cannot_read_document_or_job(client):
-    body = upload(client).json()
-    assert client.get(f"/dps/v1/documents/{body['documentId']}", headers=h("rm-other")).status_code == 404
-    assert client.get(f"/dps/v1/jobs/{body['jobId']}", headers=h("rm-other")).status_code == 404
-    assert client.get("/dps/v1/documents/nope", headers=h()).status_code == 404
-    assert client.get("/dps/v1/jobs/nope", headers=h()).status_code == 404
-
-
-def test_auditor_can_read_but_not_write(client):
-    body = upload(client).json()
-    assert client.get(f"/dps/v1/documents/{body['documentId']}", headers=h("aud", "AUDITOR")).status_code == 200
-    assert upload(client, cps=("CP-1",), data=PDF + b"2", headers=h("aud", "AUDITOR")).status_code == 404
-
-
-# ---------- links ----------
-
-def test_link_and_unlink(client):
-    body = upload(client, cps=("CP-1",)).json()
-    doc_id = body["documentId"]
-    linked = client.post(f"/dps/v1/documents/{doc_id}/links", json={"cpIds": ["CP-2"]}, headers=h()).json()
-    assert linked["cpIds"] == ["CP-1", "CP-2"]
-    assert client.post(f"/dps/v1/documents/{doc_id}/links", json={"cpIds": ["CP-9"]},
-                       headers=h()).status_code == 404
-    unlinked = client.request("DELETE", f"/dps/v1/documents/{doc_id}/links", json={"cpIds": ["CP-2"]},
-                              headers=h()).json()
-    assert unlinked["cpIds"] == ["CP-1"]
-
-
-# ---------- terms / recommendations (C1) ----------
-
-def add_term(app, doc_id, **kw):
-    with session(app) as s:
-        t = ExtractedTerm(document_id=doc_id, metric_raw=kw.pop("metric_raw", "DSCR"), **kw)
-        s.add(t)
-        s.commit()
-        return t.id
-
-
-def test_recommendations_only_published_and_linked(client, app):
-    doc_id = upload(client, cps=("CP-1",)).json()["documentId"]
-    add_term(app, doc_id, covenant_master_id="c-1", expression="DSCR >= 1.25", status="PUBLISHED",
-             confidence=0.9, page=14, quote="not less than 1.25x", frequency="QUARTERLY")
-    add_term(app, doc_id, metric_raw="EBITDA_TO_EMI", expression="EBITDA / EMI_AMOUNT >= 1.20",
-             status="PUBLISHED", confidence=0.8)
-    add_term(app, doc_id, covenant_master_id="c-2", expression="X >= 1", status="NEEDS_REVIEW")
-    recs = client.post("/dps/v1/recommendations", json={"cpId": "CP-1"}, headers=h()).json()
-    assert len(recs) == 2
-    assert recs[0]["covenantMasterId"] == "c-1"
-    assert recs[0]["source"]["page"] == 14 and recs[0]["recommendedExpression"] == "DSCR >= 1.25"
-    assert recs[1]["covenantMasterId"] is None
-    assert recs[1]["customCovenant"]["assessmentType"] == "AUTO"
-    assert client.post("/dps/v1/recommendations", json={"cpId": "CP-2"}, headers=h()).json() == []
-    assert client.post("/dps/v1/recommendations", json={"cpId": "CP-1"},
-                       headers=h("rm-other")).status_code == 404
-
-
-def test_a_manual_custom_covenant_reaches_core_with_its_name_and_limit_in_words(client, app):
-    doc_id = upload(client, cps=("CP-1",)).json()["documentId"]
-    add_term(app, doc_id, metric_raw="LOAN_TO_VALUE", name="Maximum Loan to Value", operator="<=", threshold=75.0,
-             unit="PERCENT", status="PUBLISHED", confidence=0.7, page=10, quote="of 75.00% or less")
-    [rec] = client.post("/dps/v1/recommendations", json={"cpId": "CP-1"}, headers=h()).json()
-    assert rec["customCovenant"] == {
-        "name": "Maximum Loan to Value", "assessmentType": "MANUAL",
-        "definition": "Maximum Loan to Value must be at most 75%. No statement line gives this figure: a person "
-                      "enters it each period (agreement page 10)."}
-    [term] = client.get(f"/dps/v1/documents/{doc_id}/terms", headers=h()).json()
-    assert term["name"] == "Maximum Loan to Value"
-
-
-def test_an_amendment_replaces_the_terms_it_restates_and_keeps_the_rest(client, app):
-    original = upload(client, cps=("CP-1",)).json()["documentId"]
-    add_term(app, original, covenant_master_id="c-1", expression="DSCR >= 1.25", status="PUBLISHED")
-    add_term(app, original, covenant_master_id="c-2", expression="LEVERAGE <= 3.5", status="PUBLISHED")
-    add_term(app, original, metric_raw="Asset Disposal Limit", expression=None, status="PUBLISHED")
-    first = client.post("/dps/v1/documents", data={"cpIds": ["CP-1"], "type": "LOAN_AGREEMENT",
-                                                  "amendsDocumentId": original},
-                        files={"file": ("amendment-1.pdf", PDF + b"a1", "application/pdf")}, headers=h()).json()
-    add_term(app, first["documentId"], covenant_master_id="c-1", expression="DSCR >= 1.10", status="PUBLISHED")
-    add_term(app, first["documentId"], metric_raw="asset disposal limit", expression=None, status="PUBLISHED")
-    second = client.post("/dps/v1/documents", data={"cpIds": ["CP-1"], "type": "LOAN_AGREEMENT",
-                                                   "amendsDocumentId": first["documentId"]},
-                         files={"file": ("amendment-2.pdf", PDF + b"a2", "application/pdf")}, headers=h()).json()
-    add_term(app, second["documentId"], covenant_master_id="c-2", expression="LEVERAGE <= 4.0", status="PUBLISHED")
-
-    recs = client.post("/dps/v1/recommendations", json={"cpId": "CP-1"}, headers=h()).json()
-
-    by_covenant = {r["covenantMasterId"] or r["customCovenant"]["name"].lower(): r for r in recs}
-    assert len(recs) == 3 and set(by_covenant) == {"c-1", "c-2", "asset disposal limit"}
-    assert by_covenant["c-1"]["recommendedExpression"] == "DSCR >= 1.10"
-    assert by_covenant["c-1"]["source"]["documentId"] == first["documentId"]
-    assert by_covenant["c-2"]["recommendedExpression"] == "LEVERAGE <= 4.0"  # through the chain
-    assert by_covenant["asset disposal limit"]["source"]["documentId"] == first["documentId"]
-
-
-def test_term_review_flow(client, app):
-    doc_id = upload(client).json()["documentId"]
-    tid = add_term(app, doc_id, expression="DSCR >= 1.2", status="NEEDS_REVIEW", issues_json='["quote not found"]')
-    terms = client.get(f"/dps/v1/documents/{doc_id}/terms", headers=h()).json()
-    assert terms[0]["issues"] == ["quote not found"]
-    edited = client.patch(f"/dps/v1/terms/{tid}", json={"action": "EDIT", "expression": "DSCR >= 1.25",
-                                                          "covenantMasterId": "c-1"}, headers=h()).json()
-    assert edited["method"] == "MANUAL" and edited["status"] == "NEEDS_REVIEW"
-    # The level shown beside the rule follows the edited expression (before: the old 1.2 stayed).
-    assert (edited["operator"], edited["threshold"]) == (">=", 1.25)
-    long = client.patch(f"/dps/v1/terms/{tid}", json={"action": "EDIT", "expression": "x" * 2001}, headers=h())
-    assert long.status_code == 400
-    approved = client.patch(f"/dps/v1/terms/{tid}", json={"action": "APPROVE", "note": "checked p.14"},
-                            headers=h()).json()
-    assert approved["status"] == "PUBLISHED" and approved["reviewedBy"] == "rm-anil"
-    rejected = client.patch(f"/dps/v1/terms/{tid}", json={"action": "REJECT"}, headers=h()).json()
-    assert rejected["status"] == "REJECTED"
-    assert client.patch("/dps/v1/terms/none", json={"action": "REJECT"}, headers=h()).status_code == 404
-    assert client.patch(f"/dps/v1/terms/{tid}", json={"action": "REJECT"},
-                        headers=h("rm-other")).status_code == 404
-
-
-# ---------- jobs ----------
-
-def test_resume_only_from_needs_review(client, app):
-    body = upload(client).json()
-    assert client.post(f"/dps/v1/jobs/{body['jobId']}/resume", headers=h()).status_code == 409
-    from dps.models import Job
-    with session(app) as s:
-        s.get(Job, body["jobId"]).status = "NEEDS_REVIEW"
-        s.commit()
-    r = client.post(f"/dps/v1/jobs/{body['jobId']}/resume", headers=h())
-    assert r.status_code == 202 and r.json()["status"] == "QUEUED"
-    assert client.post("/dps/v1/jobs/none/resume", headers=h()).status_code == 404
-
-
-# ---------- values (C2) ----------
+# ---------- the bank app's data-source contract (/api/data/values) ----------
 
 def add_value(app, cp, key, value, as_of, superseded=False, doc_id=None, unit="AED mn"):
     with session(app) as s:
@@ -339,134 +85,52 @@ def test_values_point_in_time_and_window(client, app):
     add_value(app, "CP-1", "INTEREST_PAID", 41.0, date(2026, 3, 31))
     add_value(app, "CP-1", "EBITDA", 230.0, date(2026, 6, 30))
 
-    pit = client.post("/dps/v1/values", json={"cpId": "CP-1", "to": "2026-03-31",
-                                              "keys": ["EBITDA", "INTEREST_PAID", "CASH"]}, headers=h()).json()
+    pit = client.post("/api/data/values", json={"cpId": "CP-1", "to": "2026-03-31",
+                                                "keys": ["EBITDA", "INTEREST_PAID", "CASH"]}, headers=h()).json()
     assert pit["points"] == [{"asOfDate": "2026-03-31", "values": {"EBITDA": 210.0, "INTEREST_PAID": 41.0}}]
     assert pit["missingKeys"] == ["CASH"]
     # Core reads this as java.time.Instant, which needs an explicit offset (SQLite returns naive values).
     assert datetime.fromisoformat(pit["sourceChangedAt"]).utcoffset() == timedelta(0)
 
-    win = client.post("/dps/v1/values", json={"cpId": "CP-1", "from": "2025-10-01", "to": "2026-03-31",
-                                              "keys": ["EBITDA"]}, headers=h()).json()
+    win = client.post("/api/data/values", json={"cpId": "CP-1", "from": "2025-10-01", "to": "2026-03-31",
+                                                "keys": ["EBITDA"]}, headers=h()).json()
     assert [p["asOfDate"] for p in win["points"]] == ["2025-12-31", "2026-03-31"]
 
-    empty = client.post("/dps/v1/values", json={"cpId": "CP-2", "to": "2026-03-31", "keys": ["EBITDA"]},
+    empty = client.post("/api/data/values", json={"cpId": "CP-2", "to": "2026-03-31", "keys": ["EBITDA"]},
                         headers=h()).json()
     assert empty == {"cpId": "CP-2", "points": [], "missingKeys": ["EBITDA"], "sourceChangedAt": None}
 
 
 def test_values_service_role_and_scope(client, app):
     add_value(app, "CP-1", "EBITDA", 1.0, date(2026, 3, 31))
-    assert client.post("/dps/v1/values", json={"cpId": "CP-1", "to": "2026-03-31", "keys": ["EBITDA"]},
+    assert client.post("/api/data/values", json={"cpId": "CP-1", "to": "2026-03-31", "keys": ["EBITDA"]},
                        headers=h("core-svc", "SERVICE")).status_code == 200
-    assert client.post("/dps/v1/values", json={"cpId": "CP-1", "to": "2026-03-31", "keys": ["EBITDA"]},
+    assert client.post("/api/data/values", json={"cpId": "CP-1", "to": "2026-03-31", "keys": ["EBITDA"]},
                        headers=h("rm-other")).status_code == 404
-    assert client.post("/dps/v1/values", json={"cpId": "CP-1", "keys": []}, headers=h()).status_code == 400
 
 
-def test_document_values_listing(client, app):
-    doc_id = upload(client, type_="FINANCIAL_STATEMENT", name="fs.pdf", data=PDF + b"fs",
-                    as_of="2026-03-31").json()["documentId"]
-    add_value(app, "CP-1", "EBITDA", 210.0, date(2026, 3, 31), doc_id=doc_id)
-    vals = client.get(f"/dps/v1/documents/{doc_id}/values", headers=h()).json()
-    assert vals[0]["source"] == {"documentId": doc_id, "page": 3, "cell": None}
-
-
-# ---------- manual values (FR-20) ----------
-
-def test_manual_value_requires_approver_and_supersedes(client, app):
-    body = {"asOfDate": "2026-03-31", "key": "EBITDA", "value": 205.0, "unit": "AED mn", "note": "From MIS"}
-    assert client.post("/dps/v1/cps/CP-1/manual-values", json=body, headers=h()).status_code == 403
-    assert client.post("/dps/v1/cps/CP-2/manual-values", json=body,
-                       headers=h("approver-1", "APPROVER")).status_code == 404
-    add_value(app, "CP-1", "EBITDA", 210.0, date(2026, 3, 31))
-    r = client.post("/dps/v1/cps/CP-1/manual-values", json=body, headers=h("approver-1", "APPROVER"))
-    assert r.status_code == 201
-    assert r.json()["sourceType"] == "USER" and r.json()["enteredBy"] == "approver-1"
-    pit = client.post("/dps/v1/values", json={"cpId": "CP-1", "to": "2026-03-31", "keys": ["EBITDA"]},
-                      headers=h()).json()
-    assert pit["points"][0]["values"]["EBITDA"] == 205.0
-    from sqlalchemy import select
-
-    from dps.models import AuditEvent, EventOutbox
-    with session(app) as s:
-        events = list(s.scalars(select(EventOutbox)))
-        assert len(events) == 1 and '"dataSourceId": "ds-dps"' in events[0].payload_json
-        assert s.scalars(select(AuditEvent).where(AuditEvent.action == "MANUAL_VALUE")).first() is not None
-    assert client.post("/dps/v1/cps/CP-1/manual-values", json={**body, "note": "x"},
-                       headers=h("approver-1", "APPROVER")).status_code == 400
-
-
-def test_core_is_never_served_two_currencies_at_once(client, app):
-    """An older period kept in INR crore beside the loan's newer LKR figures: only LKR million is served."""
-    add_value(app, "CP-1", "TOTAL_DEBT", 40.0, date(2025, 3, 31), unit="INR_CR")
-    add_value(app, "CP-1", "EBITDA", 800.0, date(2026, 3, 31), unit="LKR_MN")
-    add_value(app, "CP-1", "DSCR_INPUT", 1.4, date(2025, 3, 31), unit="x")
-    pit = client.post("/dps/v1/values", json={"cpId": "CP-1", "to": "2026-03-31",
-                                             "keys": ["EBITDA", "TOTAL_DEBT", "DSCR_INPUT"]}, headers=h()).json()
-    served = {k: v for p in pit["points"] for k, v in p["values"].items()}
-    assert served == {"EBITDA": 800.0, "DSCR_INPUT": 1.4} and pit["missingKeys"] == ["TOTAL_DEBT"]
-
-
-def test_a_manual_amount_in_another_money_unit_than_the_periods_figures_is_refused(client, app):
-    """Money for any country: an INR crore figure among a period's LKR million figures would mix currencies."""
-    add_value(app, "CP-1", "EBITDA", 800.0, date(2026, 3, 31), unit="LKR_MN")
-    approver = h("approver-1", "APPROVER")
-    body = {"asOfDate": "2026-03-31", "key": "TOTAL_DEBT", "value": 4.0, "unit": "INR_CR", "note": "From MIS"}
-    r = client.post("/dps/v1/cps/CP-1/manual-values", json=body, headers=approver)
-    assert (r.status_code, r.json()["code"]) == (409, "MIXED_UNITS")
-    ok = client.post("/dps/v1/cps/CP-1/manual-values", json={**body, "unit": "LKR_MN", "currency": "INR"},
-                     headers=approver)
-    assert ok.status_code == 201 and ok.json()["currency"] == "LKR"  # the unit decides the currency
-
-
-# ---------- AI suggestions (C3) ----------
-
-def test_ai_suggestions_service_only(client):
-    req = {"cpId": "CP-1", "covenants": []}
-    assert client.post("/dps/v1/ai-suggestions", json=req, headers=h()).status_code == 403
-    assert client.post("/dps/v1/ai-suggestions", json=req, headers=h("core", "SERVICE")).json() == []
-
-
-def test_document_model_active_links(app):
-    with session(app) as s:
-        d = Document(type="LOAN_AGREEMENT", file_name="a.pdf", storage_path="x", sha256="0" * 64, size_bytes=1,
-                     uploaded_by="u")
-        s.add(d)
-        s.commit()
-        assert d.active_cp_ids() == []
-
-
-def test_document_file_is_served_inline_to_people_with_access(client):
-    doc_id = upload(client).json()["documentId"]
-    r = client.get(f"/dps/v1/documents/{doc_id}/file", headers=h())
-    assert r.status_code == 200 and r.content == PDF
-    assert r.headers["content-type"] == "application/pdf"
-    assert r.headers["content-disposition"].startswith("inline")
-    assert client.get(f"/dps/v1/documents/{doc_id}/file", headers=h("rm-other")).status_code == 404
-
-
-def test_document_file_missing_on_disk(client, app):
-    doc_id = upload(client).json()["documentId"]
-    with app.state.db.session_factory() as s:
-        s.get(Document, doc_id).storage_path = "zz/gone.pdf"
-        s.commit()
-    assert client.get(f"/dps/v1/documents/{doc_id}/file", headers=h()).status_code == 404
-
+# ---------- job operations ----------
 
 def test_job_operations_for_support(client, app):
-    doc_id = upload(client).json()["documentId"]
+    with session(app) as s:
+        doc = Document(type="LOAN_AGREEMENT", file_name="agreement.pdf", storage_path="x", sha256="a" * 64,
+                       size_bytes=1, uploaded_by="rm-anil")
+        s.add(doc)
+        s.flush()
+        s.add(DocumentCpLink(document_id=doc.id, cp_id="CP-1", linked_by="rm-anil"))
+        job = Job(document_id=doc.id, flow="SKILL_PACK", job_type="EXTRACT_AGREEMENT")
+        s.add(job)
+        s.commit()
+        job_id = job.id
     support = h("support-1", "SUPPORT")
     assert client.get("/dps/v1/jobs", headers=h()).status_code == 403
     jobs = client.get("/dps/v1/jobs", headers=support).json()
     assert len(jobs) == 1 and jobs[0]["status"] == "QUEUED"
     assert jobs[0]["fileName"] == "agreement.pdf" and jobs[0]["cpIds"] == ["CP-1"]  # which upload the job reads
-    job_id = jobs[0]["id"]
     assert client.post(f"/dps/v1/jobs/{job_id}/retry", headers=support).status_code == 409
     with app.state.db.session_factory() as s:
         j = s.get(Job, job_id)
         j.status, j.attempts, j.error = "FAILED", 3, "boom"
-        s.get(Document, doc_id).status = "FAILED"
         s.commit()
     assert [j["id"] for j in client.get("/dps/v1/jobs?status=failed", headers=support).json()] == [job_id]
     assert client.get("/dps/v1/jobs?status=DONE", headers=support).json() == []
@@ -474,48 +138,3 @@ def test_job_operations_for_support(client, app):
     assert (retried["status"], retried["attempts"], retried["error"]) == ("QUEUED", 0, None)
     assert client.post("/dps/v1/jobs/nope/retry", headers=support).status_code == 404
     assert client.post(f"/dps/v1/jobs/{job_id}/retry", headers=h()).status_code == 403
-
-
-def test_support_and_auditor_read_but_never_change_a_cp(client, app):
-    doc_id = upload(client).json()["documentId"]
-    tid = add_term(app, doc_id, expression="DSCR >= 1.2", status="NEEDS_REVIEW")
-    for who in (h("support-1", "SUPPORT"), h("aud-1", "AUDITOR")):
-        assert client.get("/dps/v1/documents?cpId=CP-1", headers=who).status_code == 200
-        assert client.get(f"/dps/v1/documents/{doc_id}/terms", headers=who).status_code == 200
-        assert upload(client, headers=who).status_code == 404
-        assert client.post(f"/dps/v1/documents/{doc_id}/links", json={"cpIds": ["CP-2"]},
-                           headers=who).status_code == 404
-        assert client.request("DELETE", f"/dps/v1/documents/{doc_id}/links", json={"cpIds": ["CP-1"]},
-                              headers=who).status_code == 404
-        assert client.patch(f"/dps/v1/terms/{tid}", json={"action": "APPROVE"}, headers=who).status_code == 404
-        assert client.post(f"/dps/v1/documents/{doc_id}/remove", json={"reason": "x"}, headers=who).status_code == 403
-
-
-def test_rate_limits_uploads_per_user(client, app):
-    app.state.settings.uploads_per_minute = 2
-    try:
-        assert upload(client, name="a.pdf", data=PDF + b"1").status_code == 202
-        assert upload(client, name="b.pdf", data=PDF + b"2").status_code == 202
-        limited = upload(client, name="c.pdf", data=PDF + b"3")
-        assert limited.status_code == 429 and limited.json()["code"] == "RATE_LIMITED"
-        assert limited.json()["details"]["retryAfterSeconds"] >= 1
-        assert upload(client, name="d.pdf", data=PDF + b"4", headers=h("wrm-meera", "APPROVER")).status_code != 429
-    finally:
-        app.state.settings.uploads_per_minute = 30
-
-
-def test_rate_limiter_window_and_switch_off():
-    from dps.api.ratelimit import RateLimiter
-    from dps.errors import ApiError
-
-    now = [0.0]
-    lim = RateLimiter(clock=lambda: now[0])
-    lim.check("u", "ask", 1)
-    with pytest.raises(ApiError) as ex:
-        lim.check("u", "ask", 1)
-    assert ex.value.status == 429
-    lim.check("u", "upload", 1)
-    now[0] = 61.0
-    lim.check("u", "ask", 1)
-    for _ in range(100):
-        lim.check("u", "ask", 0)

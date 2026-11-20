@@ -139,7 +139,8 @@ class Job(Base):
 
     id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
     document_id: Mapped[str] = mapped_column(ForeignKey("dps_document.id"))
-    flow: Mapped[str] = mapped_column(Varchar(32))  # AGREEMENT_INTAKE | STATEMENT_PROCESSING
+    # SKILL_PACK | ANALYZE (rows queued before the one pipeline: AGREEMENT_INTAKE | STATEMENT_PROCESSING)
+    flow: Mapped[str] = mapped_column(Varchar(32))
     # QUEUED | RUNNING | RETRY_WAIT | NEEDS_REVIEW | DONE | FAILED | DEAD | CANCELLED
     status: Mapped[str] = mapped_column(Varchar(16), default="QUEUED")
     pool: Mapped[str] = mapped_column(Varchar(16), default="STANDARD")  # STANDARD | HEAVY

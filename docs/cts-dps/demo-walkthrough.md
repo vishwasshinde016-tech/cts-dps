@@ -382,7 +382,7 @@ The second run prints the **same job ID** with `(duplicate: DPS already has a jo
 
 **Inside:**
 1. Steps 3.3 to 3.5 are the same: store, job, claim, inspect, parse.
-2. The flow is the Statement Processing Flow, [`dps/src/dps/flows/statement.py:133`](../../dps/src/dps/flows/statement.py#L133). It finds each statement line (cash, inventory, total assets, long-term debt and the rest) with its value and unit.
+2. The reader is the statement_lines skill's statement reader, [`dps/src/dps/skills/statement_lines/reader.py:158`](../../dps/src/dps/skills/statement_lines/reader.py#L158). It finds each statement line (cash, inventory, total assets, long-term debt and the rest) with its value and unit.
 3. It **derives** lines the covenants need. Here TOTAL_DEBT = LT_DEBT 2342.93 + ST_DEBT 618.32 = **2961.25**, and NET_DEBT = 2961.25 − CASH 487.34 = **2473.91** (INR crore).
 4. Every expected line that is **not** found is listed (`LINES_NOT_FOUND`, [`dps/src/dps/catalog.py:65`](../../dps/src/dps/catalog.py#L65)), so a missing line is never silently zero.
 5. Figures that differ from an earlier statement for the same CP and period are flagged `RESTATED`.

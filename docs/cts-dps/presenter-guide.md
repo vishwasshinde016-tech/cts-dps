@@ -679,12 +679,12 @@ On the boards it appears only as an entry point; no flow is drawn for it. We fol
 
 | Step | Code |
 |---|---|
-| Statement job (`EXTRACT_STATEMENT`) | [`dps/src/dps/flows/statement.py`](../../dps/src/dps/flows/statement.py); readers in [`dps/src/dps/extraction/statement.py`](../../dps/src/dps/extraction/statement.py), `statement_pdf.py`, `statement_pages.py` |
+| Statement job (`EXTRACT_STATEMENT`) | [`dps/src/dps/skills/statement_lines/reader.py`](../../dps/src/dps/skills/statement_lines/reader.py); readers in [`dps/src/dps/extraction/statement.py`](../../dps/src/dps/extraction/statement.py), `statement_pdf.py`, `statement_pages.py` |
 | Compliance certificate job (`EXTRACT_CERTIFICATE`) | [`dps/src/dps/skills/certificate/`](../../dps/src/dps/skills/certificate) |
 | Check the period, legal entity, consolidated or standalone basis, currency and units against the cycle | [`dps/src/dps/analyze/obligations.py`](../../dps/src/dps/analyze/obligations.py) (`PERIOD_MISMATCH`, `ENTITY_MISMATCH` …) |
 | Restated figures compared with the approved ones | [`dps/src/dps/skills/runner.py`](../../dps/src/dps/skills/runner.py) (`RESTATED`) |
 | Every statement line not found is listed | [`dps/src/dps/catalog.py`](../../dps/src/dps/catalog.py) `lines_not_found` → `LINES_NOT_FOUND` |
-| Approved figures served to Spring as a data source | `POST /api/data/values` in [`dps/src/dps/api/documents.py`](../../dps/src/dps/api/documents.py) |
+| Approved figures served to Spring as a data source | `POST /api/data/values` in [`dps/src/dps/api/evidence.py`](../../dps/src/dps/api/evidence.py) |
 
 ### 2.4 Every job type
 
@@ -692,10 +692,10 @@ On the boards it appears only as an entry point; no flow is drawn for it. We fol
 |---|---|---|---|
 | `ANALYZE` | DMS, before accepting a file | [`dps/src/dps/analyze/analysis.py`](../../dps/src/dps/analyze/analysis.py) | type, identifiers, period, legibility, key pages |
 | `ONBOARD` | Spring (onboarding board) | [`dps/src/dps/flows/skill_job.py`](../../dps/src/dps/flows/skill_job.py) + `skills/runner.py` `run_onboard` | classification + covenants + schedule terms |
-| `EXTRACT_AGREEMENT` | Spring | [`dps/src/dps/flows/intake.py`](../../dps/src/dps/flows/intake.py) (Agreement Intake Flow) | covenants (with the same ledger) |
+| `EXTRACT_AGREEMENT` | Spring | [`dps/src/dps/skills/runner.py`](../../dps/src/dps/skills/runner.py) (covenants skill (skills flow)) | covenants (with the same ledger) |
 | `EXTRACT_AMENDMENT` | Spring (amendment board) | [`flows/skill_job.py`](../../dps/src/dps/flows/skill_job.py) + [`skills/amendment_diff/`](../../dps/src/dps/skills/amendment_diff) | changes + amended set |
 | `EXTRACT_SANCTION` | Spring | [`flows/skill_job.py`](../../dps/src/dps/flows/skill_job.py) + [`skills/sanction/`](../../dps/src/dps/skills/sanction) | sanction terms and covenants |
-| `EXTRACT_STATEMENT` | Spring (assessment) | [`dps/src/dps/flows/statement.py`](../../dps/src/dps/flows/statement.py) | statement lines with cells |
+| `EXTRACT_STATEMENT` | Spring (assessment) | [`dps/src/dps/skills/statement_lines/reader.py`](../../dps/src/dps/skills/statement_lines/reader.py) | statement lines with cells |
 | `EXTRACT_CERTIFICATE` | Spring (assessment) | [`flows/skill_job.py`](../../dps/src/dps/flows/skill_job.py) + [`skills/certificate/`](../../dps/src/dps/skills/certificate) | certified figures, UDIN, signatory |
 | `DRAFT_COMMENTARY` | Spring (cycle outcome) | [`flows/skill_job.py`](../../dps/src/dps/flows/skill_job.py) + [`skills/commentary/`](../../dps/src/dps/skills/commentary) | draft text (never decides compliance) |
 
@@ -710,13 +710,13 @@ What a job does from submit to result. Open each file as you go.
 | 1 | Submit | Spring calls `POST /dps/v1/jobs`. The request is validated, the stored file's SHA-256 is checked as a stream, a duplicate returns the existing job, and a full queue returns 429 | [`dps/src/dps/api/jobs.py:312`](../../dps/src/dps/api/jobs.py#L312) `submit_job` → [`:166`](../../dps/src/dps/api/jobs.py#L166) `validate_job` → [`:268`](../../dps/src/dps/api/jobs.py#L268) `_input_key` → [`:240`](../../dps/src/dps/api/jobs.py#L240) `create_job` |
 | 2 | Queue | A row in `dps_job` (state `QUEUED`) and the event `dps.job.accepted` | [`dps/src/dps/api/jobs.py:240`](../../dps/src/dps/api/jobs.py#L240) `create_job`, [`dps/src/dps/feed.py:39`](../../dps/src/dps/feed.py#L39) `emit_for_job` |
 | 3 | Claim | The worker loop claims one job (compare-and-set), starts the heartbeat and fences every write by attempt | [`dps/src/dps/worker.py:131`](../../dps/src/dps/worker.py#L131) `run_once` → [`:195`](../../dps/src/dps/worker.py#L195) `_process` → [`:361`](../../dps/src/dps/worker.py#L361) `_start_heartbeat`; [`dps/src/dps/jobs.py:85`](../../dps/src/dps/jobs.py#L85) `claim`, [`:162`](../../dps/src/dps/jobs.py#L162) `renew_lease`, [`:54`](../../dps/src/dps/jobs.py#L54) `guard_attempt` |
-| 4 | Route | The job goes to the right path by flow: AGREEMENT_INTAKE, STATEMENT_PROCESSING, SKILL_PACK, ANALYZE | [`dps/src/dps/worker.py:211`](../../dps/src/dps/worker.py#L211) `_run`, [`:272`](../../dps/src/dps/worker.py#L272) `_analyze`; job type to flow table [`dps/src/dps/api/jobs.py:38`](../../dps/src/dps/api/jobs.py#L38) `JOB_TYPES` |
+| 4 | Route | The job goes to the right path by flow: SKILL_PACK (every document job) or ANALYZE | [`dps/src/dps/worker.py:211`](../../dps/src/dps/worker.py#L211) `_run`, [`:272`](../../dps/src/dps/worker.py#L272) `_analyze`; job type to flow table [`dps/src/dps/api/jobs.py:38`](../../dps/src/dps/api/jobs.py#L38) `JOB_TYPES` |
 | 5 | Fetch | Read the bytes from the DMS store and check the SHA-256 | [`dps/src/dps/worker.py:330`](../../dps/src/dps/worker.py#L330) `_ingest` → [`dps/src/dps/ingest/pipeline.py:48`](../../dps/src/dps/ingest/pipeline.py#L48) `read` |
 | 6 | Inspect | Real type vs name; encrypted, corrupt, macros, scripts, zip bombs, size and page limits | [`dps/src/dps/ingest/inspect.py:63`](../../dps/src/dps/ingest/inspect.py#L63) `inspect` |
 | 7 | Parse (sandbox) | A child process with CPU, memory and time limits and no network | [`dps/src/dps/ingest/pipeline.py:56`](../../dps/src/dps/ingest/pipeline.py#L56) `page_model` → [`dps/src/dps/parse/sandbox.py:157`](../../dps/src/dps/parse/sandbox.py#L157) `run` |
 | 8 | Page model | PDF text (pypdf), OCR for pages with no text (RapidOCR), boxes (pdfplumber); Excel and Word readers | [`dps/src/dps/parse/page_model.py:30`](../../dps/src/dps/parse/page_model.py#L30) `build` → [`:53`](../../dps/src/dps/parse/page_model.py#L53) `build_pdf`, [`:142`](../../dps/src/dps/parse/page_model.py#L142) `build_xlsx`, [`:240`](../../dps/src/dps/parse/page_model.py#L240) `build_docx`; [`dps/src/dps/parse/engine.py:127`](../../dps/src/dps/parse/engine.py#L127) `ParserEngine`, [`:71`](../../dps/src/dps/parse/engine.py#L71) `RapidOcrBackend`, [`:207`](../../dps/src/dps/parse/engine.py#L207) `HeavyEngine` |
 | 9 | Segment | Split a bundled PDF into its documents | [`dps/src/dps/parse/segment.py:46`](../../dps/src/dps/parse/segment.py#L46) `segment` |
-| 10 | Flow | The CrewAI Flow per job; state saved per step (resume after review) | [`dps/src/dps/flows/skill_job.py:27`](../../dps/src/dps/flows/skill_job.py#L27) `SkillJobFlow` ([`:41`](../../dps/src/dps/flows/skill_job.py#L41) `run_skills`, [`:46`](../../dps/src/dps/flows/skill_job.py#L46) `save_result`); [`dps/src/dps/flows/intake.py:70`](../../dps/src/dps/flows/intake.py#L70); [`dps/src/dps/flows/statement.py:133`](../../dps/src/dps/flows/statement.py#L133); [`dps/src/dps/flows/persistence.py:22`](../../dps/src/dps/flows/persistence.py#L22) |
+| 10 | Flow | The CrewAI Flow per job; state saved per step (resume after review) | [`dps/src/dps/flows/skill_job.py:27`](../../dps/src/dps/flows/skill_job.py#L27) `SkillJobFlow` ([`:41`](../../dps/src/dps/flows/skill_job.py#L41) `run_skills`, [`:46`](../../dps/src/dps/flows/skill_job.py#L46) `save_result`); [`dps/src/dps/skills/runner.py:391`](../../dps/src/dps/skills/runner.py#L391); [`dps/src/dps/skills/statement_lines/reader.py:158`](../../dps/src/dps/skills/statement_lines/reader.py#L158); [`dps/src/dps/flows/persistence.py:22`](../../dps/src/dps/flows/persistence.py#L22) |
 | 11 | Onboard entry | Classify, pick the pack, extract, identifiers, cycle checks | [`dps/src/dps/skills/runner.py:611`](../../dps/src/dps/skills/runner.py#L611) `run_onboard`, pack table [`:608`](../../dps/src/dps/skills/runner.py#L608) `ONBOARD_PACKS` |
 | 12 | Classify | Rules score each type; agent second opinion only when unsure | [`dps/src/dps/analyze/classify.py:294`](../../dps/src/dps/analyze/classify.py#L294) `classify` → [`:134`](../../dps/src/dps/analyze/classify.py#L134) `rule_scores` → [`:193`](../../dps/src/dps/analyze/classify.py#L193) `decide_rules` |
 | 13 | Identify | Borrower, facility, account, period, currency, units, issuer; matched in Spring | [`dps/src/dps/analyze/identify.py:153`](../../dps/src/dps/analyze/identify.py#L153) `find_identifiers`, [`:271`](../../dps/src/dps/analyze/identify.py#L271) `match` |
@@ -740,7 +740,7 @@ What a job does from submit to result. Open each file as you go.
 | 31 | Review | A person accepts, edits or rejects each field; a new run is saved | [`dps/src/dps/api/review.py:141`](../../dps/src/dps/api/review.py#L141) `submit_review` |
 
 **Agreement Intake flow** (`EXTRACT_AGREEMENT`):
-- [`dps/src/dps/flows/intake.py:90`](../../dps/src/dps/flows/intake.py#L90) `parse_document`;
+- [`dps/src/dps/skills/runner.py:391`](../../dps/src/dps/skills/runner.py#L391) `parse_document`;
 - `:103` `extract` (rules + safety net [`dps/src/dps/extraction/safety_net.py:136`](../../dps/src/dps/extraction/safety_net.py#L136), then the AI reader [`dps/src/dps/extraction/agreement_ai.py:296`](../../dps/src/dps/extraction/agreement_ai.py#L296) `read_with_skill`);
 - `:127` `_account_for_every_duty` (ledger and second read);
 - `:188` `normalize_terms`;
@@ -749,7 +749,7 @@ What a job does from submit to result. Open each file as you go.
 
 **Amendment rules:** [`dps/src/dps/skills/amendment_diff/rules.py:56`](../../dps/src/dps/skills/amendment_diff/rules.py#L56) `rules`, [`:145`](../../dps/src/dps/skills/amendment_diff/rules.py#L145) `amended_set`.
 
-**Statement flow:** [`dps/src/dps/flows/statement.py:447`](../../dps/src/dps/flows/statement.py#L447) `validate` (records the lines not found, [`dps/src/dps/catalog.py:65`](../../dps/src/dps/catalog.py#L65)), [`:468`](../../dps/src/dps/catalog.py#L468) `report_values`.
+**Statement flow:** [`dps/src/dps/skills/statement_lines/reader.py:158`](../../dps/src/dps/skills/statement_lines/reader.py#L158) `validate` (records the lines not found, [`dps/src/dps/catalog.py:65`](../../dps/src/dps/catalog.py#L65)), [`:468`](../../dps/src/dps/catalog.py#L468) `report_values`.
 
 **Agent tools:** [`dps/src/dps/agent/document_agent.py`](../../dps/src/dps/agent/document_agent.py):
 - `:145` `page_text`;

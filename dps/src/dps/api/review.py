@@ -23,7 +23,7 @@ from sqlalchemy import func, select, true
 
 from dps import feed, jobs, results
 from dps.api.auth import ADMIN, SERVICE, SUPPORT, require_roles
-from dps.api.documents import DB, User, job_view
+from dps.api.deps import DB, User, job_view
 from dps.errors import ApiError, not_found
 from dps.models import DocumentCpLink, GoldenCandidate, Job, ReviewDecision, Run, utcnow
 
@@ -204,6 +204,16 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
     prev = db.scalars(select(Run).where(Run.job_id == job.id, Run.run_no == revision)).first()
     if prev is not None:
         prev.superseded_by = result["runId"]
+    if result["status"] == "DONE" and job.job_type == "EXTRACT_STATEMENT" and job.rollout != "SHADOW":
+        # The approved figures go to the values table (the bank app's /api/data/values) only now (G21).
+        from dps.skills.statement_lines.reader import CurrencyNotSettled, publish
+
+        settings = request.app.state.settings
+        try:
+            publish(db, job, result, settings.report_derived_values, settings.fiscal_year_end_month, reviewer)
+        except CurrencyNotSettled as ex:
+            db.rollback()
+            raise ApiError(409, "CURRENCY_DIFFERS", str(ex)) from ex
     if result["status"] == "DONE":
         job.status, job.updated_at, job.finished_at = jobs.DONE, utcnow(), utcnow()
         job.error_code = None
@@ -231,19 +241,13 @@ def _learn(db, job: Job, d: Decision, old: dict | None, new: dict | None, review
     reader next time). Prompts and rules are never changed automatically."""
     if d.action not in ("CONFIRM", "CORRECT") or new is None or new.get("group") != "STATEMENT_LINE":
         return
-    quote = ((new.get("source") or {}).get("quote") or "").strip()
+    quote = " ".join(((new.get("source") or {}).get("quote") or "").split())
     if not quote:
         return
-    from dps.models import LabelMemory
+    from dps import services
 
-    cp_id = db.scalar(select(DocumentCpLink.cp_id).where(DocumentCpLink.document_id == job.document_id))
-    if cp_id is None:
-        return
-    label = " ".join(quote.split())[:300]
-    exists = db.scalars(select(LabelMemory).where(LabelMemory.cp_id == cp_id, LabelMemory.label == label)).first()
-    if exists is None:
-        db.add(LabelMemory(cp_id=cp_id, label=label, key=new["name"][:64], source_label=label,
-                           document_id=job.document_id, confirmed_by=reviewer))
+    for cp_id in db.scalars(select(DocumentCpLink.cp_id).where(DocumentCpLink.document_id == job.document_id)):
+        services.remember_label(db, cp_id, quote, new["name"][:64], job.document_id, reviewer)
 
 
 class ReclassifyRequest(BaseModel):

@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 
 from sqlalchemy import select
-from test_flows import add_document, database, doc_status, intake, terms  # noqa: F401 - fixture
+from test_flows import add_document, agreement_result, database  # noqa: F401 - fixture
 from test_phase5_review import SERVICE, _run_certificate
 
 from dps.models import Run
@@ -23,21 +23,12 @@ CLEAN = [Page(1, "4.1 Debt Service Coverage Ratio\nThe Borrower shall maintain a
 
 # ---------- WP1: nothing is applied without a person ----------
 
-def test_f5_a_clean_agreement_is_never_published_without_a_person(database):  # noqa: F811
-    doc_id = add_document(database)
-    flow = intake(database, CLEAN)
-    flow.kickoff(inputs={"job_id": "j-f5", "document_id": doc_id})
-    assert flow.state.outcome == "NEEDS_REVIEW"
-    assert doc_status(database, doc_id) == "NEEDS_REVIEW"
-    stored = terms(database, doc_id)
-    assert stored and all(t.status != "PUBLISHED" for t in stored.values())
-
-
-def test_f5_a_dps_formula_is_marked_as_a_template(database):  # noqa: F811
-    doc_id = add_document(database)
-    intake(database, SPRINGING).kickoff(inputs={"job_id": "j-f5b", "document_id": doc_id})
-    [term] = terms(database, doc_id).values()
-    assert "FORMULA_TEMPLATE" in term.issues_json
+def test_f5_a_clean_agreement_is_never_published_without_a_person():
+    """F5 full fix (WP7): EXTRACT_AGREEMENT runs in the skills flow; there is no publishing path left at all."""
+    result = agreement_result(CLEAN)
+    covenants = [f for f in result["fields"] if f["group"] == "FINANCIAL_COVENANT"]
+    assert covenants and all(f["status"] == "NEEDS_REVIEW" for f in covenants)
+    assert result["status"] == "NEEDS_REVIEW"
 
 
 def test_f12_rules_only_says_the_agent_did_not_read():

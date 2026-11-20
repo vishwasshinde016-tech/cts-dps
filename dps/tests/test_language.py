@@ -8,12 +8,12 @@ import json
 from datetime import date
 
 import pytest
-from test_flows import FakeParser, add_document, doc_status, intake, values
+from statement_shim import StatementDeps, StatementProcessingFlow
+from test_flows import FakeParser, add_document, agreement_result, values
 
 from dps.db import Database
 from dps.extraction import agreement_ai, statement_ai
 from dps.extraction.verify import numbers_in, quote_on_page, threshold_in
-from dps.flows.statement import StatementDeps, StatementProcessingFlow
 from dps.language import detect, name, plain_digits
 from dps.models import Base
 from dps.parse.engine import Page
@@ -84,13 +84,11 @@ def test_a_french_agreement_is_read_by_the_ai_with_its_quotes_checked_in_french(
     assert dropped == 1 and all("AI_ONLY" in t.issues[0] for t in terms)
 
 
-def test_without_the_ai_reader_an_agreement_in_another_language_waits(database):
-    doc_id = add_document(database)
-    flow = intake(database, [Page(1, FRENCH_AGREEMENT, "TEXT", 1.0)])
-    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    assert flow.state.outcome == "NEEDS_REVIEW" and doc_status(database, doc_id) == "NEEDS_REVIEW"
-    assert any(i.startswith("LANGUAGE_NOT_READ: the agreement is in French")
-               for p in flow.state.proposals for i in p["issues"])
+def test_without_the_ai_reader_an_agreement_in_another_language_waits():
+    result = agreement_result([Page(1, FRENCH_AGREEMENT, "TEXT", 1.0)])
+    assert result["status"] == "NEEDS_REVIEW" and result["document"]["route"] == "NEEDS_REVIEW"
+    [w] = [w for w in result["warnings"] if w["code"] == "LANGUAGE_NOT_READ"]
+    assert w["message"].startswith("the document is in French")
 
 
 def statement(database, reader=None):

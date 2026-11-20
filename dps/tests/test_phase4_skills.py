@@ -91,7 +91,9 @@ class Tools:
 def test_every_pack_loads_and_maps_job_types():
     assert {load(n).name for n in PACKS} == set(PACKS)
     assert for_job_type("EXTRACT_SANCTION").name == "sanction"
-    assert for_job_type("EXTRACT_AGREEMENT").engine == "legacy_flow"
+    assert for_job_type("EXTRACT_AGREEMENT").name == "covenants"  # one pipeline (WP7): no legacy engine
+    assert for_job_type("EXTRACT_STATEMENT").name == "statement_lines"
+    assert {load(n).engine for n in PACKS} == {"generic"}
     assert for_job_type("NOPE") is None
     assert load("sanction").risk("SANCTIONED_AMOUNT") == "HIGH" and load("commentary").risk("x") == "LOW"
 
@@ -335,7 +337,7 @@ def test_amendment_job_reads_base_result(client, app, settings, tmp_path):
     assert {f["value"]["metric"] for f in res["amendedSet"]} == {"DSCR", "CURRENT_RATIO"}
 
 
-def test_legacy_agreement_result_gets_schedule_terms(client, app, settings, tmp_path):
+def test_an_agreement_job_result_gets_schedule_terms(client, app, settings, tmp_path):
     from dps.ingest.pipeline import Ingestor as Ing
 
     settings.derived_dir = tmp_path / "derived"
@@ -347,10 +349,11 @@ def test_legacy_agreement_result_gets_schedule_terms(client, app, settings, tmp_
     ing = Ing(store, "1", lambda req, hint: sandbox.parse_in_process(
         sandbox.ParseRequest(req.data, req.fmt, req.sha256, req.version_id, False)), ocr=False)
 
-    def runner(job):
-        return "PUBLISHED", "s", ""
+    def runner(db, job, model, raw):
+        skills.finish(db, job, skills.run_job(job, model, None, Tools(), db, "1", raw))
 
-    Worker(settings, app.state.db.session_factory, object(), {"AGREEMENT_INTAKE": runner}, ing, {}).run_once()
+    page_models: dict = {}
+    Worker(settings, app.state.db.session_factory, object(), {}, ing, page_models, pack_runner=runner).run_once()
     res = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
     check("result", res)
     sched = [f for f in res["fields"] if f["group"] == "SCHEDULE_TERM"]

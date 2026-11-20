@@ -22,7 +22,7 @@ from sqlalchemy import Date, cast, func, select
 from dps import services
 from dps.api.access import require_cp
 from dps.api.auth import ADMIN, SERVICE, SUPPORT, require_roles
-from dps.api.documents import DB, Checker, User, ValuesRequest
+from dps.api.deps import DB, Checker, User, ValuesRequest
 from dps.errors import ApiError, not_found
 from dps.ingest.store import LocalStore, StoreError
 from dps.models import AiUsage, Artifact, Document, Job, Run, utcnow
@@ -175,7 +175,10 @@ def ops_usage(request: Request, db: DB, user: User,
         row["tokensOut"] += int(tout or 0)
         if cost is not None:
             row["costUsd"] = round((row["costUsd"] or 0) + float(cost), 6)
-    return {"from": since.isoformat(), "to": to.isoformat(), "rows": sorted(merged.values(), key=lambda r: r["day"])}
+    from dps.agent.guard import budget_status
+
+    return {"from": since.isoformat(), "to": to.isoformat(), "rows": sorted(merged.values(), key=lambda r: r["day"]),
+            "budget": budget_status(db, settings)}  # this month against the monthly token budget
 
 
 def _routes(settings) -> dict[str, str]:

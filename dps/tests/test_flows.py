@@ -7,20 +7,19 @@ from pathlib import Path
 
 import httpx
 import pytest
-from conftest import reviewed_if_clean
 from openpyxl import Workbook
 from sqlalchemy import select
+from statement_shim import StatementDeps, StatementProcessingFlow, reviewed_if_clean
 
 from dps import jobs
 from dps.db import Base, Database
-from dps.flows.intake import AgreementIntakeFlow, IntakeDeps
-from dps.flows.persistence import SqlFlowPersistence
-from dps.flows.statement import StatementDeps, StatementProcessingFlow
 from dps.integrations.core import CoreClient, CoreMaster, CoreUnavailable
-from dps.models import Document, DocumentCpLink, EventOutbox, ExtractedTerm, FlowState, Job, StatementValue, utcnow
+from dps.models import Document, DocumentCpLink, EventOutbox, Job, Run, StatementValue, utcnow
 from dps.parse.engine import Page
 from dps.settings import Settings
-from dps.worker import Worker, _kickoff, build_runners
+from dps.skills import load
+from dps.skills import runner as skills
+from dps.worker import Worker, build_pack_runner, statement_deps
 
 GOLDEN = Path(__file__).resolve().parents[2] / "golden-set" / "documents"
 
@@ -80,16 +79,16 @@ AGREEMENT_PAGES = [
 ]
 
 
-def intake(database: Database, pages: list[Page], core: FakeCore | None = None, heavy: bool = False,
-           min_conf: float = 0.8) -> AgreementIntakeFlow:
-    deps = IntakeDeps(database.session_factory, lambda d: b"pdf", FakeParser(pages), core or FakeCore(), min_conf,
-                      heavy)
-    return AgreementIntakeFlow(deps)
+def pages_model(pages: list[Page]) -> dict:
+    return {"format": "PDF", "pages": [{"no": p.no, "text": p.text, "quality": p.quality, "method": "NATIVE",
+                                        "sourceMethod": p.method} for p in pages]}
 
 
-def terms(database: Database, doc_id: str) -> dict[str, ExtractedTerm]:
-    with database.session_factory() as s:
-        return {t.metric_raw: t for t in s.scalars(select(ExtractedTerm).where(ExtractedTerm.document_id == doc_id))}
+def agreement_result(pages: list[Page], job_type: str = "EXTRACT_AGREEMENT", ctx: dict | None = None) -> dict:
+    """EXTRACT_AGREEMENT in the one pipeline (full review WP7): the covenants pack in the skills flow."""
+    job = Job(id="j1", document_id="d1", job_type=job_type, tenant_id="default",
+              request_json=json.dumps({"context": ctx or {}}))
+    return skills.run(load("covenants"), job, pages_model(pages), None, None)
 
 
 def doc_status(database: Database, doc_id: str) -> str:
@@ -97,91 +96,20 @@ def doc_status(database: Database, doc_id: str) -> str:
         return s.get(Document, doc_id).status
 
 
-def test_flow_a_holds_a_clean_agreement_for_a_person(database):
+def test_an_agreement_job_holds_a_clean_agreement_for_a_person():
     """Full review F5: covenant rules are never applied without a person, however clean the read."""
-    doc_id = add_document(database)
-    flow = intake(database, AGREEMENT_PAGES)
-    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-
-    assert flow.state.outcome == "NEEDS_REVIEW"
-    stored = terms(database, doc_id)
-    assert stored["DSCR"].covenant_master_id == "m1" and stored["DSCR"].expression == "DSCR >= 1.25"
-    assert stored["ICR"].expression == "DPS_EBITDA_TTM / DPS_INTEREST_PAID_TTM >= 2"
-    assert stored["DSCR"].status == "PROPOSED"  # clean: waits for a decision
-    assert "FORMULA_TEMPLATE" in stored["ICR"].issues_json  # DPS's template, not the agreement's definition
-    assert "PUBLISHED" not in {t.status for t in stored.values()}
-    assert doc_status(database, doc_id) == "NEEDS_REVIEW"
-    with database.session_factory() as s:
-        steps = [r.method_name for r in s.scalars(select(FlowState).order_by(FlowState.saved_at))]
-    assert steps == ["parse", "extract", "normalize", "validate", "hold"]
+    result = agreement_result(AGREEMENT_PAGES)
+    covenants = {f["value"]["metric"]: f for f in result["fields"] if f["group"] == "FINANCIAL_COVENANT"}
+    assert set(covenants) == {"DSCR", "ICR"}
+    assert covenants["DSCR"]["value"]["threshold"] == 1.25 and covenants["DSCR"]["source"]["page"] == 1
+    assert all(f["status"] == "NEEDS_REVIEW" for f in covenants.values())
+    assert result["status"] == "NEEDS_REVIEW" and result["pipeline"]["skillPack"].startswith("covenants/")
+    assert covenants["DSCR"]["value"]["scope"]["obligor"] == "Borrower"  # WP6 on the agreement job too
 
 
-def test_flow_a_holds_for_review_then_finishes_after_decisions(database):
-    doc_id = add_document(database)
-    flow = intake(database, AGREEMENT_PAGES, min_conf=0.99)
-    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    assert flow.state.outcome == "NEEDS_REVIEW"
-    assert doc_status(database, doc_id) == "NEEDS_REVIEW"
-    assert json.loads(terms(database, doc_id)["DSCR"].issues_json) == ["LOW_CONFIDENCE"]
-
-    again = intake(database, AGREEMENT_PAGES)
-    again.kickoff(inputs={"id": flow.state.id, "job_id": "j1", "document_id": doc_id})
-    assert again.state.outcome == "NEEDS_REVIEW"  # nobody decided yet
-
-    with database.session_factory() as s:
-        for t in s.scalars(select(ExtractedTerm).where(ExtractedTerm.document_id == doc_id)):
-            t.status, t.reviewed_by = "PUBLISHED", "approver-1"
-        s.commit()
-    done = intake(database, AGREEMENT_PAGES)
-    done.kickoff(inputs={"id": flow.state.id, "job_id": "j1", "document_id": doc_id})
-    assert done.state.outcome == "PUBLISHED"
-    assert doc_status(database, doc_id) == "PUBLISHED"
-
-
-def test_flow_a_rerun_keeps_reviewed_terms(database):
-    doc_id = add_document(database)
-    intake(database, AGREEMENT_PAGES).kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    with database.session_factory() as s:
-        t = s.scalars(select(ExtractedTerm).where(ExtractedTerm.metric_raw == "DSCR")).one()
-        t.expression, t.reviewed_by, t.method = "DSCR >= 1.3", "approver-1", "MANUAL"
-        s.commit()
-    intake(database, AGREEMENT_PAGES).kickoff(inputs={"job_id": "j2", "document_id": doc_id})
-    stored = terms(database, doc_id)
-    assert len(stored) == 2 and stored["DSCR"].expression == "DSCR >= 1.3"
-
-
-def test_flow_a_fails_without_text_and_hands_scans_to_heavy_pool(database):
-    doc_id = add_document(database)
-    flow = intake(database, [Page(1, "", "NONE", 0.0)], heavy=True)
-    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    assert flow.state.outcome == "FAILED" and doc_status(database, doc_id) == "FAILED"
-
-    scan = intake(database, [Page(1, "", "NONE", 0.0), Page(2, "x", "NONE", 0.1)])
-    scan.kickoff(inputs={"job_id": "j1", "document_id": add_document(database, name="b.pdf")})
-    assert scan.state.outcome == "HEAVY"
-
-
-def test_flow_a_parse_error_fails(database):
-    from dps.parse.engine import ParseError
-
-    class Broken:
-        def parse(self, data):
-            raise ParseError("Unreadable PDF: PdfReadError")
-
-    doc_id = add_document(database)
-    deps = IntakeDeps(database.session_factory, lambda d: b"x", Broken(), FakeCore(), 0.8, False)
-    flow = AgreementIntakeFlow(deps)
-    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
-    assert flow.state.outcome == "FAILED" and flow.state.error == "Unreadable PDF: PdfReadError"
-
-
-def test_persistence_returns_latest_state(database):
-    p = SqlFlowPersistence(database.session_factory)
-    p.init_db()
-    assert p.load_state("nope") is None
-    p.save_state("u1", "a", {"n": 1})
-    p.save_state("u1", "b", {"n": 2})
-    assert p.load_state("u1") == {"n": 2}
+def test_an_agreement_job_with_no_text_goes_to_a_person():
+    result = agreement_result([Page(1, "", "NONE", 0.0)])
+    assert result["status"] == "NEEDS_REVIEW" and "NOTHING_FOUND" in {w["code"] for w in result["warnings"]}
 
 
 # ---------- Flow B ----------
@@ -198,9 +126,10 @@ def xlsx_bytes(rows: list[tuple]) -> bytes:
 
 
 def statement(database: Database, data: bytes, name: str, heavy: bool = True, pages=None, cps=("CP-1",),
-              as_of=date(2026, 3, 31), reviewed: bool = True):
+              as_of=date(2026, 3, 31), reviewed: bool = True, derived: bool = False):
     doc_id = add_document(database, "FINANCIAL_STATEMENT", name, as_of, cps)
-    deps = StatementDeps(database.session_factory, lambda d: data, FakeParser(pages or []), "ds-dps", heavy)
+    deps = StatementDeps(database.session_factory, lambda d: data, FakeParser(pages or []), "ds-dps", heavy,
+                         report_derived_values=derived)  # G22: the figures DPS works out only with the switch on
     flow = StatementProcessingFlow(deps)
     flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
     return (reviewed_if_clean(flow) if reviewed else flow), doc_id
@@ -218,17 +147,27 @@ GOOD_ROWS = [("Amounts in INR lakhs", None), ("EBITDA", 500), ("Short-term borro
              ("Long-term borrowings", 700), ("Total equity", 2000), ("Cash and cash equivalents", 100)]
 
 
-def test_flow_b_reports_xlsx_values_and_queues_c5(database):
+def test_a_statement_stores_the_approved_printed_figures_only(database):
+    """G21: nothing is stored before a person approves. G22: the figures as printed; Spring works out the rest.
+    G9: no event goes to Core from here (the job's dps.extraction.completed tells Spring)."""
     flow, doc_id = statement(database, xlsx_bytes(GOOD_ROWS), "fs.xlsx", cps=("CP-1", "CP-2"))
     assert flow.state.outcome == "REPORTED" and flow.state.unit_scale == "lakh"
     v = values(database)
-    assert v["EBITDA"].value == 5.0 and v["EBITDA"].cell == "BS!B2"
-    assert v["TOTAL_DEBT"].derived and v["TOTAL_DEBT"].value == 10.0
-    assert v["NET_DEBT"].value == 9.0
+    assert v["EBITDA"].value == 5.0 and v["EBITDA"].cell == "BS!B2" and values(database, "CP-2")["EBITDA"]
+    assert "TOTAL_DEBT" not in v and "NET_DEBT" not in v  # worked out by Spring's formula engine
     with database.session_factory() as s:
-        events = [json.loads(e.payload_json) for e in s.scalars(select(EventOutbox))]
-    assert {e["entityKey"] for e in events} == {"CP-1", "CP-2"}
-    assert events[0]["documentId"] == doc_id and events[0]["asOfDate"] == "2026-03-31"
+        assert s.scalars(select(EventOutbox)).first() is None
+
+
+def test_the_derived_values_switch_keeps_the_old_figures(database):
+    doc_id = add_document(database, "FINANCIAL_STATEMENT", "fs.xlsx", date(2026, 3, 31))
+    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(GOOD_ROWS), FakeParser([]), "ds-dps", True,
+                         report_derived_values=True)
+    flow = StatementProcessingFlow(deps)
+    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
+    reviewed_if_clean(flow)
+    v = values(database)
+    assert v["TOTAL_DEBT"].derived and v["TOTAL_DEBT"].value == 10.0 and v["NET_DEBT"].value == 9.0
 
 
 def test_flow_b_new_upload_supersedes_and_rerun_is_idempotent(database):
@@ -259,25 +198,26 @@ def test_flow_b_csv_needs_review_then_reports_on_resume(database):
     assert resumed.state.outcome == "REPORTED" and values(database)["EBITDA"].value == 120
 
 
-def test_flow_b_review_done_keeps_the_reviewers_corrections(database):
-    """Bug hunt (8 November 2026): "Review done" re-stored the figures as read, deleting the reviewer's correction."""
-    from dps import services
+def test_the_approved_figures_keep_the_reviewers_corrections(database):
+    """Bug hunt (8 November 2026): approving re-stored the figures as read, deleting the reviewer's correction."""
+    from statement_shim import as_result, publish
 
     csv_data = b"Line item,FY26,FY25\nEBITDA,120,100\nNet worth,900,800\n"
     flow, doc_id = statement(database, csv_data, "fs.csv")
     assert flow.state.outcome == "NEEDS_REVIEW"
+    fields, warnings, extra = as_result(flow.state, date(2026, 3, 31))
+    for f in fields:
+        f["status"] = "CONFIRMED"
+        if f["name"] == "EBITDA":
+            f["value"]["amount"], f["status"] = 125.0, "CORRECTED"
     with database.session_factory() as s:
-        services.correct_spread(s, s.get(Document, doc_id), {"EBITDA": 125.0, "TOTAL_DEBT": 400.0}, user="rm",
-                                note="from the annual report", data_source_id="ds-dps")
+        n = publish(s, Job(id="j1", document_id=doc_id, job_type="EXTRACT_STATEMENT"),
+                    {"fields": fields, "warnings": warnings, **extra}, actor="checker-1")
         s.commit()
-
-    deps = StatementDeps(database.session_factory, lambda d: csv_data, FakeParser([]), "ds-dps", True)
-    resumed = StatementProcessingFlow(deps)
-    resumed.kickoff(inputs={"id": flow.state.id, "job_id": "j1", "document_id": doc_id})
     now = values(database)
-    assert resumed.state.outcome == "REPORTED"
-    assert (now["EBITDA"].value, now["EBITDA"].source_type) == (125.0, "USER")
-    assert now["TOTAL_DEBT"].value == 400.0 and now["NET_WORTH"].value == 900
+    assert n == 2 and (now["EBITDA"].value, now["EBITDA"].source_type) == (125.0, "USER")
+    assert now["EBITDA"].entered_by == "checker-1" and now["NET_WORTH"].value == 900
+    assert doc_status(database, doc_id) == "PUBLISHED"
 
 
 def test_flow_b_net_interest_waits_once_per_borrower(database):
@@ -316,14 +256,19 @@ def test_flow_b_pdf_and_unsupported_types(database):
 
 # ---------- worker and queue ----------
 
+class Ingestor:
+    """A worker always has an ingest step in CTS; these documents have no DMS key, so it reads nothing here."""
+
+
 def settings(tmp_path: Path, **kw) -> Settings:
     return Settings(database_url=f"sqlite:///{tmp_path / 'flows.db'}", storage_dir=tmp_path / "store",
                     core_data_source_id="ds-dps", worker_max_attempts=2, worker_retry_base_seconds=0, **kw)
 
 
-def add_job(database: Database, doc_id: str, flow: str = "AGREEMENT_INTAKE", pool: str = "STANDARD") -> str:
+def add_job(database: Database, doc_id: str, flow: str = "SKILL_PACK", pool: str = "STANDARD",
+            job_type: str = "EXTRACT_AGREEMENT") -> str:
     with database.session_factory() as s:
-        j = Job(document_id=doc_id, flow=flow, pool=pool)
+        j = Job(document_id=doc_id, flow=flow, pool=pool, job_type=job_type)
         s.add(j)
         s.commit()
         return j.id
@@ -334,49 +279,58 @@ def job(database: Database, job_id: str) -> Job:
         return s.get(Job, job_id)
 
 
-def test_worker_runs_flow_a_and_marks_job_done(database, tmp_path):
+def worker(tmp_path: Path, database: Database, runner, **kw) -> Worker:
+    return Worker(settings(tmp_path, **kw), database.session_factory, FakeCore(), {}, Ingestor(),
+                  pack_runner=runner)
+
+
+def agreement_runner(db, j, model, raw):
+    skills.finish(db, j, skills.run(load("covenants"), j, pages_model(AGREEMENT_PAGES), None, None, db))
+
+
+def test_the_worker_runs_an_agreement_job_in_the_skills_flow(database, tmp_path):
     doc_id = add_document(database)
     job_id = add_job(database, doc_id)
-
-    def runner(j: Job):
-        return _kickoff(intake(database, AGREEMENT_PAGES), j)
-
-    w = Worker(settings(tmp_path), database.session_factory, FakeCore(), {"AGREEMENT_INTAKE": runner})
+    w = worker(tmp_path, database, agreement_runner)
     assert w.run_once() is True
     j = job(database, job_id)
-    assert j.status == jobs.NEEDS_REVIEW and j.flow_state_id and j.locked_by is None  # a person decides (F5)
-    steps = json.loads(j.steps_json)
-    assert [s["step"] for s in steps] == ["START", "coverage", "END"]
-    ledger = steps[1]["ledger"]  # every duty sentence of the agreement is accounted for
+    assert j.status == jobs.NEEDS_REVIEW and j.locked_by is None  # a person decides (F5)
+    with database.session_factory() as s:
+        run = s.scalars(select(Run).where(Run.job_id == job_id)).one()
+    ledger = json.loads(run.result_json)["document"]["coverage"]["ledger"]  # every duty sentence accounted for
     assert ledger["scope"] == "WHOLE_DOCUMENT" and ledger["accounted"] == ledger["candidates"]
     assert w.run_once() is False
 
 
+def test_jobs_queued_under_the_old_flow_names_run_in_the_skills_flow(database, tmp_path):
+    """Jobs queued before the one pipeline (WP7) still run: AGREEMENT_INTAKE and STATEMENT_PROCESSING."""
+    job_id = add_job(database, add_document(database), flow="AGREEMENT_INTAKE")
+    assert worker(tmp_path, database, agreement_runner).run_once()
+    assert job(database, job_id).status == jobs.NEEDS_REVIEW
+
+
 def test_worker_retries_transient_errors_then_fails(database, tmp_path):
-    doc_id = add_document(database)
-    job_id = add_job(database, doc_id)
+    job_id = add_job(database, add_document(database))
 
-    def runner(j: Job):
-        return _kickoff(intake(database, AGREEMENT_PAGES, core=FakeCore(down=True)), j)
+    def down(db, j, model, raw):
+        raise CoreUnavailable("GET /api/v1/covenants: ConnectError")
 
-    w = Worker(settings(tmp_path), database.session_factory, FakeCore(), {"AGREEMENT_INTAKE": runner})
+    w = worker(tmp_path, database, down)
     w.run_once()
     assert job(database, job_id).status == jobs.RETRY_WAIT
     w.run_once()
     j = job(database, job_id)
-    # Retries used up: DEAD (ops alerted); the screens still show the document as failed.
-    assert j.status == jobs.DEAD and "ConnectError" in j.error and doc_status(database, doc_id) == "FAILED"
-    assert j.error_code == "SPRING_UNAVAILABLE"
+    assert j.status == jobs.DEAD and "ConnectError" in j.error and j.error_code == "SPRING_UNAVAILABLE"
 
 
 def test_worker_fails_unknown_flow_and_crashing_runner(database, tmp_path):
     a = add_job(database, add_document(database), flow="NOPE")
     b = add_job(database, add_document(database, name="b.pdf"))
 
-    def boom(j: Job):
+    def boom(db, j, model, raw):
         raise ValueError("bug")
 
-    w = Worker(settings(tmp_path), database.session_factory, FakeCore(), {"AGREEMENT_INTAKE": boom})
+    w = worker(tmp_path, database, boom)
     for _ in range(3):  # a, then b crashes, then b is retried once and crashes again
         w.run_once()
     assert job(database, a).error == "No flow registered for NOPE"
@@ -384,16 +338,26 @@ def test_worker_fails_unknown_flow_and_crashing_runner(database, tmp_path):
     assert job(database, b).attempts == 2 and job(database, b).error_code == "INTERNAL_ERROR"
 
 
-def test_worker_moves_scans_to_heavy_pool(database, tmp_path):
-    job_id = add_job(database, add_document(database))
+def test_worker_moves_statements_to_the_heavy_pool_and_fails_empty_ones(database, tmp_path):
+    from statement_shim import StatementDeps as Deps
 
-    def runner(j: Job):
-        return _kickoff(intake(database, [Page(1, "", "NONE", 0.0)]), j)
+    heavy = add_job(database, add_document(database, "FINANCIAL_STATEMENT", "scan.pdf", date(2026, 3, 31)),
+                    job_type="EXTRACT_STATEMENT")
+    empty = add_job(database, add_document(database, "FINANCIAL_STATEMENT", "empty.csv", date(2026, 3, 31)),
+                    job_type="EXTRACT_STATEMENT")
+    files = {"scan.pdf": b"pdf", "empty.csv": b"a,b\n"}
+    deps = Deps(database.session_factory, lambda d: files[d.file_name], FakeParser([Page(1, "", "NONE", 0.0)]),
+                "ds-dps", False)
 
-    w = Worker(settings(tmp_path), database.session_factory, FakeCore(), {"AGREEMENT_INTAKE": runner})
+    def runner(db, j, model, raw):
+        skills.finish(db, j, skills.run_job(j, model, None, None, db, "1", raw, statement_deps=deps))
+
+    w = worker(tmp_path, database, runner)
     w.run_once()
-    j = job(database, job_id)
-    assert (j.pool, j.status, j.attempts) == ("HEAVY", jobs.QUEUED, 0)
+    w.run_once()
+    assert (job(database, heavy).pool, job(database, heavy).status, job(database, heavy).attempts) == (
+        "HEAVY", jobs.QUEUED, 0)
+    assert job(database, empty).status == jobs.FAILED and job(database, empty).error_code == "CONTENT_FAILED"
     assert w.run_once() is False  # a STANDARD worker does not take HEAVY jobs
 
 
@@ -413,60 +377,27 @@ def test_claim_takes_expired_leases_and_respects_attempts(database):
     assert jobs.lease_expired(Job(document_id="x", flow="f"))
 
 
-def test_outbox_sender(database, tmp_path):
-    with database.session_factory() as s:
-        for n in range(3):
-            s.add(EventOutbox(type="DATA_EVENT", payload_json=json.dumps({"entityKey": f"CP-{n}"})))
-        s.commit()
+@pytest.mark.skipif(not GOLDEN.exists(), reason="golden set not present")
+def test_the_pack_runner_wires_the_statement_reader(database, tmp_path):
+    from dps.extraction.statement_pdf import PdfStatement  # noqa: F401 - the reader the deps point at
 
-    class FlakyCore(FakeCore):
-        def __init__(self):
-            super().__init__()
-            self.calls = 0
-
-        def send_data_event(self, payload):
-            self.calls += 1
-            if payload["entityKey"] == "CP-1":
-                request = httpx.Request("POST", "http://core/api/v1/data-events")
-                raise httpx.HTTPStatusError("404", request=request, response=httpx.Response(404, text="no table",
-                                                                                             request=request))
-            if payload["entityKey"] == "CP-2" and self.calls == 3:
-                raise CoreUnavailable("down")
-            return super().send_data_event(payload)
-
-    core = FlakyCore()
-    w = Worker(settings(tmp_path), database.session_factory, core, {})
-    assert w.send_events() == 1  # CP-0 sent, CP-1 permanently rejected, CP-2 hit an outage
-    assert w.send_events() == 1  # CP-2 delivered on the next loop
-    assert [e["dataSourceId"] for e in core.events] == ["ds-dps", "ds-dps"]
-    with database.session_factory() as s:
-        rejected = s.scalars(select(EventOutbox).where(EventOutbox.sent_at.is_(None))).one()
-    assert rejected.last_error == "HTTP 404: no table" and rejected.attempts == 50
-    assert w.run_once() is False
+    core = CoreClient("http://core", 1.0, "")
+    deps = statement_deps(settings(tmp_path, ocr_enabled=False), database, core)
+    assert deps.pdf_reader is not None and deps.heavy_pool is False and deps.report_derived_values is False
+    assert deps.loan_currency == core.cp_currency and deps.fx_rate == core.fx_rate
+    assert callable(build_pack_runner(settings(tmp_path, ocr_enabled=False), database, core))
 
 
 @pytest.mark.skipif(not GOLDEN.exists(), reason="golden set not present")
-def test_build_runners_wires_real_parser(database, tmp_path):
-    from dps.ingest.file_store import FileStore
+def test_an_agreement_job_holds_a_covenant_the_rules_cannot_read(tmp_path):
+    from dps.parse.engine import ParserEngine
 
-    store = FileStore(tmp_path / "store")
-    _, rel = store.put((GOLDEN / "AGR-001.pdf").read_bytes(), ".pdf")
-    doc_id = add_document(database)
-    with database.session_factory() as s:
-        s.get(Document, doc_id).storage_path = rel
-        s.commit()
-    runners = build_runners(settings(tmp_path, ocr_enabled=False), database, store, FakeCore())
-    w = Worker(settings(tmp_path), database.session_factory, FakeCore(), runners)
-    job_id = add_job(database, doc_id)
-    w.run_once()
     # AGR-001 has an end-use covenant ("2.1 The proceeds of the Facility shall be used exclusively for ...") the rules
-    # do not read: the whole-document ledger holds it for a person instead of publishing without it.
-    assert job(database, job_id).status == jobs.NEEDS_REVIEW
-    with database.session_factory() as s:
-        held = s.scalars(select(ExtractedTerm).where(ExtractedTerm.document_id == doc_id,
-                                                     ExtractedTerm.issues_json.like("%UNRESOLVED_CANDIDATE%"))).all()
-    assert [t.page for t in held] == [2] and "proceeds of the Facility" in held[0].quote
-    assert set(runners) == {"AGREEMENT_INTAKE", "STATEMENT_PROCESSING"}
+    # do not read: the whole-document ledger holds it for a person instead of leaving it out.
+    pages = ParserEngine(None).parse((GOLDEN / "AGR-001.pdf").read_bytes())
+    result = agreement_result(pages)
+    held = [f for f in result["fields"] if any(i["code"] == "UNRESOLVED_CANDIDATE" for i in f["issues"])]
+    assert [f["source"]["page"] for f in held] == [2] and "proceeds of the Facility" in held[0]["source"]["quote"]
 
 
 # ---------- Core client ----------
@@ -539,15 +470,14 @@ def test_worker_heartbeat_keeps_a_long_job_from_being_taken_over(database, tmp_p
     job_id = add_job(database, add_document(database))
     seen = {}
 
-    def slow(j: Job):
+    def slow(db, j, model, raw):
         _time.sleep(2.4)
         with database.session_factory() as s:
             seen["until"] = jobs._aware(s.get(Job, j.id).locked_until)
             seen["other"] = jobs.claim(s, "w-other", "STANDARD", 3, 3)
-        return "PUBLISHED", "state-1", ""
+        jobs.finish(db, j, jobs.DONE)
 
-    w = Worker(settings(tmp_path, worker_lease_seconds=3), database.session_factory, FakeCore(),
-               {"AGREEMENT_INTAKE": slow})
+    w = worker(tmp_path, database, slow, worker_lease_seconds=3)
     started = utcnow()
     assert w.run_once() is True
     assert seen["other"] is None, "a second worker must not claim a job whose lease is being renewed"
