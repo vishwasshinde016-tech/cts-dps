@@ -42,7 +42,8 @@ KEYWORDS = {
 UNREADABLE_QUALITY = 0.3  # below this, OCR could not read the page well enough to trust any value on it
 BLOCKING = frozenset({"NOTHING_FOUND", "NOT_GROUNDED", "VERDICT_NOT_IN_RESULTS", "UNREADABLE_PAGES",
                       "TOTALS_DO_NOT_ADD", "PERIOD_MISMATCH", "BASIS_MISMATCH", "ENTITY_MISMATCH",
-                      "CURRENCY_MISMATCH", "UNITS_MISMATCH"})
+                      "CURRENCY_MISMATCH", "UNITS_MISMATCH", "BASE_MISSING", "SET_INCOMPLETE",
+                      "SET_MANIFEST_INVALID"})
 COVENANT_GROUPS = ("FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "INFO_COVENANT", "POSSIBLE_COVENANT")
 # Inspection and reader flags a reviewer must see on an extraction result (full review G15).
 FILE_FLAGS = {"TRACKED_CHANGES": "the text read is with every change accepted",
@@ -167,7 +168,7 @@ def verify_with_spring(fields: list[dict], tools, correlation_id: str | None) ->
 
 
 AGENT_GROUPS = {"sanction": "AGREEMENT_TERM", "certificate": "CERTIFIED_FIGURE", "schedule_terms": "SCHEDULE_TERM",
-                "amendment_diff": "FINANCIAL_COVENANT", "covenants": "POSSIBLE_COVENANT"}
+                "amendment_diff": "FINANCIAL_COVENANT", "covenants": "POSSIBLE_COVENANT", "waiver": "WAIVER"}
 
 
 def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: list[dict] | None,
@@ -190,6 +191,14 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
             value = {"covenant": value.get("covenant", p["name"]), "figure": value.get("figure"), **value}
         if group == "POSSIBLE_COVENANT":
             value = {**value, "metric": value.get("metric") or p.get("_written") or p["name"]}
+        if group == "WAIVER":  # the agent's reading in the waiver shape; the target is matched by a person
+            value = {"kind": value.get("kind") or "WAIVER",
+                     "target": {"metric": value.get("metric"), "clause": value.get("clause"),
+                                "appliedCovenantId": None, "name": p.get("_written") or p["name"]},
+                     "periods": [x for x in value.get("periods") or [] if isinstance(x, dict)],
+                     "conditions": [str(x)[:300] for x in value.get("conditions") or []],
+                     "expiresOn": value.get("expiresOn"), "reinstatement": None, "fee": None,
+                     "metric": value.get("metric") or "OTHER"}
         f = make_field(pack.name, pages, group, p.get("_written") or p["name"], value, p["page"], p["quote"],
                        method=method,
                        confidence=0.6 if method == "AI_VISION" else 0.7,
@@ -230,6 +239,21 @@ def _basis(f: dict) -> str | None:
     return ((f.get("test") or {}).get("basis") or (f.get("value") or {}).get("basis") or None)
 
 
+def _party(name) -> str | None:
+    from dps.skills.covenants.obligation import _party as spelled
+
+    return spelled(str(name)).lower() if name else None
+
+
+def _same_party(f: dict, party: str | None) -> bool:
+    """The rules field binds the party the agent named (WP6, F4: the Borrower's DSCR and the Guarantor's DSCR are
+    two covenants, never one). A field whose quote names no party matches any."""
+    from dps.skills.covenants.obligation import obligors
+
+    stated = [p.lower() for p in obligors((f.get("source") or {}).get("quote"))]
+    return party is None or not stated or party in stated
+
+
 def _vote_covenants(fields: list[dict], proposals: list[dict], compare) -> list[dict]:
     """Rules vs agent, one to one. Two covenants on the same metric (a DSCR for the company and one for the group, or
     two levels) each get their own match: an unmatched rule covenant with the same test first, then the same basis
@@ -245,7 +269,11 @@ def _vote_covenants(fields: list[dict], proposals: list[dict], compare) -> list[
             continue
         free = [f for f in group if id(f) not in taken]
         value, page, basis = p.get("value") or {}, p.get("page"), (p.get("value") or {}).get("basis")
-        pick = (next((f for f in free if compare(f["value"], value)), None)
+        party = _party(value.get("obligor"))
+        pick = (next((f for f in free if compare(f["value"], value) and _same_party(f, party)), None)
+                or next((f for f in free if party and _same_party(f, party)
+                         and (not basis or _basis(f) in (None, basis))), None)
+                or next((f for f in free if compare(f["value"], value) and not party), None)
                 or next((f for f in free if basis and _basis(f) == basis), None)
                 or next((f for f in free if page is not None and (f.get("source") or {}).get("page") == page), None)
                 or (free[0] if free else None))
@@ -260,12 +288,27 @@ def _vote_covenants(fields: list[dict], proposals: list[dict], compare) -> list[
 
 
 def _vote(pack: Pack, fields: list[dict], proposals: list[dict] | None) -> list[dict]:
+    if pack.name == "waiver" and proposals:  # waivers are matched by the covenant they waive, then the periods
+        for p in proposals:
+            p.setdefault("_written", p.get("name"))
+            p["name"] = _covenant_key({"value": p.get("value"), "name": p.get("name")}) or p.get("name")
+        return vote(fields, proposals, key=lambda f: _covenant_key({"value": {"metric": (f["value"].get("target") or {})
+                                                                               .get("metric")}, "name": f["name"]}),
+                    compare=_same_periods)
     if pack.name in ("covenants", "amendment_diff") and proposals:
         for p in proposals:  # covenants are matched by metric, not by the name as written
             p.setdefault("_written", p.get("name"))
             p["name"] = _covenant_key({"value": p.get("value"), "name": p.get("name")}) or p.get("name")
         return _vote_covenants(fields, proposals, _same_change if pack.name == "amendment_diff" else _same_test)
     return vote(fields, proposals)
+
+
+def _same_periods(a: dict, b: dict | None) -> bool:
+    def norm(v):
+        return sorted((p.get("from"), p.get("to"), p.get("testDate")) for p in (v or {}).get("periods") or []
+                      if isinstance(p, dict))
+
+    return norm(a) == norm(b)
 
 
 def _explain_changes(fields: list[dict], proposals: list[dict] | None) -> None:
@@ -311,7 +354,7 @@ def base_fields(db: Session, job: Job, pipeline_version: str) -> list[dict]:
     if not base_version:
         return []
     base = db.scalars(select(Job).where(Job.tenant_id == job.tenant_id, Job.document_version_id == base_version,
-                                        Job.job_type.in_(("EXTRACT_AGREEMENT", "EXTRACT_AMENDMENT")),
+                                        Job.job_type.in_(("EXTRACT_AGREEMENT", "EXTRACT_AMENDMENT", "ONBOARD")),
                                         Job.status.in_((jobs.DONE, jobs.NEEDS_REVIEW)))
                       .order_by(Job.finished_at.desc())).first()
     if base is None:
@@ -330,6 +373,8 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
     try:
         if pack.name == "commentary":
             fields, warnings, extra = _commentary(pack, raw or b"{}", gateway)
+        elif pack.name == "reconcile_set":
+            fields, warnings, extra = _reconcile(job, raw or b"", db, pipeline_version, ctx)
         else:
             fields, warnings, extra = _extract(pack, job, model or {"pages": []}, ctx, gateway, tools, db,
                                                pipeline_version)
@@ -350,14 +395,19 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
     from dps.skills.covenants.codes import stamp
 
     stamp(fields)  # taxonomy codes on every covenant-like field; defaults marked and sent to a person
-    if fields:  # phase 5: every field's confidence from the scorer, routed by the pack's thresholds
+    built = pack.name == "reconcile_set"  # a set is built from reviewed runs: no new reading, no new score
+    if not built:
+        from dps.skills.covenants.obligation import enrich
+
+        enrich(fields, (model or {}).get("pages"), ctx)  # WP6: company, facility, conditions, first test date
+    if fields and not built:  # phase 5: every field's confidence from the scorer, routed by the pack's thresholds
         from dps.scoring import Scorer
 
         quality = {p["no"]: (float(p.get("quality", 1.0)), p.get("method", "NATIVE"))
                    for p in (model or {}).get("pages", [])}
         Scorer(scorer_dir).apply(fields, pack.name, pack.risk, pack.thresholds, quality)
     check_numbers(fields)  # after scoring: a number not in its own quote always goes to a person
-    if pack.name != "commentary":
+    if pack.name not in ("commentary", "reconcile_set"):
         extra["_pages"] = page_accounting((model or {}).get("pages", []))
         if not [f for f in fields if f.get("group") != "SCHEDULE_TERM"] \
                 and not any(w["code"] == "NOTHING_FOUND" for w in warnings):
@@ -411,7 +461,7 @@ def _taxonomy_version() -> str:
 
 def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, pipeline_version: str):
     pages = model.get("pages", [])
-    if pack.name == "amendment_diff":
+    if pack.name in ("amendment_diff", "waiver"):
         if ctx.get("baseCovenants"):
             ctx["base"], ctx["baseSource"] = approved_base(ctx["baseCovenants"]), "CTS_APPROVED"
         elif db is not None:
@@ -544,6 +594,33 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     return fields, warnings, extra
 
 
+def _reconcile(job: Job, raw: bytes, db: Session | None, pipeline_version: str, ctx: dict):
+    """RECONCILE_SET (WP9): the covenants in force at the manifest's date, from the latest run of each document in
+    the set (no document is read again)."""
+    from dps.skills.reconcile_set.rules import JOB_TYPES, parse_manifest, reconcile
+
+    manifest, problem = parse_manifest(raw)
+    if manifest is None:
+        return [], [issue("SET_MANIFEST_INVALID", problem)], {"set": None}
+    runs: dict[str, dict | None] = {}
+    if db is not None:
+        from dps import results
+
+        for d in manifest["documents"]:
+            query = select(Job).where(Job.tenant_id == job.tenant_id, Job.document_version_id == d["versionId"],
+                                      Job.job_type.in_(JOB_TYPES), Job.status.in_((jobs.DONE, jobs.NEEDS_REVIEW)))
+            if d.get("jobId"):
+                query = query.where(Job.id == str(d["jobId"]))
+            found = db.scalars(query.order_by(Job.finished_at.desc())).first()
+            runs[d["versionId"]] = results.build(db, found, pipeline_version) if found is not None else None
+    base = ctx.get("baseCovenants") or manifest.get("baseCovenants") or []
+    if not all(isinstance(c, dict) and c.get("appliedCovenantId") and c.get("name") for c in base):
+        return [], [issue("SET_MANIFEST_INVALID", "each baseCovenants item needs appliedCovenantId and name")], \
+            {"set": None}
+    fields, warnings, report = reconcile(manifest, runs, approved_base(base))
+    return fields, warnings, {"set": report}
+
+
 def _commentary(pack: Pack, raw: bytes, gateway):
     from dps.skills.commentary.rules import check_text, draft
 
@@ -630,7 +707,10 @@ def pack_for(job_type: str) -> Pack | None:
 
 # G1 (Miro onboarding flow): one job classifies the document, then runs the right pack. Covenants and schedule
 # terms come back in one result, with the classification and the identifiers.
-ONBOARD_PACKS = {"LOAN_AGREEMENT": "covenants", "SANCTION_LETTER": "sanction", "AMENDMENT": "amendment_diff"}
+ONBOARD_PACKS = {"LOAN_AGREEMENT": "covenants", "SANCTION_LETTER": "sanction", "AMENDMENT": "amendment_diff",
+                 # WP9: a guarantee's covenants bind the guarantor (scope says so); an amended and restated
+                 # agreement is a full agreement that replaces an earlier one; a waiver is read against the base
+                 "GUARANTEE": "covenants", "AMENDED_AND_RESTATED": "covenants", "WAIVER_CONSENT": "waiver"}
 
 
 def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | None = None,
@@ -660,9 +740,18 @@ def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | N
                                                      "facilityIds": ctx.get("facilityIds") or []}, job.correlation_id)
     result["classification"] = c.as_result()
     result["identifiers"] = identifiers
+    restates = None
+    if c.type == "AMENDED_AND_RESTATED":  # WP9: Spring supersedes the replaced version's covenants on approval
+        restates = ctx.get("restatesVersionId") or ctx.get("amendsVersionId")
+        result["restates"] = {"versionId": restates, "evidence": c.evidence[:1]}
     result["legibility"] = legibility(model)
     result["keyPages"] = key_pages(model, c.type)
     extra = list(id_warnings)
+    if c.type == "AMENDED_AND_RESTATED":
+        extra.append(issue("RESTATES", "an amended and restated agreement: its covenants replace those of "
+                                       + (f"version {restates}" if restates else "the earlier agreement (version not "
+                                                                                  "sent: context.restatesVersionId)")
+                                       + " once approved"))
     if c.mismatch:
         extra.append(issue("TYPE_MISMATCH", f"chosen {expected}, the document reads as {c.type}"))
     if c.disputed:

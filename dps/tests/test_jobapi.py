@@ -358,7 +358,7 @@ def test_catalogue_endpoints(client):
     check_component("Capabilities", caps)
     assert {t["jobType"] for t in caps["jobTypes"] if t["available"]} == {
         "EXTRACT_AGREEMENT", "EXTRACT_STATEMENT", "ANALYZE", "EXTRACT_SANCTION", "EXTRACT_CERTIFICATE",
-        "EXTRACT_AMENDMENT", "DRAFT_COMMENTARY", "ONBOARD"}
+        "EXTRACT_AMENDMENT", "DRAFT_COMMENTARY", "ONBOARD", "EXTRACT_WAIVER", "RECONCILE_SET"}
 
 
 def test_health_and_queue_report(client, app):

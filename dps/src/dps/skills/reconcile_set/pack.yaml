@@ -1,0 +1,11 @@
+name: reconcile_set
+version: 1.0.0
+# Full review WP9 (F10): the covenants in force on a date across a document set; built from earlier runs, no model.
+job_types: [RECONCILE_SET]
+routes: {}
+page_selection: {max_pages: 0}
+limits: {token_budget: 0}
+prompt: prompt.md
+schema: schema.json
+field_risk: {"*": HIGH}
+thresholds: {MEDIUM: 0.95, LOW: 0.90}

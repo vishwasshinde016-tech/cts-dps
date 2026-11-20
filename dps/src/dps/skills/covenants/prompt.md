@@ -14,3 +14,9 @@ For each give: name (as written), metric (the code), basis (STANDALONE or CONSOL
 figures are tested; else null), operator (>=, >, <=, <; null when there is no number), threshold (a number; null
 when there is none), unit (TIMES, PERCENT, or a currency amount unit), test frequency, step-downs as
 [{"from", "to", "threshold"}], cure period in days, and the page and verbatim quote of the clause.
+
+Also give, when the clause says it (else null or []): obligor (whose duty it is, as written: Borrower, Guarantor,
+Parent, Group ...), facilityRefs (the facilities it applies to, as written), conditions (each "if / when / so long
+as" trigger, [{"text": copied from the quote, "kind": SPRINGING when it depends on loans drawn or availability, else
+CONDITIONAL}]), firstTestDate (YYYY-MM-DD), equityCure ({"allowed", "maxUses", "text"}) and baskets (permitted
+amounts, [{"text", "amount", "currency"}]). The same duty for two companies is two items.

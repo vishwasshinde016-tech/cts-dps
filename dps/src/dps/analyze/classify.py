@@ -16,7 +16,11 @@ from dataclasses import dataclass, field
 log = logging.getLogger(__name__)
 
 CLASSES = ("SANCTION_LETTER", "LOAN_AGREEMENT", "AMENDMENT", "FINANCIAL_STATEMENT", "COMPLIANCE_CERTIFICATE",
-           "SECURITY_DOCUMENT", "OTHER_EVIDENCE")
+           "SECURITY_DOCUMENT", "OTHER_EVIDENCE", "WAIVER_CONSENT", "GUARANTEE", "AMENDED_AND_RESTATED")
+# A chosen type the document may also read as without a mismatch (full review WP9): an amended and restated
+# agreement is a loan agreement; a guarantee is a security document.
+COMPATIBLE = {"LOAN_AGREEMENT": {"AMENDED_AND_RESTATED"}, "AMENDED_AND_RESTATED": {"LOAN_AGREEMENT"},
+              "SECURITY_DOCUMENT": {"GUARANTEE"}, "GUARANTEE": {"SECURITY_DOCUMENT"}}
 DECIDE_SCORE, DECIDE_LEAD = 0.8, 0.3
 MISMATCH_CONFIDENCE, UNCERTAIN_CONFIDENCE = 0.8, 0.6
 MAX_PROMPT_CHARS = 16_000  # about 4,000 tokens
@@ -72,6 +76,24 @@ SIGNALS: dict[str, list[tuple[re.Pattern, float]]] = {
         (re.compile(r"\bcomplied\s+with\b|\bin\s+compliance\s+with\b", re.I), 0.2),
         (re.compile(r"\bUDIN\b", re.I), 0.3),
         (re.compile(r"\b(chartered\s+accountants?|membership\s+no)\b", re.I), 0.15),
+    ],
+    # Full review WP9 (F10): waiver and consent letters, guarantees with covenants, amended and restated agreements.
+    "WAIVER_CONSENT": [
+        (re.compile(r"\b(?:waiver(?:\s+and\s+consent)?|consent)\s+(?:letter|request|agreement)\b", re.I), 0.6),
+        (re.compile(r"\b(?:hereby\s+)?(?:irrevocably\s+)?waives?\b|\bgrants?\s+(?:a|its|the)\s+waiver\b", re.I), 0.4),
+        (re.compile(r"\bhereby\s+consents?\b|\bconsents?\s+to\s+the\b", re.I), 0.2),
+        (re.compile(r"\b(?:non-?compliance\s+with|breach\s+of)\s+(?:the\s+)?(?:clause|covenant|financial)", re.I), 0.2),
+    ],
+    "GUARANTEE": [
+        (re.compile(r"\b(?:deed\s+of\s+|corporate\s+|parent\s+(?:company\s+)?)?guarantee\s+(?:agreement|and\s+"
+                    r"indemnity|deed)\b|\bguaranty\s+agreement\b|\bdeed\s+of\s+guarantee\b", re.I), 0.6),
+        (re.compile(r"\bguarantor\s+(?:hereby\s+)?(?:irrevocably\s+)?(?:and\s+unconditionally\s+)?guarantees?\b",
+                    re.I), 0.4),
+        (re.compile(r"\bguarantor\s+(?:shall|undertakes|covenants)\b", re.I), 0.2),
+    ],
+    "AMENDED_AND_RESTATED": [
+        (re.compile(r"\bamended\s+and\s+restated\s+(?:[\w-]+\s+){0,4}agreement\b", re.I), 0.6),
+        (re.compile(r"\bamends?\s+and\s+restates?\b|\bshall\s+be\s+amended\s+and\s+restated\b", re.I), 0.3),
     ],
     "SECURITY_DOCUMENT": [
         (re.compile(r"\bdeed\s+of\s+(hypothecation|guarantee|pledge|mortgage)\b", re.I), 0.6),
@@ -160,6 +182,17 @@ def rule_scores(model: dict) -> tuple[dict[str, float], list[dict]]:
         scores["FINANCIAL_STATEMENT"] = min(1.0, scores["FINANCIAL_STATEMENT"] + 0.4)
     if scores["AMENDMENT"] >= 0.6:  # an amendment quotes the agreement it amends: do not call it the agreement
         scores["LOAN_AGREEMENT"] = max(0.0, scores["LOAN_AGREEMENT"] - 0.3)
+        # "First Amendment to the Amended and Restated Credit Agreement" is an amendment
+        scores["AMENDED_AND_RESTATED"] = max(0.0, scores["AMENDED_AND_RESTATED"] - 0.5)
+    elif scores["AMENDED_AND_RESTATED"] >= 0.6:  # a full agreement that replaces an earlier one (WP9)
+        scores["AMENDED_AND_RESTATED"] = 1.0
+        scores["LOAN_AGREEMENT"] = min(scores["LOAN_AGREEMENT"], 0.6)
+    if scores["GUARANTEE"] >= 0.6:  # a guarantee is a security document whose covenants bind the guarantor
+        scores["SECURITY_DOCUMENT"] = max(0.0, scores["SECURITY_DOCUMENT"] - 0.4)
+        scores["LOAN_AGREEMENT"] = max(0.0, scores["LOAN_AGREEMENT"] - 0.3)
+    if scores["WAIVER_CONSENT"] >= 0.6:  # a waiver letter quotes the agreement and its covenants
+        scores["LOAN_AGREEMENT"] = max(0.0, scores["LOAN_AGREEMENT"] - 0.3)
+        scores["AMENDMENT"] = max(0.0, scores["AMENDMENT"] - 0.3)
     winner = max(scores, key=scores.get)
     return {k: round(v, 3) for k, v in scores.items()}, evidence.get(winner, [])[:3]
 
@@ -200,7 +233,9 @@ def decide_rules(scores: dict[str, float]) -> tuple[str, float] | None:
 
 PROMPT = """You classify one bank lending document. {guard}
 Classes: SANCTION_LETTER, LOAN_AGREEMENT, AMENDMENT, FINANCIAL_STATEMENT, COMPLIANCE_CERTIFICATE,
-SECURITY_DOCUMENT, OTHER_EVIDENCE, UNKNOWN.
+SECURITY_DOCUMENT, OTHER_EVIDENCE, WAIVER_CONSENT (a waiver or consent letter), GUARANTEE (a guarantee, deed of
+guarantee or guaranty agreement), AMENDED_AND_RESTATED (a full agreement that amends and restates an earlier one),
+UNKNOWN.
 Answer with JSON only: {{"type": "<class>", "basis": "STANDALONE"|"CONSOLIDATED"|null,
 "periodType": "ANNUAL"|"HALF_YEARLY"|"QUARTERLY"|"MONTHLY"|null,
 "evidence": [{{"page": <number>, "quote": "<a line copied exactly from that page>"}}]}} with 2 or 3 quotes.
@@ -328,7 +363,8 @@ def classify(model: dict, expected: str | None = None, gateway=None) -> Classifi
     result.evidence_kind = kind
     result.expected = expected
     if expected:
-        result.mismatch = result.type not in (expected, "UNKNOWN") and result.confidence >= MISMATCH_CONFIDENCE
+        result.mismatch = (result.type not in (expected, "UNKNOWN", *COMPATIBLE.get(expected, ()))
+                           and result.confidence >= MISMATCH_CONFIDENCE)
     result.uncertain = (result.confidence < UNCERTAIN_CONFIDENCE or result.disputed is not None
                         or result.method == "VISION")
     return result

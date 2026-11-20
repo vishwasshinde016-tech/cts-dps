@@ -1,5 +1,5 @@
 name: covenants
-version: 3.0.0
+version: 3.1.0
 # EXTRACT_AGREEMENT keeps the proven Agreement Intake flow (rules, safety net, AI second reader, voting); this pack's
 # rules are the same extractor, reused by the sanction and amendment packs.
 engine: legacy_flow

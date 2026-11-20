@@ -46,7 +46,11 @@ JOB_TYPES = {
     "DRAFT_COMMENTARY": {"flow": "SKILL_PACK", "document_type": "COMMENTARY_MANIFEST", "phase": 4},
     # G1 (Miro onboarding flow): classify, then extract covenants and schedule terms with the right pack.
     "ONBOARD": {"flow": "SKILL_PACK", "document_type": "UNKNOWN", "phase": 4},
+    # Full review WP9: waiver and consent letters; the covenants in force across a document set (JSON manifest).
+    "EXTRACT_WAIVER": {"flow": "SKILL_PACK", "document_type": "WAIVER_CONSENT", "phase": 4},
+    "RECONCILE_SET": {"flow": "SKILL_PACK", "document_type": "DOCUMENT_SET", "phase": 4},
 }
+JSON_TYPES = ("DRAFT_COMMENTARY", "RECONCILE_SET")  # their document is a JSON manifest, not a file to read
 LATER_TYPES = {"REPROCESS": 5}
 MEDIA_TYPES = {
     "application/pdf": ".pdf",
@@ -105,6 +109,7 @@ class JobContext(_Strict):
     expectedCurrency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")  # noqa: N815
     expectedUnits: Literal["UNITS", "THOUSAND", "LAKH", "CRORE", "MILLION", "BILLION"] | None = None  # noqa: N815
     amendsVersionId: str | None = Field(default=None, max_length=64)  # noqa: N815
+    restatesVersionId: str | None = Field(default=None, max_length=64)  # noqa: N815 - WP9 amended and restated
     baseCovenants: list[BaseCovenant] | None = Field(default=None, max_length=500)  # noqa: N815
     cycleId: str | None = Field(default=None, max_length=64)  # noqa: N815
     reprocessReason: str | None = Field(default=None, max_length=500)  # noqa: N815
@@ -113,7 +118,8 @@ class JobContext(_Strict):
 
 class JobRequest(_Strict):
     jobType: Literal["ANALYZE", "ONBOARD", "EXTRACT_AGREEMENT", "EXTRACT_AMENDMENT", "EXTRACT_SANCTION",  # noqa: N815
-                     "EXTRACT_STATEMENT", "EXTRACT_CERTIFICATE", "DRAFT_COMMENTARY", "REPROCESS"]
+                     "EXTRACT_STATEMENT", "EXTRACT_CERTIFICATE", "DRAFT_COMMENTARY", "REPROCESS", "EXTRACT_WAIVER",
+                     "RECONCILE_SET"]
     document: DocumentRef
     context: JobContext
     priority: Literal["INTERACTIVE", "AMENDMENT", "ASSESSMENT", "BULK", "REPROCESS"] = "INTERACTIVE"
@@ -173,8 +179,17 @@ def validate_job(store, body: JobRequest, settings: Settings) -> dict:
     _check_tenant(settings, body.context.tenantId)
     if body.document.mediaType not in MEDIA_TYPES:
         raise ApiError(400, "UNSUPPORTED_FORMAT", f"{body.document.mediaType} cannot be processed yet.")
-    if (body.document.mediaType == "application/json") != (body.jobType == "DRAFT_COMMENTARY"):
-        raise ApiError(400, "UNSUPPORTED_FORMAT", "application/json is the outcome manifest of DRAFT_COMMENTARY only.")
+    if (body.document.mediaType == "application/json") != (body.jobType in JSON_TYPES):
+        raise ApiError(400, "UNSUPPORTED_FORMAT", "application/json is the manifest of DRAFT_COMMENTARY and "
+                                                  "RECONCILE_SET only.")
+    # G18: a change is read against what was approved. A waiver needs the approved covenants; an amendment needs
+    # them or the version it amends (DPS then compares with its own reading, flagged BASE_FROM_DPS).
+    if body.jobType == "EXTRACT_WAIVER" and not body.context.baseCovenants:
+        raise ApiError(400, "BASE_REQUIRED", "context.baseCovenants (the approved covenants) is required for "
+                                             "EXTRACT_WAIVER.")
+    if body.jobType == "EXTRACT_AMENDMENT" and not (body.context.baseCovenants or body.context.amendsVersionId):
+        raise ApiError(400, "BASE_REQUIRED", "context.baseCovenants (preferred) or context.amendsVersionId is "
+                                             "required for EXTRACT_AMENDMENT.")
     if spec["document_type"] == "LOAN_AGREEMENT" and body.document.mediaType != "application/pdf":
         raise ApiError(400, "UNSUPPORTED_FORMAT", "A loan agreement must be a PDF.")
     if spec["document_type"] == "FINANCIAL_STATEMENT" and body.context.asOfDate is None:

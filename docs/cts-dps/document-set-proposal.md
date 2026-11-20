@@ -2,6 +2,11 @@
 
 *For the Spring (CTS) team. Status: **proposal**, nothing built until the open questions below are agreed. 19 Nov 2026.*
 
+> **Update 20 Nov 2026: a first version is built** (full review WP9). It differs from this proposal in two ways, both open for the Spring team to change:
+> - the set is sent as a JSON manifest *document* (`mediaType: application/json`, like `DRAFT_COMMENTARY`): `{setId, asOfDate, documents: [{versionId, role, effectiveDate, jobId}], baseCovenants}`, not as `context.documentSet`;
+> - it returns the covenants **in force on `asOfDate`** (each with its change trail and waivers), not the full timeline with effective-from and effective-to per value. A timeline is a number of in-force calls, one per date, until the timeline itself is agreed.
+> Waivers have their own job, `EXTRACT_WAIVER` (it needs `baseCovenants`).
+
 ## 1. The problem
 
 CTS tracks the covenant **in force on a date**. That depends on a chain of documents, not on one file:

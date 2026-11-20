@@ -1,0 +1,19 @@
+[
+  {
+    "appliedCovenantId": "AC-11",
+    "name": "Debt Service Coverage Ratio",
+    "metric": "DSCR",
+    "operator": ">=",
+    "threshold": 1.2,
+    "unit": "TIMES",
+    "clause": "21.2"
+  },
+  {
+    "appliedCovenantId": "AC-12",
+    "name": "Interest Coverage Ratio",
+    "metric": "ICR",
+    "operator": ">=",
+    "threshold": 2.0,
+    "clause": "21.5"
+  }
+]
