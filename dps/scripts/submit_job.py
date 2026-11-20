@@ -10,6 +10,13 @@ Then, in a third terminal:
     python scripts/submit_job.py ../architect-documents/us_ex10_1_credit_agreement_2020.pdf        # ONBOARD
     python scripts/submit_job.py ../architect-documents/us_holly_amendment_2010.pdf --job EXTRACT_AMENDMENT
     python scripts/submit_job.py ../golden-set/documents/FS-011.pdf --job EXTRACT_STATEMENT --as-of 2026-03-31
+    python scripts/submit_job.py ../docs/cts-dps/demo-kit/waiver-letter.pdf --job EXTRACT_WAIVER \
+        --base ../docs/cts-dps/demo-kit/base-covenants.json
+    python scripts/submit_job.py ../docs/cts-dps/demo-kit/set-manifest.json --job RECONCILE_SET \
+        --base ../docs/cts-dps/demo-kit/base-covenants.json
+
+An amendment or waiver job needs the approved covenants (--base, a JSON list as Spring sends them in
+context.baseCovenants); an amendment may name the agreement version it amends instead (--amends).
 
 What it does, step by step (each step prints a line):
 1. "DMS": stores the file in DPS_STORAGE_DIR under its SHA-256, as the DMS keeps immutable versions.
@@ -32,9 +39,10 @@ from pathlib import Path
 
 MEDIA = {".pdf": "application/pdf", ".csv": "text/csv", ".xls": "application/vnd.ms-excel",
          ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+         ".json": "application/json"}
 JOBS = ["ONBOARD", "EXTRACT_AGREEMENT", "EXTRACT_AMENDMENT", "EXTRACT_SANCTION", "EXTRACT_STATEMENT",
-        "EXTRACT_CERTIFICATE", "ANALYZE"]
+        "EXTRACT_CERTIFICATE", "ANALYZE", "EXTRACT_WAIVER", "RECONCILE_SET"]
 FINAL = {"DONE", "NEEDS_REVIEW", "FAILED", "DEAD", "CANCELLED"}
 HEADERS = {"X-User": "cts-spring", "X-Roles": "SERVICE"}
 
@@ -59,6 +67,9 @@ def main() -> int:
     ap.add_argument("--env", type=Path, default=Path(".env"))
     ap.add_argument("--json", type=Path, help="save the full dps.result JSON here")
     ap.add_argument("--wait", type=int, default=900, help="seconds to wait for the worker")
+    ap.add_argument("--base", type=Path, help="JSON file: the approved covenants (context.baseCovenants)")
+    ap.add_argument("--amends", default=None, help="the agreement version an amendment amends (amendsVersionId)")
+    ap.add_argument("--restates", default=None, help="the version an amended and restated agreement replaces")
     args = ap.parse_args()
 
     media = MEDIA.get(args.file.suffix.lower())
@@ -80,6 +91,12 @@ def main() -> int:
         context["expectedType"] = args.type
     if args.as_of:
         context["asOfDate"] = args.as_of
+    if args.base:
+        context["baseCovenants"] = json.loads(args.base.read_text(encoding="utf-8"))
+    if args.amends:
+        context["amendsVersionId"] = args.amends
+    if args.restates:
+        context["restatesVersionId"] = args.restates
     body = {"jobType": args.job, "context": context,
             "document": {"versionId": f"v-{sha[:12]}", "objectKey": key, "sha256": sha, "fileName": args.file.name,
                          "mediaType": media, "sizeBytes": len(data)}}
@@ -116,6 +133,14 @@ def main() -> int:
     print(f"4. Result  {result.get('schema')} status {result.get('status')}, type {c.get('type')} "
           f"({c.get('confidence')}), skill {(result.get('pipeline') or {}).get('skillPack')}")
     for f in result.get("fields", []):
+        if f["group"] == "WAIVER":
+            v = f["value"]
+            target = v.get("target") or {}
+            dates = ", ".join(p.get("testDate") or f"{p.get('from')}..{p.get('to')}" for p in v.get("periods") or [])
+            print(f"   p{f['source'].get('page')!s:>3}  WAIVER of {target.get('appliedCovenantId') or '?'} "
+                  f"{target.get('metric') or ''} for {dates or '?'}; expires {v.get('expiresOn')}; "
+                  f"{len(v.get('conditions') or [])} condition(s)")
+            continue
         if f["group"] in ("FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "EVENT_OF_DEFAULT", "AMENDMENT_CHANGE",
                           "STATEMENT_LINE"):
             v = f["value"]
@@ -125,11 +150,33 @@ def main() -> int:
                 level = f"{v['amount']} {v.get('unit') or ''}".strip()
             else:
                 level = f"{v.get('operator') or ''} {'' if v.get('threshold') is None else v['threshold']}".strip()
+            scope = v.get("scope") or {}
+            extra = ""
+            if scope.get("obligor") or scope.get("basis"):
+                basis = f", {scope['basis'].lower()}" if scope.get("basis") else ""
+                extra += f"  [{scope.get('obligor') or '?'}{basis}]"
+            if v.get("conditions"):
+                extra += f"  only if: {v['conditions'][0]['text'][:60]}"
+            change = v.get("change") or {}
+            if change:
+                extra += f"  {change.get('type')} {change.get('appliedCovenantId') or ''}".rstrip()
+            info = v.get("inForce") or {}
+            if info:
+                extra += "  trail: " + " > ".join(t["action"] for t in info.get("trail", []))
+                extra += "  WAIVED at date" if info.get("waivedAtDate") else ""
             print(f"   p{f['source'].get('page')!s:>3}  {f['group'][:22]:<22} "
-                  f"{str(v.get('code') or v.get('metric') or v.get('key') or f.get('name'))[:30]:<30} {level}")
+                  f"{str(v.get('code') or v.get('metric') or v.get('key') or f.get('name'))[:30]:<30} {level}{extra}")
     led = ((result.get("document") or {}).get("coverage") or {}).get("ledger")
     if led:
         print(f"   coverage: {led['candidates']} duty sentences, {led.get('unresolved', 0)} for a person to check")
+    if result.get("set"):
+        s = result["set"]
+        print(f"   set {s.get('setId')} at {s.get('asOfDate')}: applied "
+              + ", ".join(d["versionId"] for d in s["documents"] if d.get("applied"))
+              + (f"; not yet effective: {', '.join(s['notYetEffective'])}" if s.get("notYetEffective") else "")
+              + (f"; MISSING: {', '.join(s['missing'])}" if s.get("missing") else ""))
+    if result.get("restates"):
+        print(f"   restates version {result['restates'].get('versionId')}")
     warnings = sorted({w["code"] for w in result.get("warnings") or []})
     if warnings:
         print(f"   warnings: {', '.join(warnings)}")

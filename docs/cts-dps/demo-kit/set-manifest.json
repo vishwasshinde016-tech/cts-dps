@@ -1,0 +1,21 @@
+{
+  "setId": "SET-DEMO-1",
+  "asOfDate": "2026-06-30",
+  "documents": [
+    {
+      "versionId": "v-agreement-2024",
+      "role": "AGREEMENT",
+      "effectiveDate": "2024-04-01"
+    },
+    {
+      "versionId": "v-0b778be1fd2c",
+      "role": "AMENDMENT",
+      "effectiveDate": "2026-04-01"
+    },
+    {
+      "versionId": "v-ba03f5638697",
+      "role": "WAIVER",
+      "effectiveDate": "2026-05-15"
+    }
+  ]
+}

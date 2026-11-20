@@ -339,7 +339,7 @@ The second run prints the **same job ID** with `(duplicate: DPS already has a jo
 **Do** (Terminal C):
 
 ```powershell
-.venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_southcross_amendment_2018.pdf --job EXTRACT_AMENDMENT
+.venv\Scripts\python scripts\submit_job.py ..\architect-documents\us_southcross_amendment_2018.pdf --job EXTRACT_AMENDMENT --base ..\docs\cts-dps\demo-kit\southcross-base.json
 .venv\Scripts\python scripts\show_job.py
 ```
 
@@ -358,12 +358,12 @@ The second run prints the **same job ID** with `(duplicate: DPS already has a jo
 3. Each change is matched to an approved covenant by `appliedCovenantId` and clause. If the target is unclear, DPS does not guess: it raises `AMBIGUOUS_AMENDMENT_TARGET` for a person.
 4. [`dps/src/dps/skills/amendment_diff/rules.py:145`](../../dps/src/dps/skills/amendment_diff/rules.py#L145) `amended_set` builds the covenant set after the change.
 
-**Result on this file:** skill `amendment_diff/1.0.0`. Interest Coverage ≥ 1.5 is reported as an **ADD** change, with its page.
+**Result on this file:** skill `amendment_diff/1.0.0`. With the sample approved covenants in [`demo-kit/southcross-base.json`](demo-kit/southcross-base.json), Interest Coverage ≥ 1.5 is reported as a **CHANGE** of the approved covenant `AC-SX-1` (≥ 2.0), with its page. Without `--base` the job is refused with `400 BASE_REQUIRED`: an amendment needs the approved covenants (or `--amends <agreement version>`).
 
 **Say:**
 > "Same pipeline, a different skill. For an amendment, Spring also sends the covenants that are already approved. DPS says, for each one, whether the amendment adds, changes or deletes it, and gives the full set after the change. If it cannot tell which covenant a change touches, it asks a person instead of guessing.
 >
-> On the laptop we do not send base covenants, because there is no CTS database here, so each change shows as an ADD. In the bank, Spring sends them and the same change shows as a CHANGE of the existing covenant."
+> On the laptop a small file plays the CTS database: it holds the approved covenants Spring would send. So the change shows as a CHANGE of the approved covenant, exactly as in the bank."
 
 ---
 

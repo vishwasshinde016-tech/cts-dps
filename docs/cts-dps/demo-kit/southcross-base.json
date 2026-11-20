@@ -1,0 +1,18 @@
+[
+  {
+    "appliedCovenantId": "AC-SX-1",
+    "name": "Consolidated Interest Coverage Ratio",
+    "metric": "ICR",
+    "operator": ">=",
+    "threshold": 2.0,
+    "category": "FINANCIAL"
+  },
+  {
+    "appliedCovenantId": "AC-SX-2",
+    "name": "Consolidated Leverage Ratio",
+    "metric": "DEBT_TO_EBITDA",
+    "operator": "<=",
+    "threshold": 5.0,
+    "category": "FINANCIAL"
+  }
+]
