@@ -483,6 +483,11 @@
             "TIMES"
           ]
         },
+        "currency": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Z]{3}$",
+          "description": "ISO 4217 code of an amount covenant (minimum net worth, EBITDA floor), from the symbol or code next to the amount ('£5,000,000' gives GBP); absent when the text names none"
+        },
         "expression": {
           "type": [
             "string",

@@ -13,6 +13,7 @@ import gzip
 import hashlib
 import json
 import logging
+import re
 from collections.abc import Callable
 
 from sqlalchemy import select
@@ -37,6 +38,17 @@ class IngestFailed(Exception):
 
 
 Parse = Callable[[sandbox.ParseRequest, int | None], dict]
+_PAGE_OBJECT = re.compile(rb"/Type\s*/Page(?![s\w])")
+# The LIGHT pool's longest parse is 900 s at 60 s per 10 pages: more pages than this cannot finish there.
+LIGHT_MAX_PAGES = 150
+
+
+def page_hint(data: bytes, fmt: str) -> int | None:
+    """How many pages a PDF has, counted from its page objects in the raw bytes, without parsing the file (the parse
+    itself runs in the sandbox). None for other formats, or when the pages are hidden in compressed streams."""
+    if fmt != "PDF":
+        return None
+    return len(_PAGE_OBJECT.findall(data)) or None
 
 
 class Ingestor:
@@ -72,8 +84,11 @@ class Ingestor:
             except StoreError as ex:
                 log.warning("Page model %s unreadable (%s); building it again", existing.path, ex.code)
         req = sandbox.ParseRequest(data, fmt, doc.sha256, job.document_version_id, self.ocr, self.heavy)
+        hint = page_hint(data, fmt)
+        if not self.heavy and hint and hint > LIGHT_MAX_PAGES:  # it cannot finish in the LIGHT pool's time: no try
+            raise IngestFailed("LARGE_DOCUMENT", f"{hint} pages: read by the HEAVY pool", heavy=True)
         try:
-            model = self._parse(req, None)
+            model = self._parse(req, hint)  # the time limit scales with the pages (it was always the minimum)
         except InspectionFailed as ex:
             raise IngestFailed(ex.code, str(ex)) from ex
         except sandbox.SandboxError as ex:

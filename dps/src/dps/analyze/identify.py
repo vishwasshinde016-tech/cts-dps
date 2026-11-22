@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
+from dps.money import currency_words as money_words
+
 _B36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 PAN = re.compile(r"\b([A-Z]{3}[ABCFGHLJPTK][A-Z]\d{4}[A-Z])\b")
 GSTIN = re.compile(r"\b(\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b")
@@ -27,10 +29,9 @@ PERIOD_END = re.compile(
     r"\b(year|quarter|half[\s-]+year|period|(?:three|six|nine|twelve)\s+months|month)\s+ended\s+(?:on\s+)?"
     r"(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9}),?\s+(\d{4})", re.I)
 AS_AT = re.compile(r"\bas\s+(?:at|on)\s+(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9}),?\s+(\d{4})", re.I)
-CURRENCY = [(re.compile(r"₹|\bINR\b|\bRs\.?(?=\s|\d)|\brupees?\b", re.I), "INR"),
-            (re.compile(r"\bUSD\b|US\$|\$(?=\s?\d)"), "USD"), (re.compile(r"\bLKR\b|\bSLR\b"), "LKR"),
-            (re.compile(r"\bEUR\b|€"), "EUR"), (re.compile(r"\bGBP\b|£"), "GBP"),
-            (re.compile(r"\bAED\b|\bdirhams?\b", re.I), "AED")]
+# Every currency dps.money knows, plus a bare "$" before a number (US dollar) and the rupee words (INR here).
+CURRENCY = [(pattern, code) for code, pattern in money_words()] + [
+    (re.compile(r"(?<![A-Z])\$(?=\s?\d)"), "USD"), (re.compile(r"\bRs\.?(?=\s|\d)|\brupees?\b", re.I), "INR")]
 UNIT = re.compile(r"\(?\s*(?:₹|rs\.?|inr|usd|amounts?)?\s*(?:in|all\s+amounts\s+in)\s+(?:₹|rs\.?|inr|usd)?\s*"
                   r"(lakhs?|lacs?|crores?|thousands?|millions?|billions?|'000)\b", re.I)
 UNIT_NAMES = {"lakh": "LAKH", "lac": "LAKH", "crore": "CRORE", "thousand": "THOUSAND", "'000": "THOUSAND",

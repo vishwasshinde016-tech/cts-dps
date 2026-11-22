@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 
 from dps.extraction.schedule import DATE, parse_date
+from dps.money import CURRENCY_AFTER, MONEY_MARKER, currency_after_amount, currency_before_amount, document_currencies
 from dps.skills.common import issue
 
 COVENANT_GROUPS = ("FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "INFO_COVENANT", "POSSIBLE_COVENANT")
@@ -58,13 +59,16 @@ ALWAYS = re.compile(r"\b(?:outstanding|in\s+force|remains?\s+(?:in\s+effect|avai
 RATING = re.compile(r"\brating\b|\binvestment\s+grade\b", re.I)
 LESS = re.compile(r"\b(?:less|lower|fewer)\s+than\b|\bfalls?\s+below\b|\bbelow\b|\bunder\b|\bdrops?\s+below\b", re.I)
 MORE = re.compile(r"\b(?:more|greater|higher)\s+than\b|\bexceeds?\b|\babove\b|\bin\s+excess\s+of\b", re.I)
-CURRENCY = r"(?:USD|US\$|\$|EUR|€|GBP|£|INR|Rs\.?|₹|LKR|SGD|AED)"
+CURRENCY = MONEY_MARKER
 MONEY = re.compile(CURRENCY + r"\s*([\d,]+(?:\.\d+)?)\s*(million|mn|billion|bn|crores?|cr|lakhs?|thousand)?", re.I)
+# "not exceeding 5,000,000 euros": the currency after the amount
+MONEY_AFTER = re.compile(r"(?<![\d.,])([\d,]*\d(?:\.\d+)?)\s*(million|mn|billion|bn|crores?|cr|lakhs?|thousand)?"
+                         + CURRENCY_AFTER, re.I)
 PERCENT = re.compile(r"([\d.]+)\s*(?:%|per\s*cent|percent)", re.I)
 METRIC_WORDS = re.compile(r"^(?:the\s+)?((?:[A-Z][\w&'-]*\s+){0,4}[A-Z][\w&'-]*)")
 BASKET = re.compile(r"\b(?:not\s+exceeding|up\s+to|not\s+(?:to\s+)?exceed|which\s+does\s+not\s+exceed|of\s+no\s+more\s+"
                     r"than)\s+(?:in\s+(?:the\s+)?aggregate\s+)?(?:an\s+amount\s+(?:equal\s+to\s+)?(?:of\s+)?)?"
-                    + MONEY.pattern, re.I)
+                    + "(?:" + MONEY.pattern + "|" + MONEY_AFTER.pattern + r"\S*(?:\s+[A-Za-z]+){0,2})", re.I)
 FIRST_TEST = re.compile(r"\b(?:first\s+(?:test(?:ing)?\s+date|Test\s+Date|Relevant\s+Period|testing)|"
                         r"commencing\s+(?:with|from|on)|starting\s+(?:with|from|on)|beginning\s+(?:with|on))"
                         r"[^.;]{0,80}?(" + DATE.pattern + r")", re.I)
@@ -146,7 +150,7 @@ def facilities(quote: str | None) -> list[str]:
     return out[:5]
 
 
-def _money(m: re.Match) -> tuple[float | None, str | None]:
+def _money(m: re.Match, local: dict | None = None) -> tuple[float | None, str | None]:
     raw = m.group(0)
     currency = re.match(CURRENCY, raw, re.I)
     try:
@@ -154,8 +158,8 @@ def _money(m: re.Match) -> tuple[float | None, str | None]:
     except ValueError:
         return None, None
     scale = (m.group(2) or "").lower()
-    code = (currency.group(0) if currency else "").upper().rstrip(".")
-    code = {"$": "USD", "US$": "USD", "€": "EUR", "£": "GBP", "RS": "INR", "₹": "INR"}.get(code, code) or None
+    code = (currency_before_amount(currency.group(0), local) if currency
+            else currency_after_amount(m.string[m.end():m.end() + 60], local))
     return number * SCALE.get(scale, 1), code
 
 
@@ -214,11 +218,11 @@ def conditions(texts: list[str]) -> list[dict]:
     return out[:4]
 
 
-def baskets(quote: str | None) -> list[dict]:
+def baskets(quote: str | None, local: dict | None = None) -> list[dict]:
     out = []
     for m in BASKET.finditer(_flat(quote)):
-        money = MONEY.search(m.group(0))
-        amount, currency = _money(money) if money else (None, None)
+        money = MONEY.search(m.group(0)) or MONEY_AFTER.search(m.group(0))
+        amount, currency = _money(money, local) if money else (None, None)
         out.append({"text": _flat(m.group(0))[:200], "amount": amount, "currency": currency})
     return out[:5]
 
@@ -305,6 +309,7 @@ def enrich(fields: list[dict], pages: list[dict] | None = None, ctx: dict | None
     ctx = ctx or {}
     cure = None
     cure_read = False
+    local = document_currencies(" ".join(p.get("text") or "" for p in pages or []))  # "$" in an AUD agreement
     for f in fields:
         value = f.get("value")
         if not isinstance(value, dict):
@@ -342,7 +347,7 @@ def enrich(fields: list[dict], pages: list[dict] | None = None, ctx: dict | None
                               **_test(_flat(text))})
         value["conditions"] = found
         if f.get("group") == "NON_FINANCIAL_COVENANT" or not value.get("threshold"):
-            value["baskets"] = baskets(quote)
+            value["baskets"] = baskets(quote, local)
         start = first_test_date(whole) or (hints.get("firstTestDate") if isinstance(hints.get("firstTestDate"), str)
                                            and DATE.search(whole) else None)
         pause = holiday(whole)

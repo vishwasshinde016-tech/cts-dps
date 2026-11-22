@@ -50,9 +50,11 @@ class Limits:
 
     @classmethod
     def for_pool(cls, pool: str) -> Limits:
-        """LIGHT: 2 GB, at least 2 min. HEAVY (scans: OCR and layout): 6 GB, 3 min per 10 pages, at least 5 min."""
+        """LIGHT: 2 GB, at least 2 min, at most 15. HEAVY (scans, long documents): 6 GB, 3 min per 10 pages, at least 5
+        min, at most 60 (a 396-page facility agreement needs more than 15)."""
         if pool == "HEAVY":
-            return cls(memory_bytes=6 * GB, seconds_per_10_pages=180.0, min_seconds=300.0)
+            return cls(memory_bytes=6 * GB, seconds_per_10_pages=180.0, min_seconds=300.0, max_seconds=3600.0,
+                       cpu_seconds=3600)
         return cls()
 
     def wall_clock(self, pages: int | None) -> float:

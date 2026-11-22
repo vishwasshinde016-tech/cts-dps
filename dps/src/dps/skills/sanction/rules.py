@@ -5,14 +5,18 @@ from __future__ import annotations
 
 import re
 
+from dps.money import CURRENCY_AFTER, MONEY_MARKER, currency_after_amount, currency_before_amount, document_currencies
 from dps.skills.common import amount, issue, line_at, make_field, scaled
 from dps.skills.covenants.rules import as_pages, term_field
 
 PACK = "sanction"
-CUR = r"(₹|Rs\.?|INR|USD|US\$|LKR|EUR)"
+CUR = "(" + MONEY_MARKER + ")"
 AMOUNT = re.compile(r"(sanction(?:ed)?\s+(?:limit|amount)|(?:facility|loan|limit)\s+amount|amount\s+of\s+(?:the\s+)?"
                     r"(?:facility|loan)|limit)\s*[:\-]?\s*[^\n\d]{0,30}?" + CUR + r"\s*([\d,]+(?:\.\d+)?)\s*"
                     r"(crores?|cr\.?|lakhs?|lacs?|millions?|mn)?", re.I)
+# "Sanctioned Limit: 500 million Sri Lankan Rupees": the currency after the amount (group 2 stays empty)
+AMOUNT_AFTER = re.compile(AMOUNT.pattern.split("[^\\n\\d]{0,30}?")[0] + r"[^\n\d]{0,30}?()([\d,]+(?:\.\d+)?)\s*"
+                          r"(crores?|cr\.?|lakhs?|lacs?|millions?|mn)?" + CURRENCY_AFTER, re.I)
 FACILITY = re.compile(r"\b(rupee\s+term\s+loan|term\s+loan|cash\s+credit|working\s+capital\s+demand\s+loan|"
                       r"working\s+capital(?:\s+limit)?|overdraft|letter\s+of\s+credit|bank\s+guarantee|"
                       r"external\s+commercial\s+borrowing|bill\s+discounting|packing\s+credit)\b", re.I)
@@ -38,12 +42,17 @@ def _first(pages, pattern):
 
 def rules(pages: list[dict], ctx: dict) -> list[dict]:
     out = []
+    local = document_currencies(" ".join(q.get("text") or "" for q in pages))  # "Rs." / "$" of this document
     p, m = _first(pages, AMOUNT)
+    if not m:
+        p, m = _first(pages, AMOUNT_AFTER)
     if m:
         value = scaled(amount(m.group(3)), m.group(4))
+        currency = (currency_before_amount(m.group(2), local) or CURRENCY.get(m.group(2).lower(), m.group(2).upper())
+                    if m.group(2) else currency_after_amount(m.string[m.end():m.end() + 60], local))
         out.append(make_field(PACK, pages, "AGREEMENT_TERM", "SANCTIONED_AMOUNT",
                               {"key": "SANCTIONED_AMOUNT", "text": m.group(0).strip()[:200], "amount": value,
-                               "currency": CURRENCY.get(m.group(2).lower(), m.group(2).upper()), "date": None},
+                               "currency": currency, "date": None},
                               p["no"], line_at(p["text"], m.start(), m.end()), confidence=0.9))
     p, m = _first(pages, FACILITY)
     if m:

@@ -13,6 +13,7 @@ import io
 import re
 from dataclasses import asdict, dataclass, field
 
+from dps.money import CODE_WORDS
 from dps.parse.engine import ParseError
 
 # Catalog key → label phrases (lower case, matched on whole words; longest phrase wins).
@@ -210,7 +211,7 @@ TO_CRORE = {"crore": 1.0, "lakh": 0.01, "million": 0.1, "billion": 100.0, "thous
             "rupee": 1e-7}
 # The rupee sign often comes out of a PDF as a stray character: "All amounts are in ` Lakhs".
 # Money for any country (10 November 2026): "Amounts in USD thousands", "AED '000", "PKR in million".
-_CODES = r"usd|us\$|pkr|npr|bdt|aed|sar|qar|gbp|£|eur|€|sgd|slrs?"
+_CODES = CODE_WORDS + r"|us\$|£|€|¥|slrs?"
 _UNIT_HINT = re.compile(r"(?:in|amounts?\s+in|₹|rs\.?|inr|lkr|rupees|\$|" + _CODES + r")\s*(?:[`´₹]\s*|I\s+)?(?:in\s+)?"
                         r"(crores?|cr\b|lakhs?|lacs?|millions?|mn\b|billions?|bn\b|thousands?|hundreds?|"
                         r"'?000(?![\d,])|rupees?)"

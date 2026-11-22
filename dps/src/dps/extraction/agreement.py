@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass, field
 
+from dps.money import MONEY_MARKER, currency_before_amount, document_currencies
 from dps.parse.engine import Page
 
 # Our metric keys → phrases (metric_mappings.json, trimmed to the reliable multi-word forms).
@@ -38,11 +39,14 @@ for _metric, _names in {
                        "SENIOR DEBT TO EBITDA", "CASH FLOW LEVERAGE RATIO", "SENIOR SECURED LEVERAGE RATIO",
                        "CONSOLIDATED SENIOR SECURED LEVERAGE RATIO", "MAXIMUM TOTAL LEVERAGE RATIO"],
     "NET_LEVERAGE_RATIO": ["TOTAL NET LEVERAGE RATIO", "FIRST LIEN NET LEVERAGE RATIO", "SECURED NET LEVERAGE RATIO",
-                           "CONSOLIDATED NET SENIOR SECURED LEVERAGE RATIO", "SENIOR SECURED NET LEVERAGE RATIO"],
+                           "CONSOLIDATED NET SENIOR SECURED LEVERAGE RATIO", "SENIOR SECURED NET LEVERAGE RATIO",
+                           # LMA wording, no "Ratio" (a UK facility agreement, 22 Nov 2026)
+                           "ADJUSTED NET LEVERAGE", "TOTAL NET LEVERAGE", "SENIOR NET LEVERAGE",
+                           "SUPER SENIOR ADJUSTED LEVERAGE"],
     "ICR": ["CONSOLIDATED INTEREST COVERAGE RATIO"],
     "FIXED_CHARGE_COVERAGE_RATIO": ["CONSOLIDATED FIXED CHARGE COVERAGE RATIO", "BASIC FIXED CHARGE COVERAGE RATIO"],
     "DSCR": ["GLOBAL DEBT SERVICE COVERAGE RATIO", "NET DEBT SERVICE COVERAGE RATIO", "CASH FLOW COVERAGE RATIO",
-             "CASH FLOW COVERAGE", "CASH FLOW TO DEBT SERVICE"],
+             "CASH FLOW COVERAGE", "CASH FLOW TO DEBT SERVICE", "CASHFLOW COVER", "CASH FLOW COVER"],
     "DEBT_TO_NET_WORTH": ["DEBT TO TANGIBLE NET WORTH", "INDEBTEDNESS TO TANGIBLE NET WORTH",
                           "FUNDED DEBT TO TANGIBLE NET WORTH", "DEBT-TO-NET WORTH RATIO"],
     "DEBT_TO_EQUITY": ["NET DEBT TO EQUITY RATIO", "NET DEBT TO EQUITY"],
@@ -88,7 +92,18 @@ MAX_RATIO = 25.0
 _NOT_A_COVENANT = re.compile(
     r"pro\s+forma|after\s+giving\s+effect|applicable\s+(rate|margin|percentage)|pricing\s+level|asset\s+sale\s+"
     r"percentage|ecf\s+percentage|excess\s+cash\s+flow|incremental|until\s+such\s+time|evidence\s+satisfactory|"
-    r"extension\s+(option|period)|extended\s+maturity|release\s+of\s+(the\s+)?(funds|letter)", re.I)
+    r"extension\s+(option|period)|extended\s+maturity|release\s+of\s+(the\s+)?(funds|letter)|"
+    # pricing grids (Meet Group, 22 Nov 2026): "Pricing Tier ... Commitment Fee ... Letter of Credit Fee"
+    r"pricing\s+tier|commitment\s+fee|letter\s+of\s+credit\s+fee|margin\s+ratchet|"
+    r"most\s+recently\s+ended\s+on\s+or\s+prior\s+to", re.I)
+# "'Maximum Indebtedness Amount' means Adjusted Net Leverage of 3.10:1": the ratio inside a definition's own sentence
+_DEFINED_BEFORE = re.compile(r"[\"\u201c\u201d]\s*(?:means|shall\s+mean)\b[^.;]{0,200}$", re.I)
+# A number that counts days, a list of other parties ("Companies with a minimum net worth of ..."), not a covenant
+# PDF text can split a word ("15 Business D ays"), so the letters may have spaces between them
+_PERIOD_AFTER = re.compile(r"\s*(?:b\s?u\s?s\s?i\s?n\s?e\s?s\s?s\s+|banking\s+|calendar\s+)?"
+                           r"(?:d\s?a\s?y\s?s?|m\s?o\s?n\s?t\s?h\s?s?|y\s?e\s?a\s?r\s?s?|w\s?e\s?e\s?k\s?s?)\b", re.I)
+_OTHER_PARTIES = re.compile(r"\b(?:companies|entities|persons|users|investors|institutions|banks)\s+(?:with|having)\s+"
+                            r"(?:an?\s+)?(?:minimum\s+)?$", re.I)
 
 _INTENT = re.compile(r"\b(shall|must|required\s+to|undertakes?\s+to|agree(?:s|d)?\s+to|will\s+not)\b", re.I)
 
@@ -167,11 +182,12 @@ _NOT = r"(?:not|never|at\s+no\s+time)\s+(?:at\s+any\s+time\s+)?(?:(?:be|fall|go|
 # marker may stand before the first level (bug hunt 3).
 # Money for any country (10 November 2026): "Sri Lankan Rupees 2,500 million", "PKR", "AED" and the like name the
 # currency before an amount too (dps.money reads which one).
-_MONEY = (r"(?:INR|Rs\.?|₹|US\$|\$|LKR|SLRs?|USD|PKR|NPR|BDT|AED|SAR|QAR|GBP|£|EUR|€|SGD|S\$"
-          r"|(?:(?:Sri\s+Lankan?|Indian|Pakistani?|Nepalese|Nepal)\s+)?Rupees?)")
+_MONEY = MONEY_MARKER
 _CUR = r"(?:\((?:[a-h]|i{1,3}|iv|v)\)\s*)?" + _MONEY + "?"
 # "will not permit the Interest Coverage Ratio ... to be less than 3.00": a floor, though it says "less than".
-_PERMIT = r"(?:shall|will)\s+not\s+(?:permit|allow|suffer)\b[^.;]{0,220}?"
+# ... and the list item under a "shall not:" lead-in far above: "(a) Leverage Ratio. Permit the Leverage Ratio ... to be
+# greater than 2.25" (capital P: the item's first word; Meet Group, 22 Nov 2026).
+_PERMIT = r"(?:(?:shall|will)\s+not\s+(?:permit|allow|suffer)|(?-i:\bPermit))\b[^.;]{0,220}?"
 _WORD_THRESHOLDS: list[tuple[str, str]] = [
     # "shall not permit the Leverage Ratio to be greater than or equal to 3.50": below 3.50 (bug hunt).
     (_PERMIT + r"(?:to\s+)?(?:be\s+)?(?:greater|more|higher)\s+than\s+or\s+equal\s+to\s*" + _CUR + r"\s*" + _NUM
@@ -211,7 +227,7 @@ _RATIO = _NUM + r"\s*(?:x\b|times\b|:\s*1(?:\.0+)?(?!\d)|to\s+1(?:\.0+)?(?!\d))"
 # Step-down tables: "to exceed the ratio set forth opposite such period: ... June 30, 2025 4.75 to 1.00" and
 # "EBITDA of at least the amounts indicated for each period specified below: ... September 30, 2017 $9,500,000".
 # The first level of the table is taken; the rest of the schedule is in the quote for the reviewer.
-_TABLE = r"\s+the\s+(?:ratios?|amounts?|levels?)\s+(?:set\s+forth|indicated|specified|shown)\b[^;]{0,300}?"
+_TABLE = r"\s+the\s+(?:ratios?|amounts?|levels?)\s+(?:set\s+(?:forth|out)|indicated|specified|shown)\b[^;]{0,300}?"
 # A level is a ratio, an amount, or a bare number after the row's date ("March 31, 2026 3.50"; wording stress test:
 # the second level was taken when the first had no "to 1.00").
 _TABLE_LEVEL = r"(?:" + _RATIO + r"|\$\s*" + _NUM + r"|\b(?:19|20)\d\d\s+" + _NUM + r"(?![\d,]*\s*(?:%|per\s*cent)))"
@@ -307,6 +323,7 @@ class Term:
     test_months: list[int] | None = None
     cure: dict | None = None
     basis: str | None = None  # CONSOLIDATED | STANDALONE when the clause says which figures it is tested on
+    currency: str | None = None  # an amount covenant's currency as written ("JPY 50,000 million"), Phase 1
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -527,6 +544,9 @@ def _add(terms: list[Term], term: Term) -> bool:
         # "the Senior Secured Leverage Ratio is less than 1.30" (a condition, often in the definitions) gives way to
         # the covenant itself, "will not permit the Senior Secured Leverage Ratio ... to exceed 3.50".
         if named.operator in ("<", ">") and term.operator in ("<=", ">="):
+            if any((t.operator, t.threshold) == (term.operator, term.threshold) for t in same):
+                terms.remove(named)  # the covenant is already there: drop the condition, do not add it twice
+                return False
             terms[terms.index(named)] = term
             return True
         return False
@@ -601,6 +621,8 @@ def _financial(doc: _Doc, clauses: list[_Clause]) -> list[Term]:
                                                                                  metric)
         if not found or not _plausible(metric, found[1], combined[max(0, found[3] - 300):found[4] + 200]):
             continue
+        if _PERIOD_AFTER.match(combined, found[4]):
+            continue  # "at least 15 Business Days prior to" counts days (UK tax clause, 22 Nov 2026)
         op, value, unit, s, e, corroborated = found
         quote, page = _quote(doc, body_offset + s, body_offset + e)
         _add(terms, Term(metric, "FINANCIAL", op, value, unit, _frequency(combined), page, quote,
@@ -721,7 +743,10 @@ def _alias_pattern(phrase: str) -> str:
 # (b) Tangible Net Worth to be less than $1,000,000,000": the list heading, with the "shall not" far above it.
 _PERMIT_LEAD = re.compile(r"(?:shall|will)\s+not\s+permit\b[^.;]*$|(?:shall|will)\s+not\s*(?:,[^:;]{0,120})?:"
                           r"[\s\S]{0,300}?\bpermit\b[^.;]*$"  # "shall not: (a) ...; or (b) permit the ..."
-                          r"|(?-i:\bPermit)\s*:[^;]{0,400}$", re.I)
+                          r"|(?-i:\bPermit)\s*:[^;]{0,400}$"
+                          # the list item itself: "(a) Total Leverage Ratio. Permit the Total Leverage Ratio ... to be
+                          # greater than 2.25", its "shall not:" at the top of the article (Meet Group, Holly; 22 Nov)
+                          r"|(?-i:\bPermit)\s+(?:the\s+|its\s+)?[^.;:]{0,60}$", re.I)
 
 
 def _scan_unnumbered(doc: _Doc, terms: list[Term]) -> None:
@@ -729,6 +754,10 @@ def _scan_unnumbered(doc: _Doc, terms: list[Term]) -> None:
     # Every alias match in the text, so a match inside a longer alias of another metric ("Debt to EBITDA" in
     # "Net Debt to EBITDA") is not taken for a covenant of its own.
     spans = doc.spans()
+    # the definitions clause names every ratio and holds numbers of definitions, pricing and conditions (a UK
+    # agreement's "Maximum Indebtedness Amount" means Adjusted Net Leverage of 3.10:1; 22 Nov 2026)
+    definitions = [(c.start, c.start + len(c.heading) + len(c.body) + 1) for c in _clauses(doc)
+                   if _NOT_A_COVENANT_CLAUSE.search(normalize_ws(c.heading))]
     for metric, phrases in _aliases().items():
         if metric == "MIN_EBITDA":
             continue  # only a clause headed "EBITDA": the word is in every definition
@@ -742,7 +771,7 @@ def _scan_unnumbered(doc: _Doc, terms: list[Term]) -> None:
                                                                             and metric == "MIN_NET_WORTH"):
                     continue
                 window = doc.text[m.end():m.end() + 160]
-                if re.search(r"set\s+forth|indicated|specified", window, re.I):
+                if re.search(r"set\s+(?:forth|out)|indicated|specified", window, re.I):
                     window = doc.text[m.end():m.end() + 420]  # a step-down table follows the words
                 window = re.split(r"\n\s*\n", window, maxsplit=1)[0]
                 lo, hi = _own_part(doc, metric, (m.start(), m.end()), m.start() - 80, m.end() + len(window))
@@ -757,6 +786,12 @@ def _scan_unnumbered(doc: _Doc, terms: list[Term]) -> None:
                 context = doc.text[max(0, m.start() - 300):m.end() + 200]
                 if not found or not _plausible(metric, found[1], context):
                     continue
+                if any(s <= m.start() < e for s, e in definitions):
+                    continue
+                if _DEFINED_BEFORE.search(doc.text[max(0, m.start() - 260):m.start()]):
+                    continue
+                if _PERIOD_AFTER.match(combined, found[4]) or _OTHER_PARTIES.search(tail):
+                    continue  # "at least 15 Business Days"; "Companies with a minimum net worth of Rs 500 crores"
                 means = _MEANS.search(combined, len(prefix + tail + m.group(0)), found[4])
                 own = means and re.match(r"(?:[^.;" + _QUOTE_MARK + r"]|\.(?=\d)){0,160}", combined[means.end():])
                 if own and not _FORMULA.search(own.group(0)):
@@ -834,7 +869,8 @@ def _scan_ebitda_floor(doc: _Doc, terms: list[Term]) -> None:
         tail = tail[max((d.end() for d in re.finditer(r"[\d%]", tail)), default=0):]  # no number from before it
         # Held-out set: "the greater of $115,000,000 and 30% of LTM EBITDA" (a basket) and "Consolidated EBITDA
         # ... will be deemed to be $91,400,000" (a figure for a past quarter) are not floors.
-        if re.search(r"\bdeemed\b|\b(?:greater|lesser)\s+of\b", tail + window, re.I):
+        if re.search(r"\bdeemed\b|\b(?:greater|lesser)\s+of\b|\bthis\s+definition\b|\bif\s+negative\b",
+                     tail + window, re.I):
             continue
         combined = prefix + tail + m.group(0) + window
         found = _threshold(combined, True, "MIN_EBITDA")
@@ -1043,6 +1079,10 @@ def extract_terms(pages: list[Page]) -> list[Term]:
     have = {t.metric for t in financial + security}
     # A disposal cap ("not dispose of assets ... other than assets not exceeding INR 25 crore") already is the
     # restriction: one covenant, not two.
+    local = document_currencies(doc.text)  # "Rs." in a Sri Lankan agreement is LKR, "$" in an Australian one AUD
+    for t in financial:  # an amount covenant says its currency ("JPY 50,000 million"), not only its scale
+        if t.metric in AMOUNT_METRICS:
+            t.currency = currency_before_amount(t.quote, local)
     other = [t for t in _non_financial(doc, clauses)
              if not (t.metric == "ASSET_DISPOSAL_RESTRICTION" and "ASSET_DISPOSAL_CAP" in have)]
     return financial + security + other

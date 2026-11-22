@@ -565,24 +565,28 @@ def _refused_item(db: Session, batch: Batch, item: BatchItem, request_hash: str,
     db.commit()
 
 
-@router.get("/dps/v1/batches/{batch_id}")
-def get_batch(batch_id: str, db: DB, user: User) -> dict:
-    require_roles(user, SERVICE, ADMIN, SUPPORT)
+def _batch_or_404(db: Session, batch_id: str) -> Batch:
+    """G2 for every batch endpoint: another tenant's batch does not exist here (errors.csv and rerun skipped this
+    check before; Phase 1 review, 22 Nov 2026)."""
     from dps.api.access import same_tenant
 
     batch = db.get(Batch, batch_id)
     if batch is None or not same_tenant(batch.tenant_id):
         raise not_found("Batch")
-    return _batch_view(db, batch)
+    return batch
+
+
+@router.get("/dps/v1/batches/{batch_id}")
+def get_batch(batch_id: str, db: DB, user: User) -> dict:
+    require_roles(user, SERVICE, ADMIN, SUPPORT)
+    return _batch_view(db, _batch_or_404(db, batch_id))
 
 
 @router.get("/dps/v1/batches/{batch_id}/errors.csv")
 def batch_errors(batch_id: str, db: DB, user: User) -> Response:
     """Codes and references only: never document content or customer names."""
     require_roles(user, SERVICE, ADMIN, SUPPORT)
-    batch = db.get(Batch, batch_id)
-    if batch is None:
-        raise not_found("Batch")
+    batch = _batch_or_404(db, batch_id)
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(["clientFileReference", "jobId", "outcome", "errorCode"])
@@ -597,9 +601,7 @@ def batch_errors(batch_id: str, db: DB, user: User) -> Response:
 def rerun_batch(batch_id: str, db: DB, user: User) -> dict:
     """Re-queues only the items that failed after reaching the queue (DEAD); refused items need a new file."""
     require_roles(user, SERVICE, ADMIN, SUPPORT)
-    batch = db.get(Batch, batch_id)
-    if batch is None:
-        raise not_found("Batch")
+    batch = _batch_or_404(db, batch_id)
     now = utcnow()
     rerun = db.scalars(select(Job).where(Job.batch_id == batch.id, Job.status == jobs.DEAD)).all()
     for job in rerun:
