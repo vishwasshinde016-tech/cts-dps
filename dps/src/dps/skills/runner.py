@@ -57,6 +57,8 @@ FILE_FLAGS = {"TRACKED_CHANGES": "the text read is with every change accepted",
               "REPAIRED": "the PDF was damaged and repaired", "OWNER_RESTRICTED": "the PDF has owner restrictions",
               "IMAGES": "the file has pictures that are not read", "POOR_TEXT": "much of the text layer is poor",
               "IMAGE_REGIONS": "pages with large pictures were also OCR-read",
+              "SEARCHABLE_SCAN": "pages are pictures with the scanner's text layer; that text was read",
+              "FORM_SCRIPTS": "a fillable form with field scripts; the scripts were not run",
               "FORMULA_TEXT": "cells start with =, +, - or @"}
 
 
@@ -410,7 +412,41 @@ def _vote(pack: Pack, fields: list[dict], proposals: list[dict] | None) -> list[
             p.setdefault("_written", p.get("name"))
             p["name"] = _covenant_key({"value": p.get("value"), "name": p.get("name")}) or p.get("name")
         return _vote_covenants(fields, proposals, _same_change if pack.name == "amendment_diff" else _same_test)
+    if pack.name == "certificate" and proposals:
+        return _vote_figures(fields, proposals)
     return vote(fields, proposals)
+
+
+def _figure(value) -> float | None:
+    try:
+        return round(float((value or {}).get("figure")), 4)
+    except (TypeError, ValueError):
+        return None
+
+
+def _vote_figures(fields: list[dict], proposals: list[dict]) -> list[dict]:
+    """A certificate's figure read by the rules ("DSCR 2.22") and by the AI ("Historic Annual Debt Service Cover
+    Ratio 2.22") is one finding, confirmed (bulk run, 22 Nov 2026: it was listed twice). They are the same only
+    when they mean the same covenant and give the same figure: "Projected Annual DSCR 1.98" stays its own finding."""
+    from dps.skills.covenants.taxonomy import get as taxonomy
+
+    tax = taxonomy()
+
+    def code(name) -> str:
+        return tax.code_for(name) or squash(str(name or ""))
+
+    for p in proposals:
+        figure = _figure(p.get("value"))
+        if figure is None:
+            continue
+        for f in fields:
+            if f.get("group") == "CERTIFIED_FIGURE" and code(f.get("name")) == code(p.get("name")) and \
+                    _figure(f.get("value")) == figure:
+                p["_matched"] = True
+                f["method"] = "RULES+AI_CONFIRMED"
+                f["confidence"] = round(max(f.get("confidence") or 0, 0.95), 3)
+                break
+    return fields
 
 
 def _same_periods(a: dict, b: dict | None) -> bool:
@@ -833,7 +869,9 @@ def pack_for(job_type: str) -> Pack | None:
 ONBOARD_PACKS = {"LOAN_AGREEMENT": "covenants", "SANCTION_LETTER": "sanction", "AMENDMENT": "amendment_diff",
                  # WP9: a guarantee's covenants bind the guarantor (scope says so); an amended and restated
                  # agreement is a full agreement that replaces an earlier one; a waiver is read against the base
-                 "GUARANTEE": "covenants", "AMENDED_AND_RESTATED": "covenants", "WAIVER_CONSENT": "waiver"}
+                 "GUARANTEE": "covenants", "AMENDED_AND_RESTATED": "covenants", "WAIVER_CONSENT": "waiver",
+                 # a debenture trust deed holds the issuer's covenants to the trustee (bulk run, 22 Nov 2026)
+                 "TRUST_DEED": "covenants"}
 
 
 def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | None = None,

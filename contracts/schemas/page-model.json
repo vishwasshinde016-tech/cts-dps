@@ -334,7 +334,9 @@
           "NO_CACHED_VALUE",
           "CONTENT_CONTROLS",
           "COMMENTS",
-          "IMAGE_REGIONS"
+          "IMAGE_REGIONS",
+          "SEARCHABLE_SCAN",
+          "FORM_SCRIPTS"
         ]
       },
       "description": "What inspection and parsing noticed but did not refuse"

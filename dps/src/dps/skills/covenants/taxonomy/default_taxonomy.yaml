@@ -2017,6 +2017,7 @@ types:
   aliases:
   - LLCR
   - Loan Life Coverage Ratio
+  - Loan Life Cover Ratio
   keywords:
   - LLCR
   - Loan Life Coverage Ratio
@@ -2031,6 +2032,7 @@ types:
   aliases:
   - PLCR
   - Project Life Coverage Ratio
+  - Project Life Cover Ratio
   keywords:
   - PLCR
   - Project Life Coverage Ratio

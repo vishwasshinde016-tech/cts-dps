@@ -76,7 +76,14 @@ def _no_network() -> None:
     def refuse(*_a, **_k):
         raise PermissionError("network access is disabled in the parser sandbox")
 
-    socket.socket = refuse  # type: ignore[assignment,misc]
+    class NoSocket(socket.socket):
+        # A class, not a function: a module imported later still subclasses it ("class SSLSocket(socket)" in ssl,
+        # which Docling imports). A function there raised TypeError, so Docling never ran in the sandbox (bulk run,
+        # 22 Nov 2026: every heavy-pool page fell back to the fast reading). Making one still fails.
+        def __init__(self, *_a, **_k) -> None:
+            refuse()
+
+    socket.socket = NoSocket  # type: ignore[assignment,misc]
     socket.create_connection = refuse  # type: ignore[assignment]
     socket.getaddrinfo = refuse  # type: ignore[assignment]
 
@@ -98,11 +105,11 @@ def _apply_limits(limits: Limits) -> None:
 
 def parse_in_process(req: ParseRequest) -> dict:
     """Inspect, then build the page model. Runs inside the child (or directly in tests)."""
-    from dps.ingest.inspect import inspect
+    from dps.ingest.inspect import MAX_PDF_PAGES, MAX_PDF_PAGES_HEAVY, inspect
     from dps.parse.engine import ParserEngine
     from dps.parse.page_model import build
 
-    report = inspect(req.data, req.fmt)
+    report = inspect(req.data, req.fmt, MAX_PDF_PAGES_HEAVY if req.heavy else MAX_PDF_PAGES)
     engine = None
     if req.fmt == "PDF":
         ocr = None
@@ -115,6 +122,7 @@ def parse_in_process(req: ParseRequest) -> dict:
             try:
                 from dps.parse.engine import DoclingConverter, HeavyEngine
 
+                # Docling reads the pages the fast pass read poorly; OCR reads those Docling cannot
                 engine = HeavyEngine(engine, DoclingConverter())
             except ImportError:  # no Docling on this host: OCR with the heavy pool's longer limits
                 pass

@@ -70,6 +70,10 @@ def build_pdf(data: bytes, sha256: str, version_id: str | None, flags: list[str]
 
 
 IMAGE_SHARE = 0.2  # a text page whose pictures cover more than this is also OCR-read
+# A searchable scan: the whole page is one picture and its text layer is that picture's OCR, already good. Reading the
+# picture again only repeated the same lines and took most of the time (bulk run, 22 Nov 2026: a 149-page annual
+# report 964 s, a 32-page trust deed 352 s). A picture pasted on part of a text page (a table) is still read.
+SCAN_SHARE, SCAN_TEXT_CHARS, SCAN_TEXT_QUALITY = 0.9, 800, 0.8
 
 
 def _read_picture_text(data: bytes, pages: list[Page], geometry: dict, engine: ParserEngine, model: dict) -> list[Page]:
@@ -80,6 +84,10 @@ def _read_picture_text(data: bytes, pages: list[Page], geometry: dict, engine: P
     for page in pages:
         share = (geometry.get(page.no) or {}).get("imageShare", 0.0)
         if page.method != "TEXT" or share <= IMAGE_SHARE:
+            out.append(page)
+            continue
+        if share >= SCAN_SHARE and len(page.text) >= SCAN_TEXT_CHARS and page.quality >= SCAN_TEXT_QUALITY:
+            model["flags"] = sorted(set(model["flags"]) | {"SEARCHABLE_SCAN"})
             out.append(page)
             continue
         model["flags"] = sorted(set(model["flags"]) | {"IMAGE_REGIONS"})

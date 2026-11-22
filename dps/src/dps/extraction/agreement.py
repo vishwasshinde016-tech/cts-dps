@@ -34,7 +34,8 @@ FINANCIAL_ALIASES: dict[str, list[str]] = {
 }
 # Names used in US syndicated and bilateral credit agreements (benchmark of 50 real agreements, 6 November 2026).
 for _metric, _names in {
-    "DEBT_TO_EBITDA": ["CONSOLIDATED LEVERAGE RATIO", "CONSOLIDATED TOTAL LEVERAGE RATIO", "LEVERAGE RATIO",
+    "DEBT_TO_EBITDA": ["CONSOLIDATED TOTAL DEBT TO CONSOLIDATED EBITDA", "TOTAL DEBT TO CONSOLIDATED EBITDA",
+                       "CONSOLIDATED LEVERAGE RATIO", "CONSOLIDATED TOTAL LEVERAGE RATIO", "LEVERAGE RATIO",
                        "FUNDED DEBT TO EBITDA", "TOTAL FUNDED DEBT TO EBITDA", "SENIOR FUNDED DEBT TO EBITDA",
                        "SENIOR DEBT TO EBITDA", "CASH FLOW LEVERAGE RATIO", "SENIOR SECURED LEVERAGE RATIO",
                        "CONSOLIDATED SENIOR SECURED LEVERAGE RATIO", "MAXIMUM TOTAL LEVERAGE RATIO"],
@@ -95,7 +96,18 @@ _NOT_A_COVENANT = re.compile(
     r"extension\s+(option|period)|extended\s+maturity|release\s+of\s+(the\s+)?(funds|letter)|"
     # pricing grids (Meet Group, 22 Nov 2026): "Pricing Tier ... Commitment Fee ... Letter of Credit Fee"
     r"pricing\s+tier|commitment\s+fee|letter\s+of\s+credit\s+fee|margin\s+ratchet|"
-    r"most\s+recently\s+ended\s+on\s+or\s+prior\s+to", re.I)
+    r"most\s+recently\s+ended\s+on\s+or\s+prior\s+to|"
+    # Bulk run of 72 real documents (22 Nov 2026):
+    # a margin grid with a ratio band per row ("Net Debt to EBITDA Margin - Tranche1 ... > 3.00x 3.60% 3.75%")
+    r"\bmargin\s*\W{0,3}\s*tranche|\d(?:\.\d+)?\s*x?\s+\d+(?:\.\d+)?\s*%\s+\d+(?:\.\d+)?\s*%|"
+    # a penal-charges table ("Non submission of Net-worth Statement ... INR 5,000")
+    r"non[\s-]*submission|penal\s+(?:charges?|interest)|"
+    # a condition precedent ("Repayment Schedule, based on the Base Case Financial Model ... a minimum DSCR of 1.50")
+    r"base\s+case\s+(?:financial\s+)?model|"
+    # a prepayment that moves a ratio ("prepaid ... such that the LTV is reduced by at least 20 per cent")
+    r"\b(?:is|be|are)\s+(?:reduced|increased|decreased)\s+by\b|"
+    # a debt or lien basket ("Liens securing Indebtedness ... the First Lien Leverage Ratio does not exceed 3.75")
+    r"\bliens?\s+securing\b|\bassets\s+that\s+are\s+not\s+collateral\b|\bpari\s+passu\s+with\s+the\s+liens?\b", re.I)
 # "'Maximum Indebtedness Amount' means Adjusted Net Leverage of 3.10:1": the ratio inside a definition's own sentence
 _DEFINED_BEFORE = re.compile(r"[\"\u201c\u201d]\s*(?:means|shall\s+mean)\b[^.;]{0,200}$", re.I)
 # A number that counts days, a list of other parties ("Companies with a minimum net worth of ..."), not a covenant
@@ -187,7 +199,7 @@ _CUR = r"(?:\((?:[a-h]|i{1,3}|iv|v)\)\s*)?" + _MONEY + "?"
 # "will not permit the Interest Coverage Ratio ... to be less than 3.00": a floor, though it says "less than".
 # ... and the list item under a "shall not:" lead-in far above: "(a) Leverage Ratio. Permit the Leverage Ratio ... to be
 # greater than 2.25" (capital P: the item's first word; Meet Group, 22 Nov 2026).
-_PERMIT = r"(?:(?:shall|will)\s+not\s+(?:permit|allow|suffer)|(?-i:\bPermit))\b[^.;]{0,220}?"
+_PERMIT = r"(?:(?:shall|will)\s+not\s+(?:permit|allow|suffer)|(?-i:\bPermit))\b[^.;]{0,360}?"
 _WORD_THRESHOLDS: list[tuple[str, str]] = [
     # "shall not permit the Leverage Ratio to be greater than or equal to 3.50": below 3.50 (bug hunt).
     (_PERMIT + r"(?:to\s+)?(?:be\s+)?(?:greater|more|higher)\s+than\s+or\s+equal\s+to\s*" + _CUR + r"\s*" + _NUM
@@ -869,8 +881,11 @@ def _scan_ebitda_floor(doc: _Doc, terms: list[Term]) -> None:
         tail = tail[max((d.end() for d in re.finditer(r"[\d%]", tail)), default=0):]  # no number from before it
         # Held-out set: "the greater of $115,000,000 and 30% of LTM EBITDA" (a basket) and "Consolidated EBITDA
         # ... will be deemed to be $91,400,000" (a figure for a past quarter) are not floors.
-        if re.search(r"\bdeemed\b|\b(?:greater|lesser)\s+of\b|\bthis\s+definition\b|\bif\s+negative\b",
-                     tail + window, re.I):
+        # "Notwithstanding the foregoing, Consolidated EBITDA shall be $233,000,000, $257,000,000 ... for the
+        # fiscal quarters ended ...": the figures of past quarters (bulk run, 22 Nov 2026), not a floor
+        if re.search(r"\bdeemed\b|\b(?:greater|lesser)\s+of\b|\bthis\s+definition\b|\bif\s+negative\b|"
+                     r"\bfiscal\s+quarters?\s+ended\b", tail + window, re.I) or \
+                re.match(r"\s*shall\s+be\s+(?:US)?\$", window, re.I):
             continue
         combined = prefix + tail + m.group(0) + window
         found = _threshold(combined, True, "MIN_EBITDA")

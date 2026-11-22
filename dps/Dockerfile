@@ -18,7 +18,22 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 RUN pip install --no-cache-dir ".[worker,mssql]" \
     && if [ "$INSTALL_HEAVY" = "1" ]; then          pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu ".[heavy]"; fi
-# /home/dps/.cache holds the Docling models the heavy worker downloads on first use.
+# Every image carries the PP-OCRv6 text model for the fast OCR: RapidOCR's own model is for Chinese and runs English
+# words together (bulk run, 22 Nov 2026). Its SHA-256 is checked: a changed file fails the build. A bank network that
+# blocks modelscope.cn serves the same file from its own artifact store (DPS_OCR_MODEL_URL at build time).
+ARG DPS_OCR_MODEL_URL=https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.0/onnx/PP-OCRv6/rec/PP-OCRv6_rec_small.onnx
+ENV DPS_OCR_REC_MODEL=/opt/ocr-models/PP-OCRv6_rec_small.onnx
+RUN python -c "import hashlib, os, sys, urllib.request; \
+data = urllib.request.urlopen(sys.argv[1], timeout=600).read(); \
+digest = hashlib.sha256(data).hexdigest(); \
+assert digest == '6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884', digest; \
+os.makedirs('/opt/ocr-models', exist_ok=True); open(os.environ['DPS_OCR_REC_MODEL'], 'wb').write(data)" \
+    "$DPS_OCR_MODEL_URL"
+# The heavy image carries Docling's models (layout, tables, RapidOCR): the parse sandbox has no network, so they
+# cannot be downloaded at first use (bulk run, 22 Nov 2026: every Docling run failed without them).
+ENV DPS_DOCLING_ARTIFACTS=/opt/docling-models HF_HUB_OFFLINE=1
+RUN if [ "$INSTALL_HEAVY" = "1" ]; then \
+        HF_HUB_OFFLINE=0 docling-tools models download layout tableformer rapidocr -o /opt/docling-models; fi
 RUN mkdir -p /data/storage /data/staging /data/derived /run/dps-parser /home/dps/.cache \
     && chown -R dps /data /run/dps-parser /home/dps/.cache
 USER 10001

@@ -58,6 +58,7 @@ REQUIRED = {
     "AMENDED_AND_RESTATED": ("BORROWER_NAME", "ISSUER", "SIGNATURE"),
     "GUARANTEE": ("ISSUER", "SIGNATURE"),
     "WAIVER_CONSENT": ("ISSUER", "SIGNATURE"),
+    "TRUST_DEED": ("BORROWER_NAME", "SIGNATURE"),
 }
 BORROWER = [
     re.compile(r"\bM/s\.?\s+([A-Z][A-Za-z0-9&.,'()\- ]{2,80}?(?:Limited|Ltd\.?|LLP|Private Limited|Pvt\.? Ltd\.?))",

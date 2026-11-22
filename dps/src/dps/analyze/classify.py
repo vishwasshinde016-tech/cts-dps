@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 log = logging.getLogger(__name__)
 
 CLASSES = ("SANCTION_LETTER", "LOAN_AGREEMENT", "AMENDMENT", "FINANCIAL_STATEMENT", "COMPLIANCE_CERTIFICATE",
-           "SECURITY_DOCUMENT", "OTHER_EVIDENCE", "WAIVER_CONSENT", "GUARANTEE", "AMENDED_AND_RESTATED")
+           "SECURITY_DOCUMENT", "OTHER_EVIDENCE", "WAIVER_CONSENT", "GUARANTEE", "AMENDED_AND_RESTATED", "TRUST_DEED")
 # A chosen type the document may also read as without a mismatch (full review WP9): an amended and restated
 # agreement is a loan agreement; a guarantee is a security document.
 COMPATIBLE = {"LOAN_AGREEMENT": {"AMENDED_AND_RESTATED"}, "AMENDED_AND_RESTATED": {"LOAN_AGREEMENT"},
@@ -46,6 +46,10 @@ SIGNALS: dict[str, list[tuple[re.Pattern, float]]] = {
         (re.compile(r"hereinafter\s+(referred\s+to|called)\s+as\s+(the\s+)?[\"“]?(borrower|lender)", re.I), 0.3),
         (re.compile(r"^\s*lender\s*:.*?^\s*borrower\s*:|^\s*borrower\s*:.*?^\s*lender\s*:", re.I | re.S | re.M), 0.3),
         (re.compile(r"\b(agrees?|agreed)\s+to\s+(make\s+available|lend|advance)\b", re.I), 0.2),
+        # bulk run (22 Nov 2026): a bank's master facility agreement or master terms for its term loans
+        (re.compile(r"\bmaster\s+(?:facility|loan|credit)\s+agreement\b|\bmaster\s+terms\s+and\s+conditions\b"
+                    r"\s*\(?(?:applicable\s+(?:for|to)\s+)?(?:the\s+)?(?:term\s+loan|facilit(?:y|ies)|loans?)\b", re.I),
+         0.6),
     ],
     "AMENDMENT": [
         (re.compile(r"\bamendment\s+(agreement|letter|no\.?)\b|\bsupplemental\s+(agreement|deed)\b", re.I), 0.6),
@@ -55,6 +59,10 @@ SIGNALS: dict[str, list[tuple[re.Pattern, float]]] = {
         # US style: "FIRST AMENDMENT TO SECOND AMENDED AND RESTATED CREDIT AGREEMENT (this "Amendment")"
         (re.compile(r"\bamendment\s+(?:no\.?\s*\d+\s+)?to\s+(?:the\s+)?(?:[\w-]+\s+){0,6}agreement\b", re.I), 0.6),
         (re.compile(r"\(\s*this\s+[\"“]?amendment[\"”]?\s*\)", re.I), 0.3),
+        # "AMENDMENT DEED No. 1" (Australia), "Deed of Amendment" (UK)
+        (re.compile(r"\b(?:amendment|amending)\s+deed\b|\bdeed\s+of\s+amendment\b", re.I), 0.6),
+        # a lender's letter: "the Loan Agreement is hereby amended as follows"
+        (re.compile(r"\b(?:is|are)\s+(?:hereby\s+)?amended\s+(?:as\s+follows|to\s+read)\b", re.I), 0.3),
     ],
     "FINANCIAL_STATEMENT": [
         (re.compile(r"\bbalance\s+sheet\s+as\s+(at|on)\b", re.I), 0.5),
@@ -83,6 +91,9 @@ SIGNALS: dict[str, list[tuple[re.Pattern, float]]] = {
         (re.compile(r"\b(?:hereby\s+)?(?:irrevocably\s+)?waives?\b|\bgrants?\s+(?:a|its|the)\s+waiver\b", re.I), 0.4),
         (re.compile(r"\bhereby\s+consents?\b|\bconsents?\s+to\s+the\b", re.I), 0.2),
         (re.compile(r"\b(?:non-?compliance\s+with|breach\s+of)\s+(?:the\s+)?(?:clause|covenant|financial)", re.I), 0.2),
+        # US style: "WAIVER THIS WAIVER, dated as of ... (this "Waiver")", "LIMITED WAIVER", "Waiver and Amendment"
+        (re.compile(r"\(\s*this\s+[\"“]?(?:limited\s+)?waiver[\"”]?\s*\)|\blimited\s+waiver\b|"
+                    r"\bwaiver\s+and\s+(?:amendment|consent)\b", re.I), 0.6),
     ],
     "GUARANTEE": [
         (re.compile(r"\b(?:deed\s+of\s+|corporate\s+|parent\s+(?:company\s+)?)?guarantee\s+(?:agreement|and\s+"
@@ -94,6 +105,18 @@ SIGNALS: dict[str, list[tuple[re.Pattern, float]]] = {
     "AMENDED_AND_RESTATED": [
         (re.compile(r"\bamended\s+and\s+restated\s+(?:[\w-]+\s+){0,4}agreement\b", re.I), 0.6),
         (re.compile(r"\bamends?\s+and\s+restates?\b|\bshall\s+be\s+amended\s+and\s+restated\b", re.I), 0.3),
+    ],
+    # Debenture and bond trust deeds (Sri Lanka, India): the issuer's covenants to the trustee for the holders
+    "TRUST_DEED": [
+        (re.compile(r"\b(?:debenture|bond|note|security)\s+trust\s+deed\b|\btrust\s+deed\s+(?:for|in\s+respect\s+of)\b"
+                    r"[^\n]{0,120}\b(?:debentures?|bonds?|notes?)\b", re.I), 0.7),
+        (re.compile(r"\b(?:debenture|bond|note)\s+trustees?\b|\btrustee\s+for\s+the\s+(?:debenture|bond|note)\s*holders\b",
+                    re.I), 0.3),
+        (re.compile(r"\b(?:debentures?|bonds?)\b[^\n]{0,80}\b(?:redeemable|secured|unsecured|listed|rated)\b",
+                    re.I), 0.2),
+        # "TRUST DEED AN INITIAL ISSUE OF UPTO FIFTY MILLION ... DEBENTURES" (Sri Lanka)
+        (re.compile(r"\btrust\s+deed\b[\s\S]{0,300}?\bissue\s+of\b[\s\S]{0,200}?\bdebentures\b", re.I), 0.5),
+        (re.compile(r"\b(?:initial\s+|public\s+)*issue\s+of\b[^\n]{0,160}\bdebentures\b", re.I), 0.3),
     ],
     "SECURITY_DOCUMENT": [
         (re.compile(r"\bdeed\s+of\s+(hypothecation|guarantee|pledge|mortgage)\b", re.I), 0.6),
@@ -142,8 +165,22 @@ class Classification:
                 "evidence": self.evidence, **({"aiSecondOpinion": self.disputed} if self.disputed else {})}
 
 
+HEAD_SCAN, MIN_HEAD_CHARS = 8, 20
+# An SEC filing's cover line, the only text on an exhibit's first page: "EX-10.20 3 exhibit1020sunseekercred.htm"
+_FILING_LINE = re.compile(r"^\s*EX-[\d.]+\s+\d+\s+\S+\.htm\b[^\n]{0,60}$", re.I)
+
+
 def _pages(model: dict, count: int = 2) -> list[tuple[int, str]]:
-    return [(p["no"], p.get("text") or "") for p in model.get("pages", [])[:count]]
+    """The first ``count`` pages that say something, among the first HEAD_SCAN: a blank page and an SEC filing's
+    cover line come before the title in exhibits (bulk run, 22 Nov 2026: a credit agreement was UNKNOWN because its
+    two first pages were those). A short title page counts. Without such pages, the first ``count`` pages."""
+    pages = model.get("pages", [])
+
+    def says_something(text: str) -> bool:
+        return len(re.findall(r"\w", text)) >= MIN_HEAD_CHARS and not _FILING_LINE.match(text.strip())
+
+    full = [(p["no"], p.get("text") or "") for p in pages[:HEAD_SCAN] if says_something(p.get("text") or "")]
+    return full[:count] or [(p["no"], p.get("text") or "") for p in pages[:count]]
 
 
 def number_density(text: str) -> float:
@@ -180,6 +217,13 @@ def rule_scores(model: dict) -> tuple[dict[str, float], list[dict]]:
         scores["FINANCIAL_STATEMENT"] = min(1.0, scores["FINANCIAL_STATEMENT"] + 0.3)
     if any(SHEET_HINT.match(s.get("name", "")) for s in model.get("sheets", [])):
         scores["FINANCIAL_STATEMENT"] = min(1.0, scores["FINANCIAL_STATEMENT"] + 0.4)
+    # A page-1 title "... LOAN AGREEMENT" outweighs a mention of the sanction letter it follows (bulk run, 22 Nov
+    # 2026), unless the document is an amendment, a restatement, a waiver or a trust deed of that agreement
+    other = max(scores["AMENDMENT"], scores["AMENDED_AND_RESTATED"], scores["WAIVER_CONSENT"], scores["TRUST_DEED"])
+    if head and other < 0.6 and re.search(r"(?-i:\b(?:LOAN|FACILITY|FACILITIES|CREDIT)\s+AGREEMENT\b)",
+                                          head[0][1][:600]):
+        scores["LOAN_AGREEMENT"] = min(1.0, scores["LOAN_AGREEMENT"] + 0.3)
+        scores["SANCTION_LETTER"] = max(0.0, scores["SANCTION_LETTER"] - 0.3)
     if scores["AMENDMENT"] >= 0.6:  # an amendment quotes the agreement it amends: do not call it the agreement
         scores["LOAN_AGREEMENT"] = max(0.0, scores["LOAN_AGREEMENT"] - 0.3)
         # "First Amendment to the Amended and Restated Credit Agreement" is an amendment
@@ -194,9 +238,14 @@ def rule_scores(model: dict) -> tuple[dict[str, float], list[dict]]:
     elif scores["GUARANTEE"] >= 0.6:  # a guarantee is a security document whose covenants bind the guarantor
         scores["SECURITY_DOCUMENT"] = max(0.0, scores["SECURITY_DOCUMENT"] - 0.4)
         scores["LOAN_AGREEMENT"] = max(0.0, scores["LOAN_AGREEMENT"] - 0.3)
+    if scores["TRUST_DEED"] >= 0.7:  # a trust deed reads like a loan agreement and quotes the prospectus
+        scores["LOAN_AGREEMENT"] = max(0.0, scores["LOAN_AGREEMENT"] - 0.4)
+        scores["SECURITY_DOCUMENT"] = max(0.0, scores["SECURITY_DOCUMENT"] - 0.3)
     if scores["WAIVER_CONSENT"] >= 0.6:  # a waiver letter quotes the agreement and its covenants
         scores["LOAN_AGREEMENT"] = max(0.0, scores["LOAN_AGREEMENT"] - 0.3)
         scores["AMENDMENT"] = max(0.0, scores["AMENDMENT"] - 0.3)
+        # ... and the compliance it waives ("the Borrower has not complied with Section 5.9"): not a certificate
+        scores["COMPLIANCE_CERTIFICATE"] = max(0.0, scores["COMPLIANCE_CERTIFICATE"] - 0.4)
     winner = max(scores, key=scores.get)
     return {k: round(v, 3) for k, v in scores.items()}, evidence.get(winner, [])[:3]
 
@@ -239,7 +288,7 @@ PROMPT = """You classify one bank lending document. {guard}
 Classes: SANCTION_LETTER, LOAN_AGREEMENT, AMENDMENT, FINANCIAL_STATEMENT, COMPLIANCE_CERTIFICATE,
 SECURITY_DOCUMENT, OTHER_EVIDENCE, WAIVER_CONSENT (a waiver or consent letter), GUARANTEE (a guarantee, deed of
 guarantee or guaranty agreement), AMENDED_AND_RESTATED (a full agreement that amends and restates an earlier one),
-UNKNOWN.
+TRUST_DEED (a debenture, bond or note trust deed), UNKNOWN.
 Answer with JSON only: {{"type": "<class>", "basis": "STANDALONE"|"CONSOLIDATED"|null,
 "periodType": "ANNUAL"|"HALF_YEARLY"|"QUARTERLY"|"MONTHLY"|null,
 "evidence": [{{"page": <number>, "quote": "<a line copied exactly from that page>"}}]}} with 2 or 3 quotes.
