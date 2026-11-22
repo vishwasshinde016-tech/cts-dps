@@ -252,7 +252,7 @@ paths:
             schema: { $ref: "schemas/review-decisions.json" }
       responses:
         "202":
-          description: Decisions recorded; the job resumes
+          description: Decisions recorded; the job status with revision (the run just saved) and remaining (fields still to review)
           content:
             application/json:
               schema: { $ref: "schemas/job-status.json" }
@@ -387,6 +387,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Capabilities" }
+
+  /health:
+    get:
+      tags: [ops]
+      operationId: health
+      x-phase: 1
+      summary: Liveness with the database and the version (the load balancer's check)
+      security: []
+      responses:
+        "200":
+          description: UP, or DEGRADED when the database does not answer
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status, database, version]
+                properties:
+                  status: { type: string, enum: [UP, DEGRADED] }
+                  database: { type: string, enum: [UP, DOWN] }
+                  version: { type: string }
 
   /health/live:
     get:
@@ -753,9 +774,19 @@ components:
         llmEnabled: { type: boolean, description: "false: bank policy, no document data is sent to any LLM" }
     QueueReport:
       type: object
+      additionalProperties: false
       required: [generatedAt, rows]
       properties:
         generatedAt: { type: string, format: date-time }
+        dead: { type: integer, minimum: 0, description: "Jobs in DEAD (support's DLQ)" }
+        review:
+          type: object
+          description: Jobs waiting for a person; mapping problems counted apart (route MAPPING_REVIEW)
+          properties:
+            waiting: { type: integer, minimum: 0 }
+            mappingReview: { type: integer, minimum: 0 }
+            byReason: { type: object, additionalProperties: { type: integer } }
+            oldestWaitSeconds: { type: number, minimum: 0 }
         rows:
           type: array
           items:
@@ -808,11 +839,15 @@ components:
         to: { type: string, format: date }
         budget:
           type: object
-          description: This month's model tokens against DPS_AI_MONTHLY_TOKEN_BUDGET (0 = no budget)
+          description: This month's model tokens against DPS_AI_MONTHLY_TOKEN_BUDGET (null = no budget set)
           properties:
-            budgetTokens: { type: integer }
+            month: { type: string, description: "YYYY-MM" }
+            budgetTokens: { type: [integer, "null"] }
             usedTokens: { type: integer }
+            percent: { type: [number, "null"] }
             exhausted: { type: boolean }
+            aiEnabled: { type: boolean }
+            cachedAnswers: { type: integer }
         rows:
           type: array
           items:

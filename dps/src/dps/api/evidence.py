@@ -17,7 +17,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import Date, cast, func, select
+from sqlalchemy import select
 
 from dps import services
 from dps.api.access import require_cp
@@ -149,18 +149,18 @@ def ops_usage(request: Request, db: DB, user: User,
     to = utcnow().date()
     since = to - timedelta(days=days - 1)
     route_of = _routes(settings)
-    rows = db.execute(select(cast(AiUsage.at, Date), AiUsage.job_id, AiUsage.model, func.sum(AiUsage.calls),
-                             func.sum(AiUsage.prompt_tokens), func.sum(AiUsage.completion_tokens),
-                             func.sum(AiUsage.cost))
-                      .where(AiUsage.at >= utcnow() - timedelta(days=days))
-                      .group_by(cast(AiUsage.at, Date), AiUsage.job_id, AiUsage.model)).all()
+    # One row per job and model; the day is taken in Python. CAST(at AS DATE) is not portable: SQLite returns a
+    # number for it, which the date type cannot read (the API check of 21 Nov 2026 got a 500 here).
+    rows = db.execute(select(AiUsage.at, AiUsage.job_id, AiUsage.model, AiUsage.calls, AiUsage.prompt_tokens,
+                             AiUsage.completion_tokens, AiUsage.cost)
+                      .where(AiUsage.at >= utcnow() - timedelta(days=days))).all()
     job_ids = {r[1] for r in rows if r[1]}
     jobs_by_id = {j.id: j for j in db.scalars(select(Job).where(Job.id.in_(job_ids)))} if job_ids else {}
     merged: dict[tuple, dict] = {}
     for day, job_id, model, calls, tin, tout, cost in rows:
         job = jobs_by_id.get(job_id)
-        key = (str(day)[:10], job.tenant_id if job else settings.tenant_id, job.job_type if job else "INTERACTIVE",
-               route_of.get(model, "strong"))
+        key = (day.date().isoformat(), job.tenant_id if job else settings.tenant_id,
+               job.job_type if job else "INTERACTIVE", route_of.get(model, "strong"))
         row = merged.setdefault(key, {"day": key[0], "tenantId": key[1], "jobType": key[2], "route": key[3],
                                       "calls": 0, "tokensIn": 0, "tokensOut": 0, "costUsd": None})
         row["calls"] += int(calls or 0)

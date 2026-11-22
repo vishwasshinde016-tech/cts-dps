@@ -6,6 +6,12 @@
   "type": "object",
   "required": ["jobId", "runId", "revision", "fields"],
   "properties": {
+    "counts": {
+      "type": "object",
+      "description": "toReview: the fields listed here; total: every field of the result.",
+      "required": ["toReview", "total"],
+      "properties": { "toReview": { "type": "integer", "minimum": 0 }, "total": { "type": "integer", "minimum": 0 } }
+    },
     "jobId": { "type": "string" },
     "runId": { "type": "string" },
     "revision": { "type": "integer", "minimum": 1, "description": "Send back as If-Match with the decisions" },

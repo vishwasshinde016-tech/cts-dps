@@ -8,16 +8,20 @@ events:
     payload: { jobType: string, priority: string, batchId: "string|null" }
   - type: dps.analysis.completed
     when: An ANALYZE job finished (phase 3).
-    payload: { type: string, confidence: number, mismatch: boolean, identifiers: array, legibility: number }
+    payload: { type: string, confidence: number, mismatch: boolean, uncertain: boolean, expected: "string|null",
+               identifiers: array, legibility: number, missingRequired: "string|null", keyPages: array,
+               mismatches: array, route: string, resultUrl: string }
   - type: dps.extraction.completed
     when: An extraction finished with every field accepted, or after its review was submitted.
-    payload: { runId: string, resultUrl: string, fieldCount: integer }
+    payload: { skillPack: string, fields: integer, resultUrl: string, revision: integer, reviewedBy: string }
+    notes: skillPack and fields when the extraction itself finished; revision and reviewedBy when a review completed it.
   - type: dps.extraction.needs_review
     when: An extraction finished with at least one field for a person.
-    payload: { runId: string, resultUrl: string, fieldsToReview: integer, reasons: array }
+    payload: { skillPack: string, fields: integer, resultUrl: string }
+    notes: GET /dps/v1/jobs/{jobId}/review lists the fields; the job's errorCode is MAPPING_REVIEW when the borrower or facility must be mapped first.
   - type: dps.extraction.shadow
     when: A job run in SHADOW rollout (phase 7 pilot) finished; the result is stored for comparison, not shown.
-    payload: { resultUrl: string }
+    payload: { skillPack: string, fields: integer, resultUrl: string }
   - type: dps.job.failed
     when: A job ended with a deterministic failure (no retry).
     payload: { errorCode: string, message: string, quarantine: boolean }
@@ -27,7 +31,8 @@ events:
     payload: { errorCode: string, message: string, attempts: integer }
   - type: dps.job.cancelled
     when: A job was cancelled before it finished.
-    payload: { cancelledBy: string }
+    payload: { cancelledBy: string, cancelled: boolean, errorCode: string, message: string }
+    notes: cancelledBy when it was cancelled while waiting; cancelled true when it was cancelled while running.
   - type: dps.batch.completed
     when: Every item of a batch has ended.
     payload: { batchId: string, counts: object, errorsUrl: "string|null" }

@@ -400,9 +400,10 @@ def health(request: Request) -> dict:
 
 
 @router.get("/dps/v1/jobs")
-def list_jobs(db: DB, user: User, status: str | None = None, limit: int = 100) -> list[dict]:
-    """Job operations for support (contract listJobs): newest first, optionally one status (e.g. FAILED), this
-    deployment's tenant only (G2), with the file name and CPs that say which upload it is."""
+def list_jobs(db: DB, user: User, status: str | None = None, jobType: str | None = None,  # noqa: N803
+              batchId: str | None = None, limit: int = 100) -> list[dict]:  # noqa: N803 - contract names
+    """Job operations for support (contract listJobs): newest first, optionally one status (e.g. FAILED), one job
+    type or one batch, this deployment's tenant only (G2), with the file name and CPs that say which upload it is."""
     from dps.api.access import tenant
 
     require_roles(user, SUPPORT, ADMIN)
@@ -411,6 +412,10 @@ def list_jobs(db: DB, user: User, status: str | None = None, limit: int = 100) -
         q = q.where(Job.tenant_id == tenant())
     if status:
         q = q.where(Job.status == status.upper())
+    if jobType:
+        q = q.where(Job.job_type == jobType.upper())
+    if batchId:
+        q = q.where(Job.batch_id == batchId)
     found = list(db.scalars(q))
     ids = sorted({j.document_id for j in found})
     docs = {d.id: d for d in db.scalars(select(Document).where(Document.id.in_(ids)))} if ids else {}
