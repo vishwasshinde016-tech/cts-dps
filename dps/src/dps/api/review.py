@@ -199,6 +199,9 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
     new_run = Run(job_id=job.id, run_no=revision + 1, status=result["status"], trigger="REVIEW",
                   result_json="{}")
     result["runId"] = f"{job.id}:{revision + 1}"
+    from dps import results
+
+    results.flag_format(result)  # a corrected value is checked against result.json too
     new_run.result_json = json.dumps(result, default=str, separators=(",", ":"))
     db.add(new_run)
     prev = db.scalars(select(Run).where(Run.job_id == job.id, Run.run_no == revision)).first()

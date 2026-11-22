@@ -195,6 +195,30 @@ AGENT_GROUPS = {"sanction": "AGREEMENT_TERM", "certificate": "CERTIFIED_FIGURE",
                 "amendment_diff": "FINANCIAL_COVENANT", "covenants": "POSSIBLE_COVENANT", "waiver": "WAIVER"}
 
 
+COVENANT_KEYS = ("metric", "operator", "threshold", "unit", "expression")
+SCHEDULE_KINDS = ("TESTING_CALENDAR", "REPORTING_DEADLINE", "REPAYMENT", "INTEREST_RESET", "CURE_WINDOW")
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _schedule_value(value: dict, name: str) -> dict:
+    """The agent's schedule term in the contract's shape (result check of 22 Nov 2026): kind one of the five (else
+    OTHER), frequency MONTHLY … YEARLY or null, dates only real dates. Words that do not fit are kept in rule."""
+    from dps.skills.schedule_terms.rules import _freq
+
+    raw_kind = str(value.get("kind") or name or "")
+    kind = re.sub(r"[\s-]+", "_", raw_kind.strip()).upper()
+    raw_freq = value.get("frequency")
+    freq = raw_freq if raw_freq in (None, "MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY") else _freq(str(raw_freq))
+    dates = [d for d in value.get("dates") or [] if isinstance(d, str) and ISO_DATE.match(d)]
+    kept = [str(x) for x in (
+        None if kind in SCHEDULE_KINDS else f"kind: {raw_kind}",
+        None if freq or not raw_freq else f"when: {raw_freq}",
+        *[f"date: {d}" for d in value.get("dates") or [] if d not in dates and d]) if x]
+    rule = "; ".join([x for x in [value.get("rule"), *kept] if x])[:300] or None
+    kind = kind if kind in SCHEDULE_KINDS else "OTHER"
+    return {**value, "kind": kind, "frequency": freq, "dates": dates, "rule": rule}
+
+
 def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: list[dict] | None,
                 method: str = "AI") -> list[dict]:
     """Agent proposals the rules did not find: kept with method AI (or AI_VISION), high-risk ones and every covenant
@@ -210,11 +234,12 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
         if group == "AGREEMENT_TERM":
             value = {"key": p["name"], **value}
         if group == "SCHEDULE_TERM":
-            value = {"kind": value.get("kind", p["name"]), **value}
+            value = _schedule_value(value, p["name"])
         if group == "CERTIFIED_FIGURE":
             value = {"covenant": value.get("covenant", p["name"]), "figure": value.get("figure"), **value}
-        if group == "POSSIBLE_COVENANT":
-            value = {**value, "metric": value.get("metric") or p.get("_written") or p["name"]}
+        if group == "POSSIBLE_COVENANT":  # the contract's covenant value has these keys on every covenant (22 Nov 2026)
+            value = {**{k: None for k in COVENANT_KEYS}, **value,
+                     "metric": value.get("metric") or p.get("_written") or p["name"]}
         if group == "WAIVER":  # the agent's reading in the waiver shape; the target is matched by a person
             value = {"kind": value.get("kind") or "WAIVER",
                      "target": {"metric": value.get("metric"), "clause": value.get("clause"),
@@ -227,6 +252,9 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
                        method=method,
                        confidence=0.6 if method == "AI_VISION" else 0.7,
                        key=method.lower() + (f"-{p['_residual']}" if p.get("_residual") else ""))
+        if group == "SCHEDULE_TERM" and value["kind"] == "OTHER":
+            f["status"] = "NEEDS_REVIEW"
+            f["issues"].append(issue("AI_ONLY", "found by the Document Agent only; its kind is not one the bank knows"))
         if method == "AI_VISION":
             f["status"] = "NEEDS_REVIEW"
             f["issues"].append(issue("READ_FROM_IMAGE", f"page {p['page']} was read from its image; confirm it"))

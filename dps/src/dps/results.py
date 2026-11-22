@@ -8,6 +8,9 @@ tables was removed with those tables (full review WP7, migration d4e7f1a2b3c9).
 from __future__ import annotations
 
 import json
+import logging
+from functools import lru_cache
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,6 +18,38 @@ from sqlalchemy.orm import Session
 from dps.models import Document, DocumentCpLink, Job, Run, StatementValue
 
 SCHEMA = "dps.result/1.0"
+FORMAT_CODE = "RESULT_FORMAT"
+log = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _validator():
+    import jsonschema
+
+    path = Path(__file__).resolve().parent / "contract" / "schemas" / "result.json"
+    return jsonschema.Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
+
+
+def check_format(result: dict) -> list[str]:
+    """Every place where ``result`` breaks contracts/schemas/result.json, as "path: message" (empty: it follows it).
+    Checked as it will be saved: dates and other values as JSON text."""
+    data = json.loads(json.dumps(result, default=str))
+    return [f"{'/'.join(map(str, e.absolute_path)) or '(top)'}: {e.message[:120]}"
+            for e in sorted(_validator().iter_errors(data), key=lambda e: list(map(str, e.absolute_path)))]
+
+
+def flag_format(result: dict) -> None:
+    """The save-time check (result check of 22 Nov 2026: an AI run broke result.json in 173 places and nobody saw).
+    A result that breaks the contract is still saved, findings and all, with one RESULT_FORMAT warning that says where;
+    the log names every place. Safe to run twice."""
+    result["warnings"] = [w for w in result.get("warnings") or [] if w.get("code") != FORMAT_CODE]
+    problems = check_format(result)
+    if not problems:
+        return
+    for p in problems[:50]:
+        log.warning("RESULT_FORMAT job %s: %s", result.get("jobId"), p)
+    message = f"{len(problems)} place(s) do not follow result.json: " + "; ".join(problems[:3])
+    result["warnings"].append({"code": FORMAT_CODE, "message": message[:500]})
 
 
 def latest_run(db: Session, job: Job) -> dict | None:

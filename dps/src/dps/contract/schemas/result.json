@@ -727,7 +727,8 @@
             "REPORTING_DEADLINE",
             "REPAYMENT",
             "INTEREST_RESET",
-            "CURE_WINDOW"
+            "CURE_WINDOW",
+            "OTHER"
           ]
         },
         "rule": {
@@ -1224,7 +1225,7 @@
                     "properties": {
                       "id": { "type": "string" },
                       "page": { "type": "integer" },
-                      "route": { "type": "string", "enum": ["DUTY", "CUE"] },
+                      "route": { "type": "string", "enum": ["DUTY", "CUE", "LEXICON", "CROSS_DEFAULT", "TABLE"], "description": "Why the sentence is in the ledger: DUTY (shall, must), CUE (a borrower duty word), LEXICON (may not, no member of the Group may), CROSS_DEFAULT, TABLE (a lead-in with a table of levels)" },
                       "kind": { "type": ["string", "null"] },
                       "state": { "type": "string", "enum": ["FINDING", "COVERED", "NOT_A_COVENANT", "UNRESOLVED"] },
                       "reason": { "type": ["string", "null"] },

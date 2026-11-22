@@ -111,6 +111,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "schemas/result.json" }
+        "304": { description: "Not modified: If-None-Match holds the current ETag; no body (result check of 22 Nov 2026)" }
         "404": { $ref: "#/components/responses/Error" }
         "410": { $ref: "#/components/responses/Error" }
 
@@ -220,6 +221,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Batch" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
   /dps/v1/jobs/{jobId}/review:
@@ -604,6 +606,7 @@ paths:
         - { name: decision, in: path, required: true, schema: { type: string, enum: [accept, reject] } }
       responses:
         "200": { description: Decided }
+        "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
   /api/data/values:

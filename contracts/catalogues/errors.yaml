@@ -46,6 +46,7 @@ errors:
   - { code: LANGUAGE_NOT_READ, class: CONTENT, http: null, retry: false, message: "The document's language cannot be read automatically. Enter the values by hand." }
   # --- quality (field-level; job goes to review) ---
   - { code: LOW_CONFIDENCE, class: QUALITY, http: null, retry: false, message: "Confidence is low; please check this value." }
+  - { code: RESULT_FORMAT, class: QUALITY, http: null, retry: false, message: "Part of this result does not follow the agreed format (result.json); DPS saved it and logged where." }
   - { code: MODELS_DISAGREE, class: QUALITY, http: null, retry: false, message: "The readers disagree; please choose the right value." }
   - { code: TYPE_DISPUTED, class: CONTENT, http: null, retry: false, message: "The rules and the Document Agent read different document types. Please confirm the type." }
   - { code: PERIOD_MISMATCH, class: QUALITY, http: null, retry: false, message: "The document is for a different period than the cycle expects." }
