@@ -118,6 +118,7 @@ errors:
   - { code: UNRESOLVED_AMENDMENT, class: QUALITY, http: null, retry: false, message: "The amendment change could not be matched to an approved covenant; please confirm it." }
   - { code: VERDICT_NOT_IN_RESULTS, class: QUALITY, http: null, retry: false, message: "The draft commentary states a verdict the results do not support; it was not used." }
   - { code: AI_ONLY, class: QUALITY, http: null, retry: false, message: "Only the Document Agent found this value; please confirm it." }
+  - { code: SAME_SENTENCE, class: QUALITY, http: null, retry: false, message: "Several readings of the same sentence were merged into this value; the other codes are listed." }
   - { code: READ_FROM_IMAGE, class: QUALITY, http: null, retry: false, message: "This value was read from a page image; please confirm it." }
   - { code: NOT_GROUNDED, class: QUALITY, http: null, retry: false, message: "The value was not found on its page." }
   - { code: TOTALS_DO_NOT_ADD, class: QUALITY, http: null, retry: false, message: "The totals do not add up; please check the figures." }

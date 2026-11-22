@@ -67,7 +67,7 @@ class Route:
     deployment: str
     max_tokens: int = 3000
     timeout_s: float = 60.0
-    temperature: float | None = 0.0
+    temperature: float | None = None  # None: the model's default (newer Azure OpenAI models refuse any other)
     retries: int = 3
     rpm: int = 300
 
@@ -95,11 +95,19 @@ class Routes:
             merged = {**defaults, **(spec or {})}
             routes[name] = Route(name, str(merged.get("provider", "default")), str(merged.get("deployment", "")),
                                  int(merged.get("max_tokens", 3000)), float(merged.get("timeout_s", 60)),
-                                 merged.get("temperature", 0.0), int(merged.get("retries", 3)),
+                                 None if merged.get("temperature") is None else float(merged["temperature"]),
+                                 int(merged.get("retries", 3)),
                                  max(1, int(merged.get("rpm", 300)) // max(1, share)))
         budgets = raw.get("budgets") or {}
         return cls(routes, int(budgets.get("per_job_tokens", 150_000)),
                    int(budgets.get("per_tenant_day_tokens", 20_000_000)))
+
+
+def temperature_for(route: Route, settings) -> float | None:
+    """The route's temperature from the routes file when it sets one (e.g. 0 for steady answers where the model allows
+    it), else DPS_AI_TEMPERATURE; None keeps the model's default. The routes file's value was ignored before (review of
+    22 Nov 2026)."""
+    return route.temperature if route.temperature is not None else getattr(settings, "ai_temperature", None)
 
 
 class TokenBucket:
@@ -309,7 +317,7 @@ def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cove
                          int(getattr(settings, "ai_rpm_share", 1) or 1))
 
     def provider(route: Route) -> Completion:
-        raw = crewai_completion(route.deployment, settings.ai_temperature, route.timeout_s)
+        raw = crewai_completion(route.deployment, temperature_for(route, settings), route.timeout_s)
 
         def call(messages: list[dict]) -> str:
             try:

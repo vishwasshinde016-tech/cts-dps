@@ -102,9 +102,29 @@ def _cost(settings: Settings, prompt: int, completion: int) -> float | None:
 
 
 def prompt_version(messages: list[dict] | None) -> str:
-    """A short fingerprint of the system prompt: a changed prompt shows as a new version in the trace."""
-    system = next((str(m.get("content", "")) for m in messages or [] if m.get("role") == "system"), "")
-    return hashlib.sha256(system.encode()).hexdigest()[:8] if system else "-"
+    """A short fingerprint of the instructions: a changed prompt shows as a new version in the trace.
+
+    The system message when there is one; else, in the skills' single user message (``common.prompt_for``), the task
+    and the answer format, without the pages and the batch note, so every read of one task shares a version (review of
+    22 Nov 2026: all 30 calls of a run showed "-")."""
+    text = next((str(m.get("content", "")) for m in messages or [] if m.get("role") == "system"), "")
+    if not text:
+        user = next((str(m.get("content", "")) for m in messages or [] if m.get("role") == "user"), "")
+        start = user.find("Task:\n")
+        if start != -1:
+            text = user[start:]
+            schema = text.find("Schema:\n")
+            if schema != -1:
+                end = text.find("\n", schema + len("Schema:\n"))
+                text = text[:end] if end != -1 else text
+        else:  # other prompts (classify, the residual read): the instructions before the document's data
+            cuts = [i for i in (user.find(m) for m in DATA_MARKERS) if i > 0]
+            text = user[:min(cuts)] if cuts else ""
+    return hashlib.sha256(text.encode()).hexdigest()[:8] if text else "-"
+
+
+# Where a prompt's instructions end and the document's data begins (classify: "Facts:"; residual read: "Candidates:").
+DATA_MARKERS = ("Facts:", "Candidates:", "<<<page ")
 
 
 def _text(value: object, keep: bool) -> str | None:

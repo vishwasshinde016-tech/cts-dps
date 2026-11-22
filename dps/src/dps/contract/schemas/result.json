@@ -961,6 +961,7 @@
             "LENDER",
             "BANK",
             "AUDITOR",
+            "AGENT",
             null
           ],
           "description": "For ISSUER: who issued the document (G3)"

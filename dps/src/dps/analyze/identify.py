@@ -66,6 +66,20 @@ BORROWER = [
     re.compile(r"to\s+the\s+(?:members|board\s+of\s+directors)\s+of\s+([A-Z][A-Za-z0-9&.,'\- ]{2,80}?"
                r"(?:Limited|Ltd\.?|LLP))", re.I),
 ]
+# US and UK style (review of 22 Nov 2026: a US credit agreement showed none of these): "AUTOZONE, INC., a Nevada
+# corporation (the "Borrower")", "AUTOZONE, INC., / as Borrower", "U.S. BANK NATIONAL ASSOCIATION, as Administrative
+# Agent". A name is a run of capitalised words (it may cross a line) ending in a company suffix.
+_SUFFIX = r"(?i:Limited|Ltd|LLP|PLC|Inc|Incorporated|Corporation|Corp|Company|LLC|L\.P|N\.A|National\s+Association)\.?"
+# words split by spaces; a line break only right before the suffix ("AUTOZONE," then "INC." on the next line)
+_NAME = (r"((?:[A-Z][\w&.'\-]*(?:,?[ \t]+|,[ \t]*\n[ \t]*(?=" + _SUFFIX + r"))){0,7}?" + _SUFFIX + r")")
+BORROWER += [
+    re.compile(_NAME + r",?\s*(?:an?\s+[A-Za-z ]{2,40}?"
+               r"(?:corporation|company|partnership|limited\s+liability\s+company)\s*)?\(\s*(?:the\s+)?[\"“]Borrower[\"”]\s*\)"),
+    re.compile(_NAME + r",?\s*\n\s*as\s+(?:the\s+)?Borrower\b"),
+]
+ISSUER.insert(2, ("AGENT", re.compile(_NAME + r",?\s*\n?\s*as\s+(?:the\s+)?Administrative\s+Agent\b")))
+# A signature page is often followed by exhibits and schedules: these say a page was signed wherever it is.
+SIGNED_PAGE = re.compile(r"\bin\s+witness\s+whereof\b|\bBy:\s*/s/|\bBy:\s*_{3,}", re.I)
 SIGNATURE = re.compile(r"\b(authori[sz]ed\s+signatory|for\s+and\s+on\s+behalf\s+of|signed\s+(?:and\s+delivered\s+)?"
                        r"by|signature\s*:|\(signature\)|managing\s+director|partner\s*\n|membership\s+no)", re.I)
 LEGAL_SUFFIX = re.compile(r"\b(private|pvt|limited|ltd|llp|plc|inc|m/s|the)\b\.?", re.I)
@@ -254,6 +268,11 @@ def _signature(pages: list[dict]) -> Found | None:
     for page in reversed(pages[-2:]):
         text = page.get("text") or ""
         m = SIGNATURE.search(text)
+        if m:
+            return Found("SIGNATURE", "PRESENT", page["no"], _line(text, m.start(), m.end()))
+    for page in reversed(pages):
+        text = page.get("text") or ""
+        m = SIGNED_PAGE.search(text)
         if m:
             return Found("SIGNATURE", "PRESENT", page["no"], _line(text, m.start(), m.end()))
     if pages:

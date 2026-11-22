@@ -22,11 +22,12 @@ from dps.models import Job
 from dps.skills import Pack, for_job_type, load
 from dps.skills.common import (
     MAX_PROMPT_CHARS,
-    agent_proposals,
     batched_proposals,
     issue,
     make_field,
+    page_batches,
     select_pages,
+    squash,
     vote,
 )
 
@@ -203,20 +204,77 @@ ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 def _schedule_value(value: dict, name: str) -> dict:
     """The agent's schedule term in the contract's shape (result check of 22 Nov 2026): kind one of the five (else
     OTHER), frequency MONTHLY … YEARLY or null, dates only real dates. Words that do not fit are kept in rule."""
+    from dps.skills.common import amount
     from dps.skills.schedule_terms.rules import _freq
 
     raw_kind = str(value.get("kind") or name or "")
     kind = re.sub(r"[\s-]+", "_", raw_kind.strip()).upper()
     raw_freq = value.get("frequency")
     freq = raw_freq if raw_freq in (None, "MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY") else _freq(str(raw_freq))
-    dates = [d for d in value.get("dates") or [] if isinstance(d, str) and ISO_DATE.match(d)]
+    raw_dates = value.get("dates")
+    raw_dates = [raw_dates] if isinstance(raw_dates, str) else raw_dates if isinstance(raw_dates, list) else []
+    dates = [d for d in raw_dates if isinstance(d, str) and ISO_DATE.match(d)]
+    days = value.get("daysAfterPeriodEnd")
+    days = days if isinstance(days, int) and not isinstance(days, bool) else (
+        int(days) if isinstance(days, str) and days.strip().isdigit() else None)
+    money = value.get("amount")
+    money = float(money) if isinstance(money, (int, float)) and not isinstance(money, bool) else (
+        amount(money) if isinstance(money, str) else None)
     kept = [str(x) for x in (
         None if kind in SCHEDULE_KINDS else f"kind: {raw_kind}",
         None if freq or not raw_freq else f"when: {raw_freq}",
-        *[f"date: {d}" for d in value.get("dates") or [] if d not in dates and d]) if x]
-    rule = "; ".join([x for x in [value.get("rule"), *kept] if x])[:300] or None
+        *[f"date: {d}" for d in raw_dates if d not in dates and d]) if x]
+    rule = "; ".join([str(x) for x in [value.get("rule"), *kept] if x])[:300] or None
     kind = kind if kind in SCHEDULE_KINDS else "OTHER"
-    return {**value, "kind": kind, "frequency": freq, "dates": dates, "rule": rule}
+    return {**value, "kind": kind, "frequency": freq, "dates": dates, "daysAfterPeriodEnd": days, "amount": money,
+            "rule": rule}
+
+
+_METHOD_RANK = {"RULES+AI_CONFIRMED": 0, "REGEX": 1, "RULES": 1, "AI": 2, "AI_VISION": 2, "AI_RESIDUAL": 3}
+_MERGE_GROUPS = (*COVENANT_GROUPS, "EVENT_OF_DEFAULT")
+
+
+def _code_of(f: dict) -> str:
+    v = f.get("value") or {}
+    return str(v.get("code") or v.get("metric") or "")
+
+
+def _generic(f: dict) -> bool:
+    code = _code_of(f).upper()
+    return not code or code.endswith("OTHER")
+
+
+def merge_same_sentence(fields: list[dict]) -> list[dict]:
+    """One sentence, one finding (review of 22 Nov 2026: 24 sentences gave 50 fields, mostly two AI parts reading the
+    same sentence, one with a specific code and one with *_OTHER). Fields with the same page and quote are merged
+    into the best one: rules before AI, a specific code before OTHER. Only AI fields are dropped; their codes stay on
+    the kept field as ``value.alsoCodes`` and an issue says so. A rules finding is never dropped, and an event of
+    default is never merged into a covenant."""
+    by_sentence: dict[tuple, list[dict]] = {}
+    for f in fields:
+        source = f.get("source") or {}
+        if f.get("group") in _MERGE_GROUPS and source.get("quote"):
+            by_sentence.setdefault((source.get("page"), squash(source["quote"])[:200]), []).append(f)
+    dropped: set[int] = set()
+    for same in by_sentence.values():
+        if len(same) < 2 or not any(str(f.get("method", "")).startswith("AI") for f in same):
+            continue
+        keep = min(same, key=lambda f: (_METHOD_RANK.get(f.get("method"), 2), _generic(f)))
+        merged = []
+        for f in same:
+            if f is keep or not str(f.get("method", "")).startswith("AI"):
+                continue
+            if (f["group"] == "EVENT_OF_DEFAULT") != (keep["group"] == "EVENT_OF_DEFAULT"):
+                continue
+            dropped.add(id(f))
+            code = _code_of(f)
+            if code and code != _code_of(keep) and code not in merged:
+                merged.append(code)
+        if merged:
+            keep["value"]["alsoCodes"] = [*keep["value"].get("alsoCodes", []), *merged]
+            keep["issues"].append(issue("SAME_SENTENCE", f"{len(merged)} other reading(s) of this sentence merged "
+                                                         f"here; other codes: {', '.join(merged)}"))
+    return [f for f in fields if id(f) not in dropped]
 
 
 def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: list[dict] | None,
@@ -584,12 +642,14 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
         if gateway is not None:  # Miro AI function 3: the agent reads the schedule terms with the schedule skill
             sched_pages = select_pages(pages, sched_fields, KEYWORDS["schedule_terms"],
                                        sched.page_selection.get("max_pages", 20))
-            sched_proposals = agent_proposals(sched, gateway, sched_pages, spring=tools,
-                                              correlation_id=job.correlation_id, notes=notes, all_pages=pages)
+            # in batches that each fit one prompt: one prompt left 4 of the 20 schedule pages out (22 Nov 2026)
+            sched_proposals = batched_proposals(sched, gateway, page_batches(sched_pages), notes=notes, spring=tools,
+                                                correlation_id=job.correlation_id, all_pages=pages)
             sched_fields = vote(sched_fields, sched_proposals)
             sched_fields += _agent_only(sched, pages, sched_fields, sched_proposals)
         warnings += sched.checks(sched_fields, {**ctx, "sanctionedAmount": amount})
         fields += sched_fields
+    fields = merge_same_sentence(fields)
     entries = None
     if pack.name == "covenants":  # every covenant-shaped sentence of the whole document ends with an outcome
         from dps.skills.covenants import ledger, omissions
@@ -603,6 +663,7 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
 
             residual = names.clean(residual, drop_mechanics=True, collapse=False) or []
             fields += _agent_only(pack, pages, fields, residual, method="AI_RESIDUAL")
+            fields = merge_same_sentence(fields)
             ledger.settle(entries, fields, decisions)
         ledger.attach(entries, fields)
         fields += ledger.review_items(entries, pages, pack.name)

@@ -176,3 +176,17 @@ def _job():
     from test_phase4_skills import fake_job
 
     return fake_job("EXTRACT_AGREEMENT")
+
+
+def test_schedule_values_of_the_wrong_type_are_put_right():
+    """The agent may write one date as text, or numbers as text: dates becomes a list of real dates, days and amount
+    numbers (or null), and nothing is read letter by letter."""
+    model = model_of(PAGE)
+    proposal = {"name": "REPAYMENT", "page": 1, "quote": "determined on the Closing Date",
+                "value": {"kind": "REPAYMENT", "rule": "pay back", "dates": "2027-03-31", "daysAfterPeriodEnd": "45",
+                          "amount": "1,000,000", "frequency": 4}}
+    [field] = skills._agent_only(load("schedule_terms"), model["pages"], [], [proposal])
+    v = field["value"]
+    assert v["dates"] == ["2027-03-31"] and v["daysAfterPeriodEnd"] == 45 and v["amount"] == 1000000.0
+    assert v["frequency"] is None and "date: 2" not in (v["rule"] or "")
+    assert _valid(field) == []
