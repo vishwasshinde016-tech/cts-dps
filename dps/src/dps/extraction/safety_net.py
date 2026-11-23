@@ -24,6 +24,7 @@ from dps.extraction.agreement import (
     _Doc,
     normalize_ws,
 )
+from dps.money import MONEY_MARKER
 from dps.parse.engine import Page
 
 # "permit"/"maintain" too: a list form ("the Borrower will not: ... 6.01 Permit the Leverage Ratio to exceed")
@@ -49,7 +50,7 @@ _NUMBER = re.compile(r"\b" + _WORD + r"(?:\s+point(?:\s+" + _WORD + r"){1,3}|"
                      r"\s+and\s+(?:one[- ]|a[- ])?(?:half|quarter)|\s+and\s+three[- ]quarters?)?"
                      r"[\s-]+to[\s-]+one\b|"  # held-out set: "not greater than one-to-one"
                      r"\d+(?:\.\d+)?\s*(?:%|per\s*cent|percent|x\b|times\b|:\s*1(?:\.0+)?\b|to\s+1(?:\.0+)?\b)|"
-                     r"(?:\$|INR|Rs\.?|₹|LKR|USD)\s*\d|\d[\d,]*(?:\.\d+)?\s*(?:crores?|lakhs?|million|billion)\b|"
+                     r"" + MONEY_MARKER + r"\s*\d|\d[\d,]*(?:\.\d+)?\s*(?:crores?|lakhs?|million|billion)\b|"
                      # Wording stress test: a plain ratio ("a minimum DSCR of 1.25"), not a section number ("7.12 ...",
                      # "Section 6.01") nor a date.
                      r"(?<![\w.§/-])(?<!section\s)(?<!clause\s)(?<!article\s)\d{1,2}\.\d{1,2}\b(?![\d/-])(?!\.\d)(?!\s+(?-i:[A-Z][a-z]))",

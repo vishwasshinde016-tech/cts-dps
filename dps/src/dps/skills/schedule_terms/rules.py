@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import date
 
+from dps.money import MONEY_MARKER, currency_after_amount, currency_before_amount, document_currencies
 from dps.skills.common import amount, issue, line_at, make_field, scaled
 
 PACK = "schedule_terms"
@@ -17,7 +18,7 @@ DEADLINE = re.compile(r"within\s+(\d{1,3})\s*(?:\(\w+\)\s*)?days\s+(?:of|from|af
 TESTED = re.compile(r"\btested\s+(quarterly|half[\s-]*yearly|semi[\s-]*annually|annually|monthly|on\s+each\s+"
                     r"(quarter|half[\s-]*year|financial\s+year)\s+(?:end\s+)?date)", re.I)
 REPAY = re.compile(r"\b(?:repa\w+\s+in|in)\s+(\d{1,3})\s+(?:equal\s+|structured\s+)?(monthly|quarterly|half[\s-]*yearly"
-                   r"|annual|yearly)\s+instal?ments?(?:\s+of\s+(₹|Rs\.?|INR|USD)?\s*([\d,]+(?:\.\d+)?)\s*"
+                   r"|annual|yearly)\s+instal?ments?(?:\s+of\s+(" + MONEY_MARKER + r")?\s*([\d,]+(?:\.\d+)?)\s*"
                    r"(crores?|lakhs?|millions?)?)?", re.I)
 FIRST_DUE = re.compile(r"first\s+instal?ment[^\n.]{0,60}?(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9}),?\s+(\d{4})",
                        re.I)
@@ -44,6 +45,7 @@ def _value(kind: str, rule: str, **kw) -> dict:
 
 def rules(pages: list[dict], ctx: dict) -> list[dict]:
     out, seen = [], set()
+    local = document_currencies(" ".join(p.get("text") or "" for p in pages))  # "Rs." / "$" / "¥" of this document
 
     def add(kind, page, m, value, conf=0.85):
         key = (kind, value.get("frequency"), value.get("daysAfterPeriodEnd"), value.get("amount"))
@@ -73,8 +75,8 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
                     dates = []
             value = _value("REPAYMENT", m.group(0), frequency=_freq(m.group(2)), dates=dates,
                            amount=per * int(m.group(1)) if per else None,
-                           currency={"₹": "INR", "rs": "INR", "rs.": "INR"}.get((m.group(3) or "").lower(),
-                                                                                (m.group(3) or "").upper() or None))
+                           currency=currency_before_amount(m.group(3), local) if m.group(3)
+                           else currency_after_amount(text[m.end():m.end() + 60], local) if m.group(4) else None)
             value["instalments"] = int(m.group(1))
             add("REPAYMENT", p, m, value)
         for m in RESET.finditer(text):

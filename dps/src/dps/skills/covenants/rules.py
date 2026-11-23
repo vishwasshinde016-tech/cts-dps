@@ -22,7 +22,7 @@ def term_value(t: Term) -> dict:
     if t.levels:
         schedule = [{"from": lv.get("from"), "to": lv.get("to"), "threshold": lv.get("threshold")} for lv in t.levels]
     return {"metric": t.metric, "operator": t.operator, "threshold": t.threshold, "unit": t.unit,
-            "expression": None, "schedule": schedule}
+            "expression": None, "schedule": schedule, **({"currency": t.currency} if t.currency else {})}
 
 
 def term_field(pack: str, pages: list[dict], t: Term, key: str = "") -> dict:

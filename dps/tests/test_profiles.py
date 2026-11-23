@@ -21,6 +21,7 @@ PROFILES = [
     {"code": "IN", "currency": "INR", "currencyWords": ["Rs.", "INR", "Indian Rupees"]},
     {"code": "LK", "currency": "LKR", "currencyWords": ["LKR", "Rs.", "SLRs"]},
     {"code": "KE", "currency": "KES", "currencyWords": ["KES", "KShs", "Kenya Shillings"]},
+    {"code": "GH", "currency": "GHS", "currencyWords": ["GHS", "GH₵", "Ghana Cedis"]},
     {"code": "XX", "currency": "bad", "currencyWords": ["nothing"]},
 ]
 LANKA = LoanProfile("LKR", True, 3, "CONSOLIDATED", "WESTERN", "LK")
@@ -61,7 +62,11 @@ def test_a_country_added_in_core_is_recognised_and_shared_words_name_no_currency
     words = currency_words(PROFILES)
     assert detect_currency("Amounts in KShs million", words) == "KES"
     assert detect_currency("Kenya Shillings '000", words) == "KES"
-    assert detect_currency("Amounts in KShs million") is None  # not a built-in currency word
+    # KES has been built in since 22 Nov 2026 (dps.money, 44 currencies); the Ghana cedi is not, so only its profile
+    # names it
+    assert detect_currency("Amounts in KShs million") == "KES"
+    assert detect_currency("Amounts in GH₵ million", words) == "GHS"
+    assert detect_currency("Amounts in GH₵ million") is None  # not a built-in currency word
     assert detect_currency("Rs. '000", words) is None  # India, Sri Lanka: the loan's currency is used
     assert detect_currency("SLRs million", words) == "LKR"
 
