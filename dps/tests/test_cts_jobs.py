@@ -227,8 +227,14 @@ def test_every_spring_call_carries_the_jobs_correlation_id():
 
 
 def test_finish_payload_for_failed_always_has_quarantine(app):
+    from dps.models import Document
+
     with app.state.db.session_factory() as db:
-        job = Job(id="j-q", document_id="d", flow="SKILL_PACK", job_type="EXTRACT_AGREEMENT", tenant_id="default",
+        doc = Document(type="LOAN_AGREEMENT", file_name="f.pdf", storage_path="x", sha256="0" * 64, size_bytes=1,
+                       uploaded_by="u")
+        db.add(doc)
+        db.flush()  # SQL Server checks the job's document foreign key
+        job = Job(id="j-q", document_id=doc.id, flow="SKILL_PACK", job_type="EXTRACT_AGREEMENT", tenant_id="default",
                   status="RUNNING", sha256="0" * 64)
         db.add(job)
         db.commit()
