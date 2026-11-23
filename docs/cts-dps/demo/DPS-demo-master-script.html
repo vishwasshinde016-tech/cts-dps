@@ -58,7 +58,7 @@
 
 <div class="cover">
   <h1>CTS DPS demo: the master script</h1>
-  <p class="meta">For the call with the Spring developers, the app (UI) developers and the architect &middot; about 55 minutes &middot; 20 Nov 2026</p>
+  <p class="meta">For the call with the Spring developers, the app (UI) developers and the architect &middot; about 60 minutes &middot; 20 Nov 2026, updated 23 Nov 2026 (observability and traceability, full setup)</p>
   <p>The audience is seeing DPS for the first time, so the order is: <b>show it working first, then explain how it works, then say what each team builds.</b> Every phase says what to open, what to run, what to point at and what to say. The live flows use the <b>architect's own documents</b> (already downloaded in <code>architect-documents\</code>). Small DPS-made sample files are used only for the flows the architect's list has no document for: a waiver letter, a guarantee, an amended and restated agreement and a document set.</p>
 </div>
 
@@ -84,6 +84,7 @@
   <tr><td>5</td><td>How it is built</td><td>15</td><td>architect</td><td>Archify page (full)</td></tr>
   <tr><td>6</td><td>What each team builds</td><td>10</td><td>Spring and UI developers</td><td>Swagger</td></tr>
   <tr><td>7</td><td>Database and operations</td><td>3</td><td>architect, Spring</td><td>DB viewer</td></tr>
+  <tr><td>7b</td><td>Observability and traceability: every document as one trace (Langfuse)</td><td>5</td><td>architect, everyone</td><td>Langfuse in the browser</td></tr>
   <tr><td>8</td><td>Honest status and decisions needed</td><td>4</td><td>everyone</td><td>talk</td></tr>
   <tr><td>A&ndash;E</td><td>Appendix: request bodies, failures, questions and answers, reset, glossary</td><td>&ndash;</td><td>you</td><td>&ndash;</td></tr>
 </table>
@@ -112,6 +113,8 @@
   <tr><td>The result format</td><td><a href="../../../contracts/schemas/result.json">contracts/schemas/result.json</a></td><td>6</td><td>the room</td></tr>
   <tr><td>Every error and warning code, with its message</td><td><a href="../../../contracts/catalogues/errors.yaml">contracts/catalogues/errors.yaml</a></td><td>6</td><td>the room</td></tr>
   <tr><td>The database (after the first run)</td><td><code>C:\cts-dps\dps\dps.db</code> (open in DB Browser for SQLite, or the VS Code SQLite viewer)</td><td>3, 7</td><td>the room</td></tr>
+  <tr><td><b>Traces</b> (Langfuse, open source, on this laptop)</td><td><code>http://localhost:3000</code> (after step 0.2b); sign-in in <code>C:\cts-dps\deploy\observability\.env</code></td><td>7b</td><td>the room</td></tr>
+  <tr><td>The observability guide: set-up, what to show, what is and is not sent</td><td><a href="../../../docs/cts-dps/observability-demo.md">docs/cts-dps/observability-demo.md</a></td><td>0.2b, 7b</td><td>you</td></tr>
   <tr><td>The full design</td><td><a href="../../../docs/cts-dps/design.md">docs/cts-dps/design.md</a></td><td>if asked</td><td>you</td></tr>
   <tr><td>Document set proposal (what is built, what is open)</td><td><a href="../../../docs/cts-dps/document-set-proposal.md">docs/cts-dps/document-set-proposal.md</a></td><td>4d, 8</td><td>you</td></tr>
 </table>
@@ -142,6 +145,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\cts-dps\dps\scripts\setup
 C:\cts-dps\dps\.venv\Scripts\alembic.exe upgrade head</pre></div>
 <p class="small"><code>.env</code> from <code>.env.example</code> means: SQLite <code>dps.db</code>, local <code>storage\</code> and <code>derived\</code> folders, dev sign-in headers, AI off. Never show <code>.env</code> on screen if you add Azure settings to it. Every command below calls the programs in <code>C:\cts-dps\dps\.venv\Scripts\</code> by their full path, so no <code>Activate.ps1</code> is needed (it is often blocked by the execution policy).</p>
 
+<div class="box you"><span class="tag">FOR YOU</span><p><b>Everything in one command.</b> <code>setup.ps1</code> also puts the PP-OCRv6 English OCR model in place (SHA-256 checked; without it scanned pages run words together). Switches: <code>-Heavy</code> adds the HEAVY reader (Docling in <code>.venv-heavy</code> and its models, about 2 GB), <code>-Observability</code> adds Langfuse (step 0.2b), <code>-All</code> does both and runs the tests. <b>Office laptop without internet</b> (or with PyPI, modelscope.cn or Docker Hub blocked): on a laptop with internet run <code>scripts\make-offline-bundle.ps1</code>, copy the project with <code>offline-bundle\</code> and <code>deploy\observability\images\</code>, then on the office laptop run <code>setup.ps1 -Offline -Observability</code>. The bundle must be made with the same Python version (3.12).</p></div>
+
+<h3>0.2b Traces: Langfuse on this laptop (once; again after a reboot)</h3>
+<div class="box run"><span class="tag">RUN</span> <b>Any PowerShell window (first time about 10 minutes: Docker downloads the images)</b>
+<pre>powershell -NoProfile -ExecutionPolicy Bypass -File C:\cts-dps\deploy\observability\start-langfuse.ps1</pre>
+It starts Docker Desktop if needed, generates the secrets once, starts Langfuse (6 containers, every port on 127.0.0.1), waits until it answers and writes the 3 <code>OTEL_*</code> lines into <code>C:\cts-dps\dps\.env</code>. Wait for <code>Langfuse:  http://localhost:3000</code>.</div>
+<div class="box you"><span class="tag">FOR YOU</span><p>Start Langfuse <b>before</b> Terminals A, B and H: they read <code>.env</code> when they start. Sign in once before the call (user <code>demo@cts-dps.local</code>, password: <code>LANGFUSE_USER_PASSWORD</code> in <code>C:\cts-dps\deploy\observability\.env</code>; never show that file). Needs Docker Desktop and about 6 GB of free memory. No Docker? Skip phase 7b; everything else works without it.</p></div>
+
 <h3>0.3 The four windows (open them before the call)</h3>
 <table>
   <tr><th>Window</th><th>What</th><th>How</th></tr>
@@ -149,6 +160,7 @@ C:\cts-dps\dps\.venv\Scripts\alembic.exe upgrade head</pre></div>
   <tr><td>2. Browser tab 2</td><td>Swagger</td><td><code>http://localhost:9400/docs</code> (after Terminal A runs)</td></tr>
   <tr><td>3. VS Code</td><td>Terminals A, B, H, C and the files</td><td><code>code C:\cts-dps</code>; split the terminal (Ctrl+Shift+5)</td></tr>
   <tr><td>4. DB viewer</td><td><code>dps.db</code></td><td>DB Browser for SQLite: File &rarr; Open, <code>C:\cts-dps\dps\dps.db</code>, tab "Browse Data". Press F5 to refresh.</td></tr>
+  <tr><td>5. Browser tab 3 (optional)</td><td>Langfuse: project <b>CTS DPS</b> &rarr; Tracing</td><td><code>http://localhost:3000</code> (after step 0.2b)</td></tr>
 </table>
 <p>Keep <b>this script</b> and <a href="../../../docs/cts-dps/diagrams/dps-flow-explained.html">dps-flow-explained.html</a> on your own second screen or phone.</p>
 
@@ -180,7 +192,8 @@ You should see <code>"status":"UP"</code> and <code>"workers":"UP"</code>.</div>
 <pre>cd C:\cts-dps\dps
 Remove-Item C:\cts-dps\dps\dps.db, C:\cts-dps\dps\storage, C:\cts-dps\dps\derived, C:\cts-dps\dps\staging -Recurse -Force -ErrorAction SilentlyContinue
 C:\cts-dps\dps\.venv\Scripts\alembic.exe upgrade head</pre>
-This deletes only the local demo data. <code>.env</code> and <code>architect-documents\</code> stay. Start A, B and H again before the call.</div>
+This deletes only the local demo data. <code>.env</code> and <code>architect-documents\</code> stay. Start A, B and H again before the call.
+<p class="small">The rehearsal's traces stay in Langfuse. For an empty Langfuse: <code>C:\cts-dps\deploy\observability\stop-langfuse.ps1 -Purge</code> (asks first), then step 0.2b again.</p></div>
 
 <h3>0.7 Optional: the AI second reader</h3>
 <div class="box you"><span class="tag">FOR YOU</span><p>Only if the Azure settings are in <code>.env</code> and a test call answers. Otherwise demo on rules only and say "the AI adds a second reading of every page; it is switched off on this laptop". Do not run a live Azure call unless you decided to before the call.</p></div>
@@ -445,6 +458,23 @@ curl.exe -H "X-User: ops-1" -H "X-Roles: SUPPORT" http://localhost:9400/dps/v1/o
 
 <!-- ================================================================== -->
 <div class="phase">
+<h2>Phase 7b. Observability and traceability <span class="pill">5 min &middot; architect, everyone &middot; Langfuse</span></h2>
+<div class="box you"><span class="tag">FOR YOU</span><p>Needs step 0.2b and Terminals A and B started after it. The phase 3 run is already a trace; if the AI is on, it has AI calls too. No Docker or no Langfuse? Say the SAY box and show <code>dps_ai_call</code> and <code>dps_trace_event</code> in the DB viewer instead.</p></div>
+<div class="box open"><span class="tag">OPEN</span> Browser tab 3: <code>http://localhost:3000</code> &rarr; project <b>CTS DPS</b> &rarr; <b>Tracing</b>. Click the newest trace (named after the job type, for example <code>ONBOARD</code>).</div>
+<div class="box show"><span class="tag">SHOW</span>
+<ol>
+<li><b>The tree:</b> <code>dps.job</code> &rarr; <code>dps.ingest</code> (pages, OCR pages, Docling pages) &rarr; <code>dps.classify</code> (type, confidence) &rarr; <code>dps.pack covenants</code> &rarr; <code>dps.ai.read covenants</code> part 1, 2, 3 &rarr; <code>dps.ledger</code> &rarr; <code>dps.enrich</code> &rarr; <code>dps.scoring</code>. The bars show where the time went.</li>
+<li><b>One AI call</b> (<code>chat azure/...</code>): model, tokens in and out, seconds, prompt version, attempt. A retried call would be a red step of its own.</li>
+<li><b>Sessions:</b> one per document, so every job on one document (onboarding, amendment, reprocess) sits side by side.</li>
+<li><b>Back in the DB viewer:</b> <code>dps_trace_event</code> rows <code>SHOWN</code> with <code>trace_id</code> and <code>detail_json.ai_span_id</code>, and <code>dps_ai_call</code> with <code>trace_id</code>, <code>span_id</code>, model and tokens: the same ids as in Langfuse.</li>
+</ol></div>
+<div class="box say"><span class="tag">SAY</span><p>"Every document DPS reads is one trace. You see each step, how long it took, and every AI call with its model, tokens and prompt version. Each covenant the AI proposed links, by id, to the AI read and the call that produced it, in our own audit tables, which are kept. Langfuse is only the window onto them.</p>
+<p>It is open source and runs on this laptop: no document text and no prompt leaves it, and Langfuse's own telemetry is off. DPS writes OpenTelemetry, the open standard, so in production the bank can send the same traces to its own platform by changing one address."</p></div>
+<div class="box fail"><span class="tag">IF IT FAILS</span><p>No trace? Terminals A and B were started before Langfuse: restart them (Ctrl+C, the same command) and run phase 3 again. Langfuse down? Show the two tables in the DB viewer; the links are there without Langfuse.</p></div>
+</div>
+
+<!-- ================================================================== -->
+<div class="phase">
 <h2>Phase 8. Honest status and decisions needed <span class="pill">4 min &middot; everyone</span></h2>
 <div class="box say"><span class="tag">SAY</span>
 <p><b>"Built and working:</b> all the flows you saw, the job API, the review gate, the checks, and rules with the AI as a second reader.</p>
@@ -453,6 +483,7 @@ curl.exe -H "X-User: ops-1" -H "X-Roles: SUPPORT" http://localhost:9400/dps/v1/o
 <li>a job could stay stuck as RUNNING; now it is reaped;</li>
 <li>some covenant wordings, tables and springing conditions were missed; now they are found or sent to review.</li></ul>
 <p><b>New this week:</b> company and condition on each covenant, waivers, guarantees, amended and restated agreements, and the 'in force on a date' set.</p>
+<p><b>Also new:</b> every document is one trace (OpenTelemetry, the open standard), shown in Langfuse, open source, on our own machine. Each AI finding links to the AI call that produced it, by id, in DPS's own audit tables. And one setup script installs everything, also without internet.</p>
 <p><b>Still open:</b> a full timeline per covenant (today it is in force on one date per call), speed tests on the real VM with the bank's Azure, and a labelled set of the bank's own documents to measure accuracy."</p></div>
 <div class="box say"><span class="tag">SAY</span> <b>Decisions we need today:</b>
 <ol><li><b>Who writes the job row:</b> the DPS API (our proposal) or Spring directly into the table?</li>
@@ -524,6 +555,10 @@ curl.exe -H "X-User: cts-spring" -H "X-Roles: SERVICE" "http://localhost:9400/dp
 <tr><td>Set: <code>SET_INCOMPLETE</code></td><td>the amendment or waiver of 4d not read yet</td><td>run them, then the set again</td><td>"it refuses to guess with a document missing"</td></tr>
 <tr><td>Swagger 401/403</td><td>missing headers</td><td>add <code>X-User</code> and <code>X-Roles: SERVICE</code></td><td>"dev sign-in; the bank uses a service token"</td></tr>
 <tr><td>Port 9400 in use</td><td>an old API still running</td><td>close it, or <code>--port 9401</code> (and <code>--api http://localhost:9401</code>)</td><td>&ndash;</td></tr>
+<tr><td>Langfuse shows no trace</td><td>A and B were started before Langfuse, or <code>.env</code> has no <code>OTEL_*</code> lines</td><td>restart A and B; check <code>http://127.0.0.1:3000/api/public/health</code></td><td>"the service reads its settings when it starts"</td></tr>
+<tr><td><code>start-langfuse.ps1</code>: port 3000 in use</td><td>another program on 3000</td><td><code>start-langfuse.ps1 -Port 3100</code> (it updates <code>.env</code>); restart A and B</td><td>&ndash;</td></tr>
+<tr><td>Docker Desktop does not start</td><td>Docker not installed or blocked</td><td>skip phase 7b</td><td>"the traces need Docker on this laptop; DPS itself does not"</td></tr>
+<tr><td>Langfuse stopped during a run</td><td>&ndash;</td><td>nothing: the job finishes normally</td><td>"tracing never holds up a job; spans are dropped, the work is not"</td></tr>
 </table>
 </div>
 
@@ -541,6 +576,10 @@ curl.exe -H "X-User: cts-spring" -H "X-Roles: SERVICE" "http://localhost:9400/dp
 <tr><td>What does DPS store?</td><td>Its own tables and the parsed pages. The file itself stays in the DMS. DPS never writes to the Spring database.</td></tr>
 <tr><td>How fast is it?</td><td>Spring gets the job ID in milliseconds. A 100-page native PDF is read in about a minute on rules; speed on the real VM with Azure is still to be measured.</td></tr>
 <tr><td>Word and Excel?</td><td>Yes. Word is read as logical pages, including form fields, footnotes and tracked changes; Excel flags hidden rows and missing saved values.</td></tr>
+<tr><td>Can we see why the AI proposed a covenant?</td><td>Yes. In DPS's history table each AI finding has the id of the AI read and the trace; <code>dps_ai_call</code> has the model, prompt version, tokens and time of each call with the same ids. Langfuse shows the same as a tree. The prompt and answer text are kept only if the bank switches it on (<code>DPS_AI_TRACE_TEXT</code>), masked.</td></tr>
+<tr><td>Does tracing send our documents anywhere?</td><td>No. Traces carry ids, counts and times, not document text. Langfuse runs on this machine, its own telemetry is off, and its ports are on 127.0.0.1.</td></tr>
+<tr><td>Are we tied to Langfuse?</td><td>No. DPS writes OpenTelemetry, the standard. In production the same traces can go to the bank's platform (Grafana Tempo, Azure Monitor, Dynatrace ...) by changing one address.</td></tr>
+<tr><td>What if the tracing tool is down?</td><td>Jobs carry on. Spans are sent in the background and dropped if nothing answers; the audit tables in DPS's database are written as always.</td></tr>
 </table>
 </div>
 
@@ -550,7 +589,9 @@ curl.exe -H "X-User: cts-spring" -H "X-Roles: SERVICE" "http://localhost:9400/dp
 <pre>cd C:\cts-dps\dps
 Remove-Item C:\cts-dps\dps\dps.db, C:\cts-dps\dps\storage, C:\cts-dps\dps\derived, C:\cts-dps\dps\staging -Recurse -Force -ErrorAction SilentlyContinue
 C:\cts-dps\dps\.venv\Scripts\alembic.exe upgrade head
-Remove-Item C:\cts-dps\dps\ex10-result.json -ErrorAction SilentlyContinue</pre></div>
+Remove-Item C:\cts-dps\dps\ex10-result.json -ErrorAction SilentlyContinue
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\cts-dps\deploy\observability\stop-langfuse.ps1</pre>
+<p class="small">The last line stops Langfuse and keeps its traces; add <code>-Purge</code> to delete them.</p></div>
 
 <h2>Appendix E. Words you will use</h2>
 <table>
@@ -567,6 +608,10 @@ Remove-Item C:\cts-dps\dps\ex10-result.json -ErrorAction SilentlyContinue</pre><
 <tr><td>Amended and restated</td><td>A full new agreement that replaces an earlier one.</td></tr>
 <tr><td>Document set</td><td>The agreement with its amendments and waivers, read together to give the covenants in force on a date.</td></tr>
 <tr><td>Event</td><td>A short message to Spring: "job accepted", "result ready", with an increasing number (seq).</td></tr>
+<tr><td>Trace</td><td>The record of one job from start to finish: every step with its time, and every AI call.</td></tr>
+<tr><td>Span</td><td>One step in a trace (reading the file, one AI read, scoring ...). An AI call is a span of its own.</td></tr>
+<tr><td>OpenTelemetry</td><td>The open standard for traces, metrics and logs. DPS writes it; any tool can read it.</td></tr>
+<tr><td>Langfuse</td><td>Open-source (MIT) tool that shows traces of AI applications. Runs in Docker on this laptop for the demo.</td></tr>
 </table>
 </div>
 

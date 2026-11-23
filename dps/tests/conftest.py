@@ -19,8 +19,10 @@ Settings.model_config["env_file"] = None
 @pytest.fixture(autouse=True)
 def _no_local_env(monkeypatch):
     for key in list(os.environ):
-        if key.startswith(("DPS_", "AZURE_", "OPENAI_")) and key != "DPS_TEST_DATABASE_URL":
+        if key.startswith(("DPS_", "AZURE_", "OPENAI_", "OTEL_")) and key != "DPS_TEST_DATABASE_URL":
             monkeypatch.delenv(key, raising=False)
+    # A laptop's dps/.env may point at Langfuse (setup.ps1 -Observability): tests never read it, never send spans.
+    monkeypatch.setenv("DPS_OTEL_ENV_FILE", "")
 
 
 class FakeChecker:

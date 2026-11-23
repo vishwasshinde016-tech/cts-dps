@@ -229,7 +229,25 @@ def batched_proposals(pack, gateway, batches: list[list[dict]], notes: list | No
             "the pages for this task: list what is"
         extra = f"These are part {i + 1} of {len(batches)} of {what} on these pages." if len(batches) > 1 else ""
         before = len(notes) if notes is not None else 0
-        got = agent_proposals(pack, gateway, batch, extra=extra, notes=notes, **kw)
+        from dps.ops import observability as obs
+
+        numbers = [p.get("no") for p in batch if p.get("no") is not None]
+        # One trace span per agent read (observability, 23 Nov 2026): its model calls nest under it, and each
+        # proposal keeps the span id, so a finding opens the read (and the calls) that produced it.
+        with obs.span(f"dps.ai.read {pack.name}", **{
+                "dps.pack": pack.name, "dps.part": i + 1, "dps.parts": len(batches), "dps.pages": len(batch),
+                "dps.first_page": min(numbers) if numbers else None,
+                "dps.last_page": max(numbers) if numbers else None}) as read_span:
+            got = agent_proposals(pack, gateway, batch, extra=extra, notes=notes, **kw)
+            new_notes = [n["code"] for n in (notes or [])[before:]]
+            obs.set_attrs(read_span, **{"dps.proposals": len(got) if got is not None else 0,
+                                        "dps.notes": ",".join(new_notes) or None})
+            if got is None and new_notes:  # no usable answer (AI_UNAVAILABLE, AI_BUDGET_EXCEEDED ...): a failed read
+                obs.mark_failed(read_span, new_notes[0])
+            span_id = obs.current_ids()[1]
+            for p in got or []:
+                if span_id and isinstance(p, dict):
+                    p["_span"] = span_id
         if got is None:
             spent = notes is not None and any(n["code"] == "AI_BUDGET_EXCEEDED" for n in notes[before:])
             if spent and i + 1 < len(batches):

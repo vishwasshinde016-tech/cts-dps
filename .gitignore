@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .venv/
+.venv-heavy/
 .pytest_cache/
 .ruff_cache/
 .coverage
@@ -31,3 +32,9 @@ desktop.ini
 dps/samples/
 # fetch_public_samples.py keeps the SEC HTML next to the PDF it prints; only the PDFs are committed
 architect-documents/*.htm
+
+# The offline install bundle (scripts/make-offline-bundle.ps1): wheels, models and images, gigabytes
+offline-bundle/
+
+# Parsed pages written by local demo runs
+dps/derived/

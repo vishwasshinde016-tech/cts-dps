@@ -8,7 +8,8 @@ component inside the bank's Spring app.
 
 | File | What it is |
 | --- | --- |
-| [install-and-demo.md](install-and-demo.md) | **Start here on a new laptop:** install, check, one-command demo, run the service, what to read |
+| [install-and-demo.md](install-and-demo.md) | **Start here on a new laptop:** install (one command, also offline), check, one-command demo, run the service, what to read |
+| [observability-demo.md](observability-demo.md) | **Traces:** every document as one OpenTelemetry trace in Langfuse (open source, on the laptop); AI findings linked to their AI calls in the audit tables |
 | [demo-walkthrough.md](demo-walkthrough.md) | **Read this while you demo:** upload real documents and follow each one through every step: what to type, what DPS does inside, where the file and data are now, how to show it, what to say (onboarding, amendment, assessment) |
 | [presenter-guide.md](presenter-guide.md) | **Read while explaining the code:** boards to code, step-by-step flow with file:line, agent, skills, tools, Java wrap, DB, IDs, schemas, logs, demo, code excerpts |
 | [diagrams/dps-flow-explained.html](diagrams/dps-flow-explained.html) | **Explain the flow block by block (open in a browser):** click any of the 58 blocks to see what it does, what to say, where the data is, and its code; **Open in VS Code** opens the file on this laptop at that line; Next/Previous walks the flow |

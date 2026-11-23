@@ -1,0 +1,161 @@
+# Langfuse v4 (open source, MIT core) for DPS traces, on this laptop only (observability, 23 Nov 2026).
+#
+# Start / stop:  powershell -ExecutionPolicy Bypass -File deploy\observability\start-langfuse.ps1   (or stop-langfuse.ps1)
+# Open:          http://localhost:3000   (user and password in deploy\observability\.env, written by the start script)
+#
+# Made from Langfuse's own docker-compose.yml (github.com/langfuse/langfuse, main, release v4.83.0 of 19 Nov 2026),
+# with these changes for a bank laptop:
+# - Every port is bound to 127.0.0.1: nothing on the network can reach Langfuse or its databases. Only the web UI
+#   (3000) and the file store for the browser (9090) are published; Postgres, ClickHouse and Redis are not.
+# - TELEMETRY_ENABLED=false: Langfuse sends no usage statistics anywhere. AUTH_DISABLE_SIGNUP=true: no new accounts.
+# - No AI gateway or in-app AI features: Langfuse makes no model calls of its own.
+# - Versions pinned. Secrets come from .env (generated, git-ignored); a missing one stops the start with an error.
+# - DPS sends traces only (OTLP over HTTP) to http://127.0.0.1:3000/api/public/otel/v1/traces.
+
+name: cts-dps-langfuse
+
+x-langfuse-env: &langfuse-env
+  NEXTAUTH_URL: http://localhost:${LANGFUSE_PORT:-3000}
+  DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?run start-langfuse.ps1}@postgres:5432/postgres
+  SALT: ${SALT:?run start-langfuse.ps1}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?run start-langfuse.ps1}
+  TELEMETRY_ENABLED: "false"
+  LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: clickhouse
+  CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?run start-langfuse.ps1}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?run start-langfuse.ps1}
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?run start-langfuse.ps1}
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_AUTH: ${REDIS_AUTH:?run start-langfuse.ps1}
+  REDIS_TLS_ENABLED: "false"
+
+x-langfuse-depends: &langfuse-depends
+  postgres:
+    condition: service_healthy
+  minio:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  clickhouse:
+    condition: service_healthy
+
+services:
+  langfuse-worker:
+    image: docker.langfuse.com/langfuse/langfuse-worker:${LANGFUSE_IMAGE_TAG:-4.83.0}
+    restart: unless-stopped
+    depends_on: *langfuse-depends
+    environment: *langfuse-env
+
+  langfuse-web:
+    image: docker.langfuse.com/langfuse/langfuse:${LANGFUSE_IMAGE_TAG:-4.83.0}
+    restart: unless-stopped
+    depends_on: *langfuse-depends
+    ports:
+      - 127.0.0.1:${LANGFUSE_PORT:-3000}:3000
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?run start-langfuse.ps1}
+      AUTH_DISABLE_SIGNUP: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:9090
+      LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://minio:9000
+      # Created on first start (headless set-up): the DPS project with its OTLP keys, and one sign-in user.
+      LANGFUSE_INIT_ORG_ID: cts
+      LANGFUSE_INIT_ORG_NAME: CTS
+      LANGFUSE_INIT_PROJECT_ID: cts-dps
+      LANGFUSE_INIT_PROJECT_NAME: CTS DPS
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:?run start-langfuse.ps1}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:?run start-langfuse.ps1}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_USER_EMAIL:?run start-langfuse.ps1}
+      LANGFUSE_INIT_USER_NAME: DPS demo
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_USER_PASSWORD:?run start-langfuse.ps1}
+
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:26.3.62.3
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?run start-langfuse.ps1}
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  minio:
+    image: ${MINIO_IMAGE:-cgr.dev/chainguard/minio:latest}
+    restart: unless-stopped
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?run start-langfuse.ps1}
+    ports:
+      - 127.0.0.1:9090:9000
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 2s
+
+  redis:
+    image: docker.io/redis:7.2
+    restart: unless-stopped
+    command: >
+      --requirepass ${REDIS_AUTH:?run start-langfuse.ps1}
+      --maxmemory-policy noeviction
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_AUTH}", "--no-auth-warning", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+
+  postgres:
+    image: docker.io/postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run start-langfuse.ps1}
+      POSTGRES_DB: postgres
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  langfuse_postgres_data:
+  langfuse_clickhouse_data:
+  langfuse_clickhouse_logs:
+  langfuse_minio_data:
+  langfuse_redis_data:

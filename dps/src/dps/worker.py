@@ -203,10 +203,21 @@ class Worker:
         doc = db.get(Document, job.document_id)
         token = jobs.worker_attempt.set((job.id, self.settings.worker_id, job.attempts))
         stop = self._start_heartbeat(job.id, job.attempts)
+        # The job's trace (observability, 23 Nov 2026). In Langfuse: the trace name is the job type, the session is
+        # the document (every job on one document side by side), the user is who uploaded it. Ids only: no file name.
         with obs.bound(job_id=job.id, document_id=job.document_id, user=doc.uploaded_by if doc else None), \
-                obs.span("dps.job", **{"dps.flow": job.flow, "dps.pool": self.settings.worker_pool}):
+                obs.span("dps.job", **{"dps.flow": job.flow, "dps.pool": self.settings.worker_pool,
+                                       "dps.job_type": job.job_type, "dps.job_id": job.id,
+                                       "dps.document_id": job.document_id, "dps.attempt": job.attempts,
+                                       "langfuse.trace.name": job.job_type,
+                                       "langfuse.session.id": job.document_id,
+                                       "langfuse.user.id": doc.uploaded_by if doc else None,
+                                       "langfuse.trace.tags": job.flow}) as job_span:
             try:
                 self._run(db, job, doc)
+                obs.set_attrs(job_span, **{"dps.status": job.status, "dps.error_code": job.error_code})
+                if job.status in ("FAILED", "DEAD"):
+                    obs.mark_failed(job_span, job.error_code or job.status)
             except jobs.LeaseLost:
                 db.rollback()
                 log.warning("Discarded a stale attempt for job %s", job.id)
@@ -300,9 +311,17 @@ class Worker:
         if self.ingestor is None or doc is None or not (doc.object_key or job.job_type == "ANALYZE"):
             return True
         try:
-            with obs.span("dps.ingest"):
+            with obs.span("dps.ingest", **{"dps.pool": self.settings.worker_pool}) as ingest_span:
                 data = self.ingestor.read(doc, staged=not doc.object_key)
                 model = self.ingestor.page_model(db, job, doc, data)
+                pages = (model or {}).get("pages") or []
+                methods = [str(p.get("sourceMethod") or p.get("method") or "") for p in pages]
+                obs.set_attrs(ingest_span, **{
+                    "dps.bytes": len(data or b""), "dps.pages": len(pages),
+                    "dps.pages_ocr": sum(m == "OCR" for m in methods),
+                    "dps.pages_docling": sum(m == "DOCLING" for m in methods),
+                    "dps.pages_blank": sum(m == "BLANK" for m in methods),
+                    "dps.flags": ",".join((model or {}).get("flags") or []) or None})
         except IngestFailed as ex:
             db.refresh(job)
             jobs.record_step(db, job, "INGEST", error=ex.code)

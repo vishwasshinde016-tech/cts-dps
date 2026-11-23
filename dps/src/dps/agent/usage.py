@@ -37,6 +37,9 @@ class Call:
     messages: list[dict] | None = None
     answer: str | None = None
     error: str | None = None
+    # The model call's trace span (observability, 23 Nov 2026): the dps_ai_call row opens its trace in Langfuse.
+    trace_id: str | None = None
+    span_id: str | None = None
 
 
 @dataclass
@@ -73,8 +76,21 @@ def note(model: str, prompt_tokens: int, completion_tokens: int, *, seconds: flo
     current.prompt += int(prompt_tokens or 0)
     current.completion += int(completion_tokens or 0)
     current.calls += 1
+    trace_id, span_id = obs.current_ids()
     current.detail.append(Call(model, int(prompt_tokens or 0), int(completion_tokens or 0), seconds, messages,
-                               answer, error))
+                               answer, error, trace_id, span_id))
+
+
+def last_call(span_id: str | None = None) -> Call | None:
+    """The most recent call noted in this request (its tokens go on the model call's trace span); with ``span_id``,
+    only a call noted inside that span (another thread's call is never taken for this one)."""
+    current = _noted.get()
+    if current is None:
+        return None
+    for call in reversed(current.detail):
+        if span_id is None or call.span_id == span_id:
+            return call
+    return None
 
 
 def begin() -> None:
@@ -154,7 +170,8 @@ def record(db: Session, settings: Settings, purpose: str, user: str, *, cp_id: s
                       error=(call.error or "")[:500] or None, seconds=call.seconds,
                       prompt_tokens=call.prompt_tokens, completion_tokens=call.completion_tokens, cost=call_cost,
                       request_text=_text(call.messages, settings.ai_trace_text),
-                      response_text=_text(call.answer, settings.ai_trace_text)))
+                      response_text=_text(call.answer, settings.ai_trace_text),
+                      trace_id=call.trace_id, span_id=call.span_id))
         price = f", cost {call_cost}" if call_cost is not None else ""
         obs.event("AI_CALL", f"{purpose} {call.model} {status} {call.seconds:.1f} s, "
                   f"{call.prompt_tokens} in / {call.completion_tokens} out tokens{price}"

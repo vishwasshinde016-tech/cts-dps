@@ -45,6 +45,8 @@ More on the samples: [demo-kit/README.md](../demo-kit/README.md). The architect'
 | 6 | [contracts/dps-jobs-api.yaml](../../../contracts/dps-jobs-api.yaml) (the job API) |
 | 6 | [contracts/schemas/result.json](../../../contracts/schemas/result.json) (the result format) |
 | 6 | [contracts/catalogues/errors.yaml](../../../contracts/catalogues/errors.yaml) (every error and warning code) |
+| 7b | Langfuse: `http://localhost:3000`, project CTS DPS, then Tracing (after `deploy\observability\start-langfuse.ps1`) |
+| 7b | `dps/dps.db`: tables `dps_ai_call` and `dps_trace_event` (`trace_id`, `ai_span_id`) |
 
 ## 4. For the presenter only
 
@@ -55,7 +57,8 @@ More on the samples: [demo-kit/README.md](../demo-kit/README.md). The architect'
 | [presenter-guide.md](../presenter-guide.md) | Backup: code tour, questions and answers, glossary |
 | [design.md](../design.md) | The full design, if asked |
 | [document-set-proposal.md](../document-set-proposal.md) | Phases 4d and 8 |
-| [install-and-demo.md](../install-and-demo.md) | Setup on a new machine |
+| [install-and-demo.md](../install-and-demo.md) | Setup on a new machine (one command; `-Heavy`, `-Observability`, `-Offline`) |
+| [observability-demo.md](../observability-demo.md) | Phase 7b: traces in Langfuse, what to show, what is and is not sent |
 
 ## 5. Scripts and setup
 
@@ -65,3 +68,6 @@ More on the samples: [demo-kit/README.md](../demo-kit/README.md). The architect'
 | [dps/scripts/show_job.py](../../../dps/scripts/show_job.py) | Shows the latest job and its events |
 | [dps/scripts/demo_onboard.py](../../../dps/scripts/demo_onboard.py) | Fallback: runs the same code in-process when a job is too slow for the room |
 | [dps/.env.example](../../../dps/.env.example) | Copied to `dps/.env` once (SQLite, local storage, dev sign-in, AI off) |
+| [dps/scripts/setup.ps1](../../../dps/scripts/setup.ps1) | Installs everything: packages, `.env`, tables, OCR model; `-Heavy` (Docling), `-Observability` (Langfuse), `-Offline` |
+| [dps/scripts/make-offline-bundle.ps1](../../../dps/scripts/make-offline-bundle.ps1) | Builds `offline-bundle\` (wheels, models, Langfuse images) for a laptop without internet |
+| [deploy/observability/start-langfuse.ps1](../../../deploy/observability/start-langfuse.ps1) | Starts Langfuse on this laptop and points DPS at it; `stop-langfuse.ps1` stops it |

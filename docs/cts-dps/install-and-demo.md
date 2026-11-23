@@ -16,6 +16,8 @@ About 20 minutes. Windows commands shown (PowerShell); Linux and macOS use `.ven
   ```
 
 - **Only for the AI part (optional):** network access to the bank's Azure OpenAI endpoint, and the Azure key from the vault. Everything else runs without them.
+- **Only for the traces (optional):** Docker Desktop and about 6 GB of free memory, for Langfuse ([observability-demo.md](observability-demo.md)).
+- **No internet on the laptop** (or PyPI, modelscope.cn or Docker Hub blocked): make an offline bundle on a laptop with internet first (section 2, "Offline").
 
 ## 2. Install
 
@@ -27,9 +29,22 @@ cd C:\cts-dps\dps
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 ```
 
-`scripts\setup.ps1` runs steps 2 to 4 below. It then runs the one-document demo. Two options:
+`scripts\setup.ps1` runs steps 2 to 4 below. It also puts the PP-OCRv6 English OCR model where DPS looks for it, checking its SHA-256; without it, scanned pages run words together. Then it runs the one-document demo and prints what is installed and what is missing. Options:
+- `-Heavy` also installs the HEAVY reader: Docling in `.venv-heavy` and its layout, table and OCR models (about 2 GB).
+- `-Observability` also starts Langfuse (traces) in Docker on this laptop and writes the `OTEL_*` lines into `.env` ([observability-demo.md](observability-demo.md)).
+- `-Offline` installs everything from `..\offline-bundle` with no internet (see below).
 - `-Tests` also runs the full test suite.
 - `-Samples` also downloads the demo files (section 4).
+- `-All` is `-Heavy -Observability -Tests` together.
+
+**Offline (office laptop).**
+1. On a laptop with internet and the same Python version (3.12), run `scripts\make-offline-bundle.ps1` (add `-Heavy` for Docling). It writes `..\offline-bundle\`: the Python wheels, the OCR model and the Docling models. It also writes the Langfuse images to `..\deploy\observability\images\`.
+2. Copy the project together with those folders.
+3. On the office laptop run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1 -Offline -Observability
+```
 
 GitHub Copilot follows the same steps from `.github/copilot-instructions.md`.
 
