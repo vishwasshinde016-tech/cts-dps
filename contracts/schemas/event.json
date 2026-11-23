@@ -11,7 +11,8 @@
     "type": {
       "type": "string",
       "enum": ["dps.job.accepted", "dps.analysis.completed", "dps.extraction.completed", "dps.extraction.needs_review", "dps.extraction.shadow",
-               "dps.job.failed", "dps.job.dead", "dps.job.cancelled", "dps.batch.completed"]
+               "dps.job.failed", "dps.job.dead", "dps.job.cancelled", "dps.batch.completed",
+               "dps.job.retry_wait", "dps.job.moved", "dps.job.requeued", "dps.job.superseded"]
     },
     "occurredAt": { "type": "string", "format": "date-time" },
     "tenantId": { "type": "string" },

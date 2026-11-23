@@ -8,9 +8,16 @@
   "properties": {
     "counts": {
       "type": "object",
-      "description": "toReview: the fields listed here; total: every field of the result.",
+      "description": "toReview: the fields listed here; total: every field of the result; openWarnings: the blocking warnings listed in warnings.",
       "required": ["toReview", "total"],
-      "properties": { "toReview": { "type": "integer", "minimum": 0 }, "total": { "type": "integer", "minimum": 0 } }
+      "properties": { "toReview": { "type": "integer", "minimum": 0 }, "total": { "type": "integer", "minimum": 0 },
+                      "openWarnings": { "type": "integer", "minimum": 0 } }
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Blocking warnings not yet acknowledged: the job is DONE only when each is acknowledged (decision ACKNOWLEDGE with fieldId warning:<CODE> and a comment) or the review is closed (POST /dps/v1/jobs/{jobId}/close).",
+      "items": { "type": "object", "required": ["fieldId", "code"],
+                 "properties": { "fieldId": { "type": "string" }, "code": { "type": "string" }, "message": { "type": ["string", "null"] } } }
     },
     "jobId": { "type": "string" },
     "runId": { "type": "string" },

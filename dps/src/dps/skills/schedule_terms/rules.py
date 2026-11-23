@@ -29,6 +29,45 @@ MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", 
                                       "dec"], start=1)}
 
 
+# The bank app's Frequency (covenant-service: DAILY, WEEKLY, MONTHLY, QUARTERLY, YEARLY, CUSTOM) for DPS's frequency.
+# HALF_YEARLY has no value of its own there: CUSTOM with the cron of the 1st of January and July, in the app's form.
+APP_FREQUENCY = {"MONTHLY": ("MONTHLY", None), "QUARTERLY": ("QUARTERLY", None), "YEARLY": ("YEARLY", None),
+                 "HALF_YEARLY": ("CUSTOM", "0 0 2 1 1,7 ?")}
+# What a reporting deadline asks for, most specific first.
+DELIVERABLES = (
+    (re.compile(r"compliance\s+certificate", re.I), "COMPLIANCE_CERTIFICATE"),
+    (re.compile(r"\baudited\s+(?:annual\s+|standalone\s+|consolidated\s+)*(?:financial\s+statements|accounts|"
+                r"financials|balance\s+sheet)", re.I), "AUDITED_FINANCIAL_STATEMENTS"),
+    (re.compile(r"\b(?:unaudited|quarterly|half[\s-]*yearly|interim|provisional)\s+(?:financial\s+statements|"
+                r"accounts|financials|results)", re.I), "INTERIM_FINANCIAL_STATEMENTS"),
+    (re.compile(r"\bstock\s+(?:and\s+(?:book\s+)?debtors?\s+)?statements?", re.I), "STOCK_STATEMENT"),
+    (re.compile(r"\binsurance\s+(?:policy|policies|certificates?)", re.I), "INSURANCE"),
+    (re.compile(r"\bfinancial\s+statements|\baccounts\b", re.I), "FINANCIAL_STATEMENTS"),
+)
+_TESTED_ON = ("COMPLIANCE_CERTIFICATE", "AUDITED_FINANCIAL_STATEMENTS", "INTERIM_FINANCIAL_STATEMENTS",
+              "FINANCIAL_STATEMENTS")
+
+
+def link_terms(fields: list[dict]) -> None:
+    """CTS integration, 23 Nov 2026: each schedule term in the bank app's Frequency terms, and each reporting
+    deadline with what it asks for and the financial covenants tested at its frequency (never a guess: no frequency,
+    or none the same, links none)."""
+    covenants = [f for f in fields if f.get("group") == "FINANCIAL_COVENANT" and f.get("id")]
+    for f in fields:
+        if f.get("group") != "SCHEDULE_TERM":
+            continue
+        v = f.get("value") or {}
+        freq = v.get("frequency")
+        v["appFrequency"], v["appCron"] = APP_FREQUENCY.get(freq, (None, None))
+        if v.get("kind") != "REPORTING_DEADLINE":
+            continue
+        text = " ".join(str(x) for x in ((f.get("source") or {}).get("quote"), v.get("rule")) if x)
+        deliverable = next((code for rx, code in DELIVERABLES if rx.search(text)), None)
+        v["deliverable"] = deliverable
+        v["covenantIds"] = [c["id"] for c in covenants
+                            if deliverable in _TESTED_ON and freq and (c.get("test") or {}).get("frequency") == freq]
+
+
 def _freq(word: str) -> str | None:
     w = re.sub(r"[\s-]+", " ", word.lower()).replace("half yearly", "half").replace("semi annually", "half")
     for k, v in FREQ_WORDS.items():

@@ -98,10 +98,10 @@ def test_schemas_and_catalogues_are_valid():
     assert {e["type"] for e in events} == set(_schema("event")["properties"]["type"]["enum"])
 
 
-def test_openapi_lists_31_dps_endpoints_and_2_compatibility_ones():
+def test_openapi_lists_32_dps_endpoints_and_2_compatibility_ones():
     spec = openapi()
     operations = [(path, method) for path, item in spec["paths"].items() for method in item]
-    assert len([o for o in operations if not o[0].startswith("/api/")]) == 31  # GET /health added 21 Nov 2026
+    assert len([o for o in operations if not o[0].startswith("/api/")]) == 32  # + health, close
     assert len([o for o in operations if o[0].startswith("/api/")]) == 2
     assert all("x-phase" in spec["paths"][p][m] for p, m in operations)
 
@@ -190,11 +190,11 @@ def test_submit_needs_a_key_a_service_role_and_a_valid_body(client, app):
     assert r.status_code == 400 and r.json()["code"] == "VALIDATION_FAILED"
 
 
-def test_statement_needs_a_period_end(client, app):
+def test_a_statement_may_come_without_a_period_end(client, app):
+    """CTS integration, 23 Nov 2026: the period end is read from the statement when not sent."""
     body = request_body(app, job_type="EXTRACT_STATEMENT")
     body["context"]["asOfDate"] = None
-    r = submit(client, body)
-    assert r.status_code == 400 and r.json()["code"] == "INVALID_INPUT"
+    assert submit(client, body).status_code == 202
 
 
 def test_queue_full_answers_429(client, app, settings):
@@ -315,7 +315,7 @@ def test_catalogue_endpoints(client):
     check_component("Capabilities", caps)
     assert {t["jobType"] for t in caps["jobTypes"] if t["available"]} == {
         "EXTRACT_AGREEMENT", "EXTRACT_STATEMENT", "ANALYZE", "EXTRACT_SANCTION", "EXTRACT_CERTIFICATE",
-        "EXTRACT_AMENDMENT", "DRAFT_COMMENTARY", "ONBOARD", "EXTRACT_WAIVER", "RECONCILE_SET"}
+        "EXTRACT_AMENDMENT", "DRAFT_COMMENTARY", "ONBOARD", "EXTRACT_WAIVER", "RECONCILE_SET", "AUTO"}
 
 
 def test_health_and_queue_report(client, app):

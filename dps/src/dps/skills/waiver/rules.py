@@ -21,6 +21,16 @@ WAIVE = re.compile(r"\b(?:hereby\s+)?(?:irrevocably\s+)?(?:(waive[sd]?|grants?\s
                    r"(consents?\s+to|grants?\s+(?:its\s+)?consent)|"
                    r"(agrees?\s+not\s+to\s+(?:test|apply|declare|treat)|shall\s+not\s+(?:be\s+)?(?:tested|test|treat)))\b",
                    re.I)
+# An extension of time (CTS integration, 23 Nov 2026: the bank app records an extension with its new date): "the
+# Lender extends the date for delivery of the audited accounts to 31 December 2026", "grants an extension of time
+# until ...". The new date is extendedTo.
+EXTEND = re.compile(r"\b(?:extends?|extended|grants?\s+(?:an?\s+|its\s+)?extension|extension\s+of\s+(?:time|the\s+"
+                    r"(?:date|deadline|period|time)))\b", re.I)
+EXTENDED_TO = re.compile(r"\b(?:to|until|till|up\s*to|on\s+or\s+before|by)\s+(?:and\s+including\s+)?(?:the\s+)?(?:"
+                         + DATE.pattern + r")", re.I)
+# only an extension of a date or a time limit, never a facility extended to the borrower
+EXT_OBJECT = re.compile(r"\b(?:date|deadline|time|period|timeline|due)\b", re.I)
+KINDS = ("WAIVER", "CONSENT", "NOT_TESTED", "EXTENSION")
 CLAUSE = re.compile(r"\b(?:clause|section|article|paragraph)\s+(\d+(?:\.\d+)*(?:\s*\([a-z0-9]{1,4}\))*)", re.I)
 PERIOD_FROM_TO = re.compile(r"\bfrom\s+(?:and\s+including\s+)?(?P<a>" + DATE.pattern.replace("?P<", "?P<a_") + r")"
                             r"\s+(?:to|until|till|up\s+to)\s+(?:and\s+including\s+)?(?P<b>"
@@ -96,9 +106,13 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
         listed = sentences(p.get("text") or "")
         for i, s in enumerate(listed):
             m = WAIVE.search(s)
-            if not m or NOT_WAIVED.search(s):
+            ext = EXTEND.search(s) if EXT_OBJECT.search(s) else None
+            if ext and (m is None or ext.start() < m.start()):
+                kind = "EXTENSION"
+            elif m and not NOT_WAIVED.search(s):
+                kind = "WAIVER" if m.group(1) else "CONSENT" if m.group(2) else "NOT_TESTED"
+            else:
                 continue
-            kind = "WAIVER" if m.group(1) else "CONSENT" if m.group(2) else "NOT_TESTED"
             following = listed[i + 1] if i + 1 < len(listed) else ""
             text = s + (" " + following if CONDITION.match(following.strip()) else "")
             clause_m = CLAUSE.search(text)
@@ -112,19 +126,23 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
                 continue
             seen.add(key)
             conditions = [" ".join(c.group(0).split())[:300] for c in CONDITION.finditer(text)] or doc_conditions
+            extended_to = _iso(EXTENDED_TO.search(text[ext.start():])) if kind == "EXTENSION" else None
             value = {"kind": kind,
                      "target": {"metric": (target or {}).get("value", {}).get("metric") or metric, "clause": clause,
                                 "appliedCovenantId": (target or {}).get("value", {}).get("appliedCovenantId"),
                                 "name": (target or {}).get("name")},
                      "periods": found, "conditions": conditions, "expiresOn": expiry,
                      "reinstatement": " ".join(reinstate.group(0).split())[:300] if reinstate else None,
-                     "fee": fee, "metric": metric or "OTHER"}
+                     "fee": fee, "metric": metric or "OTHER",
+                     **({"extendedTo": extended_to} if kind == "EXTENSION" else {})}
             f = make_field(PACK, pages, "WAIVER", name, value, int(p["no"]), s, "RULES", 0.7,
                            key=f"{key}-{p['no']}-{i}")
             if target is None:
                 f["issues"].append(issue("WAIVER_TARGET_UNKNOWN", "the waived covenant is not one of the approved "
                                                                   "covenants sent; choose it"))
-            if not found:
+            if kind == "EXTENSION" and extended_to is None:
+                f["issues"].append(issue("WAIVER_PERIOD_UNKNOWN", "no new date found for the extension; set it"))
+            elif kind != "EXTENSION" and not found:
                 f["issues"].append(issue("WAIVER_PERIOD_UNKNOWN", "no test date or period found for the waiver; "
                                                                   "set it"))
             f["status"] = "NEEDS_REVIEW"  # a waiver always goes to a person

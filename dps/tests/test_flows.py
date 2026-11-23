@@ -307,7 +307,9 @@ def test_worker_retries_transient_errors_then_fails(database, tmp_path):
     assert job(database, job_id).status == jobs.RETRY_WAIT
     w.run_once()
     j = job(database, job_id)
-    assert j.status == jobs.DEAD and "ConnectError" in j.error and j.error_code == "SPRING_UNAVAILABLE"
+    # the detail stays in the log; the job says which kind of failure only (CTS review, 23 Nov 2026)
+    assert j.status == jobs.DEAD and "SpringUnavailable" in j.error and j.error_code == "SPRING_UNAVAILABLE"
+    assert "ConnectError" not in j.error and "/api/" not in j.error
 
 
 def test_worker_fails_unknown_flow_and_crashing_runner(database, tmp_path):
@@ -321,7 +323,8 @@ def test_worker_fails_unknown_flow_and_crashing_runner(database, tmp_path):
     for _ in range(3):  # a, then b crashes, then b is retried once and crashes again
         w.run_once()
     assert job(database, a).error == "No flow registered for NOPE"
-    assert job(database, b).status == jobs.DEAD and job(database, b).error == "ValueError: bug"
+    assert job(database, b).status == jobs.DEAD and "ValueError" in job(database, b).error
+    assert "bug" not in job(database, b).error  # no exception text leaves DPS
     assert job(database, b).attempts == 2 and job(database, b).error_code == "INTERNAL_ERROR"
 
 

@@ -102,10 +102,4 @@ def checks(fields: list[dict], ctx: dict) -> list[dict]:
     for key in ("SANCTIONED_AMOUNT", "TENOR_MONTHS"):
         if key not in names:
             warnings.append(issue("NOTHING_FOUND", f"{key} not found in the sanction letter"))
-    expected = (ctx.get("facilityCurrency") or "").upper()
-    for f in fields:
-        if f["name"] == "SANCTIONED_AMOUNT" and expected and f["value"].get("currency") not in (None, expected):
-            found = f["value"]["currency"]
-            f["issues"].append(issue("CURRENCY_MISMATCH", f"letter in {found}, facility in {expected}"))
-            f["status"] = "NEEDS_REVIEW"
     return warnings

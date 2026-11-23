@@ -13,6 +13,7 @@ import json
 import logging
 import re
 import time
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -45,10 +46,15 @@ BLOCKING = frozenset({"NOTHING_FOUND", "NOT_GROUNDED", "VERDICT_NOT_IN_RESULTS",
                       "TOTALS_DO_NOT_ADD", "PERIOD_MISMATCH", "BASIS_MISMATCH", "ENTITY_MISMATCH",
                       "CURRENCY_MISMATCH", "UNITS_MISMATCH", "BASE_MISSING", "SET_INCOMPLETE",
                       "SET_MANIFEST_INVALID",
+                      # a statement with no period date sent and none in its heading: its figures cannot be stored
+                      "PERIOD_DATE_MISSING",
                       # a statement's holds a person clears outside it (an FX rate, a borrower setting, relinking)
                       "CURRENCY_DIFFERS", "CURRENCY_MIXED", "LOAN_CURRENCY_UNKNOWN", "LOANS_DIFFER",
                       # a document that addresses an AI model, or that the rules cannot read (another language)
-                      "PROMPT_INJECTION_SUSPECTED", "LANGUAGE_NOT_READ"})
+                      "PROMPT_INJECTION_SUSPECTED", "LANGUAGE_NOT_READ",
+                      # a document of another borrower, or of another type than the caller chose: a person accepts it
+                      # before the job can close (CTS review, 23 Nov 2026)
+                      "MAPPING_CONFLICT", "TYPE_MISMATCH"})
 COVENANT_GROUPS = ("FINANCIAL_COVENANT", "NON_FINANCIAL_COVENANT", "INFO_COVENANT", "POSSIBLE_COVENANT")
 # Inspection and reader flags a reviewer must see on an extraction result (full review G15).
 FILE_FLAGS = {"TRACKED_CHANGES": "the text read is with every change accepted",
@@ -144,54 +150,26 @@ def page_accounting(pages: list[dict]) -> dict:
             "readable": counts["PARSED"] + counts["OCR"], "accounted": len(pages), "notParsed": listed[:200]}
 
 
-def _expression(value: dict) -> str | None:
-    metric, op, threshold = value.get("metric"), value.get("operator"), value.get("threshold")
-    if not metric or not op or threshold is None:
-        return None
-    number = f"{threshold:g}" if isinstance(threshold, float) else str(threshold)
-    return f"{metric} {op} {number}"
+def verify_with_spring(fields: list[dict], tools, correlation_id: str | None, as_of=None) -> list[dict]:
+    """Covenant fields: library match, the condition in the bank app's formula language and its validation in Java
+    (batched, one call each). Runs after the taxonomy stamp and the scope enrichment, so the formula is built on the
+    final metric and its mapping sees conditions and scope (CTS integration, 23 Nov 2026; see skills/app_formula)."""
+    from dps.skills import app_formula
 
-
-def verify_with_spring(fields: list[dict], tools, correlation_id: str | None) -> list[dict]:
-    """Covenant fields: library match and formula validation in Java (batched, one call each)."""
     warnings: list[dict] = []
-    covenants = [f for f in fields if f["group"] in COVENANT_GROUPS and f["value"].get("metric")]
-    if tools is None or not covenants:
+    covenants = [f for f in fields if f["group"] in COVENANT_GROUPS and isinstance(f.get("value"), dict)]
+    if not covenants:
         return warnings
-    library, fresh = tools.covenant_library()
-    if library:
-        index = {}
-        for item in library:
-            for key in [item.get("name", ""), *item.get("aliases", []), *item.get("metricKeys", [])]:
-                if key:
-                    index.setdefault(re.sub(r"[^a-z0-9]", "", key.lower()), item)
-        for f in covenants:
-            hit = index.get(re.sub(r"[^a-z0-9]", "", f["value"]["metric"].lower())) or index.get(
-                re.sub(r"[^a-z0-9]", "", f["name"].lower()))
-            if hit:
-                f["libraryMatch"] = {"covenantMasterId": hit["id"], "expression": hit.get("expression")}
-    elif not fresh:
-        warnings.append(issue("SPRING_UNAVAILABLE", "covenant library not reached; library matches missing"))
-    items = []
-    for f in covenants:
-        expr = (f.get("libraryMatch") or {}).get("expression") or _expression(f["value"])
-        if expr:
-            f["value"]["expression"] = f["value"].get("expression") or expr
-            items.append((f["id"], expr))
-    if not items:
+    library: list = []
+    if tools is not None:
+        library, fresh = tools.covenant_library()
+        if not library and not fresh:
+            warnings.append(issue("SPRING_UNAVAILABLE", "covenant library not reached; library matches missing"))
+    app_formula.apply(covenants, library, as_of=as_of)
+    items = [(f["id"], f["value"]["expression"]) for f in covenants if f["value"].get("expression")]
+    if tools is None or not items:
         return warnings
-    checks = tools.validate_formulas(items, correlation_id)
-    for f in covenants:
-        c = checks.get(f["id"])
-        if c is None:
-            continue
-        if not c.available:
-            f["issues"].append(issue("SPRING_UNAVAILABLE", "formula not validated in Core"))
-            f["status"] = "NEEDS_REVIEW"
-        elif not c.valid:
-            message = "; ".join(str(e.get("message") or e.get("code")) for e in c.errors)[:300]
-            f["issues"].append(issue("FORMULA_INVALID", message or "Core rejected the formula"))
-            f["status"] = "NEEDS_REVIEW"
+    app_formula.record_checks(covenants, tools.validate_formulas(items, correlation_id))
     return warnings
 
 
@@ -249,6 +227,15 @@ def _generic(f: dict) -> bool:
     return not code or code.endswith("OTHER")
 
 
+def _second_covenant(f: dict, keep: dict) -> bool:
+    """A reading of the same sentence that is another covenant: a specific code different from the kept one, with a
+    threshold of its own (CTS integration review, 23 Nov 2026: such a reading was merged away with its threshold)."""
+    if _generic(f) or _generic(keep) or _code_of(f) == _code_of(keep):
+        return False
+    mine, theirs = (f.get("value") or {}).get("threshold"), (keep.get("value") or {}).get("threshold")
+    return isinstance(mine, (int, float)) and not isinstance(mine, bool) and mine != theirs
+
+
 def merge_same_sentence(fields: list[dict]) -> list[dict]:
     """One sentence, one finding (review of 22 Nov 2026: 24 sentences gave 50 fields, mostly two AI parts reading the
     same sentence, one with a specific code and one with *_OTHER). Fields with the same page and quote are merged
@@ -271,6 +258,8 @@ def merge_same_sentence(fields: list[dict]) -> list[dict]:
                 continue
             if (f["group"] == "EVENT_OF_DEFAULT") != (keep["group"] == "EVENT_OF_DEFAULT"):
                 continue
+            if _second_covenant(f, keep):
+                continue  # "DSCR of at least 1.25 and Leverage of at most 3.5": two covenants, both kept
             dropped.add(id(f))
             code = _code_of(f)
             if code and code != _code_of(keep) and code not in merged:
@@ -302,11 +291,32 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
             value = {"covenant": value.get("covenant", p["name"]), "figure": value.get("figure"), **value}
         # the contract's covenant value has these keys on every covenant (22 Nov 2026), also on an amendment's
         # covenants the agent read (bulk run: Holly's six broke result.json, "'expression' is a required property")
+        unread_op = None
         if group in COVENANT_GROUPS:
+            from dps.skills.app_formula import normalise_operator
+
             value = {**{k: None for k in COVENANT_KEYS}, **value,
                      "metric": value.get("metric") or p.get("_written") or p["name"]}
+            # the agent's operator in the contract's terms ("≥", "minimum" -> ">="); anything else is not an operator
+            raw_op = value.get("operator")
+            value["operator"] = normalise_operator(raw_op)
+            if raw_op is not None and value["operator"] is None:
+                unread_op = str(raw_op)[:40]
+            threshold = value.get("threshold")
+            if isinstance(threshold, str):  # "1.25x", "3.50:1" -> 1.25, 3.5
+                m = re.search(r"-?\d+(?:\.\d+)?", threshold.replace(",", ""))
+                value["threshold"] = float(m.group(0)) if m else None
+            elif isinstance(threshold, bool):
+                value["threshold"] = None
+            value["expression"] = None  # always built by DPS in the app's formula language (app_formula)
         if group == "WAIVER":  # the agent's reading in the waiver shape; the target is matched by a person
-            value = {"kind": value.get("kind") or "WAIVER",
+            from dps.skills.waiver.rules import KINDS
+
+            kind = str(value.get("kind") or "WAIVER").upper()
+            extended_to = value.get("extendedTo")
+            extended_to = extended_to if isinstance(extended_to, str) and ISO_DATE.match(extended_to) else None
+            value = {"kind": kind if kind in KINDS else "WAIVER",
+                     **({"extendedTo": extended_to} if kind == "EXTENSION" else {}),
                      "target": {"metric": value.get("metric"), "clause": value.get("clause"),
                                 "appliedCovenantId": None, "name": p.get("_written") or p["name"]},
                      "periods": [x for x in value.get("periods") or [] if isinstance(x, dict)],
@@ -319,6 +329,10 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
                        key=method.lower() + (f"-{p['_residual']}" if p.get("_residual") else ""))
         if p.get("_span"):  # the agent read's trace span; moved into dps_trace_event by finish(), never sent to Spring
             f["_aiSpan"] = p["_span"]
+        if unread_op:
+            f["status"] = "NEEDS_REVIEW"
+            f["issues"].append(issue("OPERATOR_UNREAD", f"the Document Agent wrote '{unread_op}', which is not an "
+                                                        "operator; set it from the quote"))
         if group == "SCHEDULE_TERM" and value["kind"] == "OTHER":
             f["status"] = "NEEDS_REVIEW"
             f["issues"].append(issue("AI_ONLY", "found by the Document Agent only; its kind is not one the bank knows"))
@@ -504,16 +518,23 @@ def _explain_changes(fields: list[dict], proposals: list[dict] | None) -> None:
 
 
 def approved_base(base: list[dict]) -> list[dict]:
-    """G2: Spring's approved covenants (context.baseCovenants) as result fields, keyed by metric."""
+    """G2: Spring's approved covenants (context.baseCovenants) as result fields, keyed by metric. The bank app sends
+    its formula ("DSCR >= 1.25") and often nothing else: metric, operator, threshold and unit are read from it when
+    not sent, so an unchanged covenant is not reported as changed (CTS integration, 23 Nov 2026)."""
     from dps.extraction.agreement import _best_metric
+    from dps.skills.app_formula import normalise_operator, read_formula
 
     out = []
     for c in base:
-        metric = c.get("metric") or _best_metric(c.get("name", "")) or c.get("name", "")
+        parsed = read_formula(c.get("expression")) or {}
+        metric = c.get("metric") or parsed.get("metric") or _best_metric(c.get("name", "")) or c.get("name", "")
+        threshold = c.get("threshold") if c.get("threshold") is not None else parsed.get("threshold")
         group = "NON_FINANCIAL_COVENANT" if c.get("category") == "NON_FINANCIAL" else "FINANCIAL_COVENANT"
         out.append({"id": c["appliedCovenantId"], "group": group, "name": c.get("name") or metric,
-                    "value": {"metric": metric, "operator": c.get("operator"), "threshold": c.get("threshold"),
-                              "unit": c.get("unit"), "expression": c.get("expression"),
+                    "value": {"metric": metric,
+                              "operator": normalise_operator(c.get("operator")) or parsed.get("operator"),
+                              "threshold": threshold, "unit": c.get("unit") or parsed.get("unit"),
+                              "expression": c.get("expression"),
                               "appliedCovenantId": c["appliedCovenantId"], "clause": c.get("clause")},
                     "source": {"page": None, "quote": None}, "method": "MANUAL", "confidence": 1.0,
                     "issues": [], "status": "CONFIRMED"})
@@ -532,7 +553,8 @@ def base_fields(db: Session, job: Job, pipeline_version: str) -> list[dict]:
     if not base_version:
         return []
     base = db.scalars(select(Job).where(Job.tenant_id == job.tenant_id, Job.document_version_id == base_version,
-                                        Job.job_type.in_(("EXTRACT_AGREEMENT", "EXTRACT_AMENDMENT", "ONBOARD")),
+                                        Job.job_type.in_(("EXTRACT_AGREEMENT", "EXTRACT_AMENDMENT", "ONBOARD",
+                                                          "AUTO")),
                                         Job.status.in_((jobs.DONE, jobs.NEEDS_REVIEW)))
                       .order_by(Job.finished_at.desc())).first()
     if base is None:
@@ -541,13 +563,25 @@ def base_fields(db: Session, job: Job, pipeline_version: str) -> list[dict]:
     return result.get("amendedSet") or result.get("fields", [])
 
 
+def token_budget(pack: Pack, model: dict | None) -> int | None:
+    """The job's token budget: the pack's, raised for long documents by ``token_budget_per_page`` up to
+    ``token_budget_max`` (CTS review, 23 Nov 2026: a fixed budget ran out part-way through long agreements, and the
+    batches after it were not read). The month's budget still caps every job."""
+    base = pack.limits.get("token_budget")
+    per_page, ceiling = pack.limits.get("token_budget_per_page"), pack.limits.get("token_budget_max")
+    pages = len((model or {}).get("pages") or [])
+    if not base or not per_page or not pages:
+        return base
+    return max(base, min(per_page * pages, ceiling or base))
+
+
 def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: Session | None = None,
         pipeline_version: str = "1", raw: bytes | None = None, scorer_dir: str | None = None,
         statement_deps=None) -> dict:
     started = time.monotonic()
     request = json.loads(job.request_json or "{}")
     ctx = dict(request.get("context") or {})
-    budget = gateway.begin_job(pack.limits.get("token_budget")) if gateway is not None else None
+    budget = gateway.begin_job(token_budget(pack, model)) if gateway is not None else None
     extra: dict = {}
     with obs.span(f"dps.pack {pack.name}", **{"dps.pack": pack.name, "dps.ai": gateway is not None}) as span_obj:
         try:
@@ -586,6 +620,11 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
 
         with obs.span("dps.enrich", **{"dps.fields": len(fields)}):
             enrich(fields, (model or {}).get("pages"), ctx)  # WP6: company, facility, conditions, first test date
+    if pack.name not in ("commentary", "reconcile_set", "statement_lines"):
+        from dps.skills.app_formula import parse_date
+
+        # library match + the bank app's formula, on the final metric and scope (CTS integration, 23 Nov 2026)
+        warnings += verify_with_spring(fields, tools, job.correlation_id, as_of=parse_date(ctx.get("asOfDate")))
     if fields and not built:  # phase 5: every field's confidence from the scorer, routed by the pack's thresholds
         from dps.scoring import Scorer
 
@@ -726,8 +765,14 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
         warnings += sched.checks(sched_fields, {**ctx, "sanctionedAmount": amount})
         fields += sched_fields
     fields = merge_same_sentence(fields)
+    if pack.name in ("sanction", "covenants", "amendment_diff"):
+        from dps.skills.schedule_terms.rules import link_terms
+
+        link_terms(fields)  # the app's frequency, and each reporting deadline with the covenants it serves
     entries = None
-    if pack.name == "covenants":  # every covenant-shaped sentence of the whole document ends with an outcome
+    # every covenant-shaped sentence of the whole document ends with an outcome; a sanction letter's covenants too
+    # (CTS review, 23 Nov 2026: a covenant the rules missed in a sanction letter was lost without a trace)
+    if pack.name in ("covenants", "sanction"):
         from dps.skills.covenants import ledger, omissions
 
         with obs.span("dps.ledger") as ledger_obj:
@@ -739,7 +784,9 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
                 from dps.skills.covenants import names
 
                 residual = names.clean(residual, drop_mechanics=True, collapse=False) or []
-                fields += _agent_only(pack, pages, fields, residual, method="AI_RESIDUAL")
+                # what the agent finds is a covenant to confirm, also in a sanction letter (never a loan term)
+                fields += _agent_only(pack if pack.name == "covenants" else load("covenants"), pages, fields,
+                                      residual, method="AI_RESIDUAL")
                 fields = merge_same_sentence(fields)
                 from dps.agent.guard import injection_signs
 
@@ -763,7 +810,7 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     if page_note and page_note["notSent"] and gateway is not None:
         warnings.append(issue("PAGES_NOT_SENT", "duty pages not in the agent's prompt (it could open them with its "
                                                 "tools): " + ", ".join(map(str, page_note["notSent"][:30]))))
-    warnings += verify_with_spring(fields, tools, job.correlation_id)
+    # the library match and the app formula run in run(), after the taxonomy stamp and the scope enrichment
     warnings += pack.checks(fields, ctx)
     extra = {}
     if entries is not None:
@@ -818,7 +865,18 @@ def _statement(job: Job, db: Session | None, deps):
     if state.outcome == "FAILED":
         raise ContentFailed(state.error)
     doc = db.get(Document, job.document_id) if db is not None else None
-    fields, warnings, extra = as_result(state, doc.as_of_date if doc else None, deps.report_derived_values)
+    as_of = doc.as_of_date if doc else None
+    if doc is not None and as_of is None and state.period_end:
+        # no period date sent: the one the statement's heading names, kept for publishing (CTS integration)
+        as_of = doc.as_of_date = date.fromisoformat(state.period_end)
+    fields, warnings, extra = as_result(state, as_of, deps.report_derived_values)
+    if state.period_source == "DOCUMENT":
+        warnings.append(issue("PERIOD_FROM_DOCUMENT", f"period end {as_of.isoformat()} read from the statement's "
+                                                      "heading (no period date was sent); check it"))
+    elif state.period_source == "MISSING":
+        warnings.append(issue("PERIOD_DATE_MISSING", "no period date was sent and the statement's heading names "
+                                                     "none: send it with reclassify (asOfDate) before approving, "
+                                                     "or the figures cannot be stored"))
     warnings += statement_warnings(fields, results.approved_figures(db, doc) if db is not None else {})
     return fields, warnings, extra
 
@@ -891,8 +949,12 @@ def finish(db: Session, job: Job, result: dict) -> None:
     save_run(db, job, result)
     status = jobs.NEEDS_REVIEW if result["status"] == "NEEDS_REVIEW" else jobs.DONE
     mapping = (result.get("document") or {}).get("route") == "MAPPING_REVIEW"
+    # fields: every field; toReview: the ones waiting for a person; route: why (MAPPING_REVIEW, NEEDS_REVIEW ...)
     jobs.finish(db, job, status, None, "MAPPING_REVIEW" if mapping and status == jobs.NEEDS_REVIEW else None,
-                payload={"skillPack": result["pipeline"]["skillPack"], "fields": len(result["fields"])})
+                payload={"skillPack": result["pipeline"]["skillPack"], "fields": len(result["fields"]),
+                         "toReview": sum(1 for f in result["fields"] if f.get("status") == "NEEDS_REVIEW"),
+                         "route": (result.get("document") or {}).get("route"),
+                         "documentType": (result.get("classification") or {}).get("type")})
 
 
 def trace_ai_fields(db: Session | None, job: Job, result: dict) -> None:
@@ -937,10 +999,16 @@ ONBOARD_PACKS = {"LOAN_AGREEMENT": "covenants", "SANCTION_LETTER": "sanction", "
                  "GUARANTEE": "covenants", "AMENDED_AND_RESTATED": "covenants", "WAIVER_CONSENT": "waiver",
                  # a debenture trust deed holds the issuer's covenants to the trustee (bulk run, 22 Nov 2026)
                  "TRUST_DEED": "covenants"}
+# CTS integration, 23 Nov 2026: one upload for every document type. AUTO classifies like ONBOARD and also reads
+# statements and compliance certificates with their own packs; the classification in the result says what was read.
+AUTO_PACKS = {**ONBOARD_PACKS, "FINANCIAL_STATEMENT": "statement_lines", "COMPLIANCE_CERTIFICATE": "certificate"}
+# packs that check the cycle's expectations (period, basis, entity, currency) themselves
+_CHECK_OWN_EXPECTATIONS = ("certificate", "statement_lines")
 
 
 def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | None = None,
-                pipeline_version: str = "1", scorer_dir: str | None = None) -> dict:
+                pipeline_version: str = "1", scorer_dir: str | None = None, raw: bytes | None = None,
+                statement_deps=None) -> dict:
     from dps.analyze import obligations
     from dps.analyze.classify import classify
     from dps.analyze.identify import find_identifiers, legibility, match, missing_required
@@ -952,17 +1020,27 @@ def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | N
         c = classify(model, expected, gateway)
         obs.set_attrs(class_span, **{"dps.type": c.type, "dps.confidence": round(float(c.confidence or 0), 3),
                                      "dps.mismatch": bool(c.mismatch), "dps.uncertain": bool(c.uncertain)})
-    pack_name = ONBOARD_PACKS.get(c.type)
-    if pack_name is None:  # not an onboarding document (a statement, a certificate, an unreadable scan)
+    auto = job.job_type == "AUTO"
+    pack_name = (AUTO_PACKS if auto else ONBOARD_PACKS).get(c.type)
+    if auto and db is not None:  # the document's type, as read, for everything that follows (publish, reuse)
+        from dps.models import Document
+
+        doc = db.get(Document, job.document_id)
+        if doc is not None and doc.type in ("UNKNOWN", "", None):
+            doc.type = c.type[:32]
+    if pack_name is None:  # not a type this job reads (a security document, other evidence, an unreadable scan)
+        code = "TYPE_NOT_READ" if auto else "TYPE_NOT_ONBOARDING"
+        message = (f"the document reads as {c.type}; DPS reads agreements, sanction letters, amendments, waivers, "
+                   "statements and compliance certificates: reclassify it if the type is wrong" if auto else
+                   f"the document reads as {c.type}; onboarding reads agreements, sanction letters and amendments")
         result = run(load("covenants"), job, {"pages": []}, None, None, db, pipeline_version)
         result["fields"], result["status"] = [], "NEEDS_REVIEW"
-        result["warnings"] = [issue("TYPE_NOT_ONBOARDING",
-                                    f"the document reads as {c.type}; onboarding reads agreements, sanction "
-                                    "letters and amendments")]
+        result["warnings"] = [issue(code, message)]
         result["document"] = {"confidence": c.confidence, "route": "NEEDS_REVIEW",
-                              "reasons": ["TYPE_NOT_ONBOARDING"], "pages": page_accounting(model.get("pages", []))}
+                              "reasons": [code], "pages": page_accounting(model.get("pages", []))}
     else:
-        result = run(load(pack_name), job, model, gateway, tools, db, pipeline_version, scorer_dir=scorer_dir)
+        result = run(load(pack_name), job, model, gateway, tools, db, pipeline_version, raw=raw,
+                     scorer_dir=scorer_dir, statement_deps=statement_deps)
     with obs.span("dps.identify") as id_span:
         found = find_identifiers(model)
         identifiers, id_warnings = match(found, tools, {"cpIds": ctx.get("cpIds") or [],
@@ -996,7 +1074,8 @@ def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | N
     conflicts = [i for i in identifiers if i["match"]["status"] == "CONFLICT"]
     if conflicts:
         extra.append(issue("MAPPING_CONFLICT", f"{len(conflicts)} identifier(s) point to another borrower"))
-    mismatches = obligations.check(ctx, found, c.basis, model)
+    mismatches = ([] if pack_name in _CHECK_OWN_EXPECTATIONS  # already checked by the pack: not twice
+                  else obligations.check(ctx, found, c.basis, model))
     extra += mismatches
     result["warnings"] = extra + result["warnings"]
     if c.mismatch or c.uncertain or conflicts or mismatches:
@@ -1011,7 +1090,8 @@ def run_job(job: Job, model: dict | None, gateway=None, tools=None, db: Session 
             pipeline_version: str = "1", raw: bytes | None = None, scorer_dir: str | None = None,
             statement_deps=None) -> dict:
     """The worker's entry point for every job type that reads a document (one pipeline, full review WP7)."""
-    if job.job_type == "ONBOARD":
-        return run_onboard(job, model or {"pages": []}, gateway, tools, db, pipeline_version, scorer_dir)
+    if job.job_type in ("ONBOARD", "AUTO"):
+        return run_onboard(job, model or {"pages": []}, gateway, tools, db, pipeline_version, scorer_dir, raw,
+                           statement_deps)
     return run(pack_for(job.job_type), job, model, gateway, tools, db, pipeline_version, raw, scorer_dir,
                statement_deps)

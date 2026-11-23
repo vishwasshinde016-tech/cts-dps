@@ -184,7 +184,9 @@ for _metric, _more in {
         if _rule[0] == _metric:
             _rule[1].extend(_more)
 
-_NUM = r"([0-9][0-9,]*(?:\.[0-9]+)?)"
+# A minus sign right before the number keeps it ("not less than -0.50x"; CTS review 23 Nov 2026); a hyphen inside a
+# word or a range ("1-2", "Clause 21-3") is not a sign.
+_NUM = r"((?:(?<![\w.\-−])[-−](?=\d))?[0-9][0-9,]*(?:\.[0-9]+)?)"
 _UNIT = r"\s*(crores?|cr\b|lakhs?|lacs?|million|billion|mn\b|bn\b)?"  # "LKR 8,000 Mn" (Sri Lanka run)
 # "shall not (be|fall|go|drop) less than / below": a verb may sit between the negation and the comparison.
 # Without it the bare "less than" rule below matches and the floor is read as a ceiling.
@@ -215,8 +217,12 @@ _WORD_THRESHOLDS: list[tuple[str, str]] = [
      ">="),
     (r"(?:(?:less|lower)\s+than\s+or\s+equal\s+to|at\s+or\s+below)\s*" + _CUR + r"\s*" + _NUM + _UNIT, "<="),
     (_PERMIT + r"(?:to\s+)?(?:exceed|be\s+(?:greater|more|higher)\s+than)\s*" + _CUR + r"\s*" + _NUM + _UNIT, "<="),
-    (r"(?:equals?\s+or\s+exceeds?|equal\s+to\s+or\s+greater\s+than|in\s+excess\s+of)\s*" + _CUR + r"\s*" + _NUM
-     + _UNIT, ">="),
+    (r"(?:equals?\s+or\s+exceeds?|equal\s+to\s+or\s+greater\s+than)\s*" + _CUR + r"\s*" + _NUM + _UNIT, ">="),
+    # "not (be) in excess of 3.5" is a ceiling; "in excess of 500 crore" alone is strictly greater (CTS review)
+    # (the negated form starts earlier in the sentence, so it wins over the plain one: the earliest match is taken)
+    (_NOT + r"in\s+excess\s+of\s*" + _CUR + r"\s*" + _NUM + _UNIT, "<="),
+    (_PERMIT + r"(?:to\s+)?(?:be\s+)?in\s+excess\s+of\s*" + _CUR + r"\s*" + _NUM + _UNIT, "<="),
+    (r"in\s+excess\s+of\s*" + _CUR + r"\s*" + _NUM + _UNIT, ">"),
     (r"(?:never\s+exceed|shall\s+not\s+exceed|equal\s+to\s+or\s+less\s+than)\s*" + _CUR + r"\s*" + _NUM + _UNIT,
      "<="),
     (r"(?:" + _NOT + r"(?:less|lower)\s+than|" + _NOT + r"below|at\s+least|minimum(?:\s+of)?|no\s+less\s+than"
@@ -427,7 +433,7 @@ def _frequency(text: str) -> str | None:
 
 
 def _number(raw: str) -> float:
-    return float(raw.replace(",", ""))
+    return float(raw.replace(",", "").replace("−", "-"))
 
 
 def _threshold(text: str, amount: bool,

@@ -152,6 +152,10 @@ class StatementState(BaseModel):
     profile_issues: list[str] = Field(default_factory=list)
     language: str = "en"
     lines: dict = Field(default_factory=dict)  # catalogue lines: expected, found, notFound
+    # No period date sent (one upload for every type, CTS integration 23 Nov 2026): the period end the statement's
+    # heading names ("YYYY-MM-DD"), and where the date came from: "" (sent), DOCUMENT (read here) or MISSING.
+    period_end: str = ""
+    period_source: Literal["", "DOCUMENT", "MISSING"] = ""
     not_found: list[str] = Field(default_factory=list)  # catalogue lines the statement did not give
     error: str = ""
     outcome: Literal["", "REPORTED", "NEEDS_REVIEW", "FAILED", "HEAVY"] = ""
@@ -170,6 +174,7 @@ class StatementReader:
         self.state = StatementState(id=str(uuid.uuid4()), job_id=job_id, document_id=document_id,
                                     review_done=review_done)
         self._parse_document()
+        self._find_period()
         self._extract_and_calculate()
         self._validate()
         return self.state
@@ -200,10 +205,33 @@ class StatementReader:
                 rows = self._parse(data, ext)
         self.state.rows = [list(r) for r in rows]
 
+    def _find_period(self) -> None:
+        """The caller sent no period date: the period end the statement's own heading names. Never a guess: a date
+        the heading does not tie to the period ("as at", "year ended") is not taken, and none found is MISSING."""
+        with self._deps.session_factory() as db:
+            doc = db.get(Document, self.state.document_id)
+            if doc is None or doc.as_of_date is not None:
+                return
+        from dps.skills.statement_lines.period import period_end
+
+        found = period_end(self.state.header_text, self.state.page_text[:3000], self._raw_text[:3000])
+        self.state.period_end = found.isoformat() if found else ""
+        self.state.period_source = "DOCUMENT" if found else "MISSING"
+
+    def _as_of(self, doc: Document) -> date | None:
+        """The statement's period end: the one sent, else the one its heading names."""
+        if doc.as_of_date is not None:
+            return doc.as_of_date
+        return date.fromisoformat(self.state.period_end) if self.state.period_end else None
+
     def _parse(self, data: bytes, ext: str) -> list[tuple]:
         entity = self.state.entity or self._deps.entity
         self.state.parse_issues, self._raw_text, self._doc_text = [], "", ""
         try:
+            if ext in IMAGE_SUFFIXES:  # a photo of a statement: read as a scanned page (CTS integration, 23 Nov 2026)
+                from dps.parse.images import to_pdf
+
+                data, ext = to_pdf(data), ".pdf"
             if ext == ".pdf":
                 table = self._read_table(data, entity)
                 if table is not None and table.rows:
@@ -239,7 +267,7 @@ class StatementReader:
                 self.state.header_text = header_from_csv(data)
                 self._raw_text = data.decode("utf-8-sig", errors="replace")[:200_000]
             else:
-                raise ParseError(f"{ext} statements are not supported; upload PDF, XLSX, XLS or CSV")
+                raise ParseError(f"{ext} statements are not supported; upload PDF, XLSX, XLS, CSV, PNG or JPEG")
         except ParseError as ex:
             self.state.error, rows = str(ex), []
         except Exception as ex:  # noqa: BLE001 - a corrupt workbook or CSV is a content failure, not a crash
@@ -351,7 +379,7 @@ class StatementReader:
         names, else the loans') and the bank's FX rate between them on the statement date. Without a rate the
         statement waits: a figure in one currency is never compared with a limit in another."""
         with self._deps.session_factory() as db:
-            as_of = db.get(Document, self.state.document_id).as_of_date or date.today()
+            as_of = self._as_of(db.get(Document, self.state.document_id)) or date.today()
         issues = []
         loan = self.state.loan_currency or self._deps.default_currency
         words = self._deps.currency_words() if self._deps.currency_words else []
@@ -455,7 +483,7 @@ class StatementReader:
         """A figure 20 times larger or smaller than the same CP's previous period: the unit was probably misread."""
         with self._deps.session_factory() as db:
             doc = db.get(Document, self.state.document_id)
-            previous = services.previous_values(db, doc.active_cp_ids(), doc.as_of_date, SCALE_KEYS)
+            previous = services.previous_values(db, doc.active_cp_ids(), self._as_of(doc), SCALE_KEYS)
         out = []
         for v in values:
             before = previous.get(v.key)
@@ -485,6 +513,9 @@ class StatementReader:
         self.state.lines = lines_not_found(v["key"] for v in self.state.values)
         self.state.not_found = list(self.state.lines["notFound"])
         self.state.outcome = "NEEDS_REVIEW"
+
+
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
 
 
 def _suffix(name: str) -> str:
@@ -564,8 +595,12 @@ def publish(db: Session, job: Job, result: dict, report_derived: bool = False, f
     loan_ccy = meta.get("loanCurrency") or "INR"
     corrected_keys = {f["name"] for f in lines if f.get("status") == "CORRECTED"}
     cp_ids = doc.active_cp_ids()
+    # The bank app's OBLIGOR_ID tables ask /api/data/values by obligor id (compat-data-values.json): the figures
+    # are kept under the job's obligor too (CTS review, 23 Nov 2026: those tables were always empty).
+    obligor = ((json.loads(job.request_json or "{}").get("context") or {}).get("obligorId") or "").strip()
+    keys = cp_ids + ([obligor] if obligor and obligor not in cp_ids else [])
     comparatives = meta.get("comparatives") or {}
-    for cp in cp_ids:
+    for cp in keys:
         kept_user = set()
         for old in db.scalars(select(StatementValue).where(
                 StatementValue.cp_id == cp, StatementValue.as_of_date == doc.as_of_date,
@@ -609,7 +644,8 @@ def publish(db: Session, job: Job, result: dict, report_derived: bool = False, f
     doc.review_json = json.dumps({**{k: v for k, v in meta.items() if k not in ("comparatives", "derivedReported")},
                                   "issues": [f"{w.get('code')}: {w.get('message') or ''}".rstrip(": ")
                                              for w in result.get("warnings") or []]}, default=str)
-    services.audit(db, actor, "STATEMENT_APPROVED", "document", doc.id, values=len(values), cpIds=cp_ids)
+    services.audit(db, actor, "STATEMENT_APPROVED", "document", doc.id, values=len(values), cpIds=cp_ids,
+                   obligorId=obligor or None)
     history.result(db, doc.id, job.id, "APPROVED",
-                   f"after review, {len(values)} figures stored for {', '.join(cp_ids) or 'no CP'}")
+                   f"after review, {len(values)} figures stored for {', '.join(keys) or 'no CP'}")
     return len(values)

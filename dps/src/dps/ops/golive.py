@@ -18,7 +18,7 @@ from dps.models import Job, ReviewDecision, Run, utcnow
 TARGETS = {"classificationAccuracy": 0.98, "groundingRate": 1.0, "sampledErrorRate": 0.01,
            "calibrationError": 0.05, "p95SecondsNative": 300, "p95SecondsScan": 900}
 EXTRACTION_TYPES = ("EXTRACT_AGREEMENT", "EXTRACT_STATEMENT", "EXTRACT_SANCTION", "EXTRACT_CERTIFICATE",
-                    "EXTRACT_AMENDMENT", "EXTRACT_WAIVER")
+                    "EXTRACT_AMENDMENT", "EXTRACT_WAIVER", "AUTO")
 
 
 def _p95(values: list[float]) -> float | None:

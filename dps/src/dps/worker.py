@@ -202,6 +202,9 @@ class Worker:
     def _process(self, db: Session, job: Job) -> None:
         doc = db.get(Document, job.document_id)
         token = jobs.worker_attempt.set((job.id, self.settings.worker_id, job.attempts))
+        from dps.integrations.spring import CORRELATION
+
+        correlation = CORRELATION.set(job.correlation_id)  # every Spring call of this job carries it
         stop = self._start_heartbeat(job.id, job.attempts)
         # The job's trace (observability, 23 Nov 2026). In Langfuse: the trace name is the job type, the session is
         # the document (every job on one document side by side), the user is who uploaded it. Ids only: no file name.
@@ -224,6 +227,7 @@ class Worker:
             finally:
                 stop.set()
                 jobs.worker_attempt.reset(token)
+                CORRELATION.reset(correlation)
                 self.page_models.clear()  # sequential worker: never keep a page model past its job
 
     def _run(self, db: Session, job: Job, doc: Document | None) -> None:
@@ -285,16 +289,20 @@ class Worker:
             self._sync_document(db, job)
             return
         except (SpringUnavailable, httpx.HTTPError, OSError) as ex:
+            # the detail (URLs, paths) stays in the log; the job and its events carry a plain message only
+            # (CTS review, 23 Nov 2026: exception text reached the bank app's logs)
+            log.warning("job %s: a service did not answer: %s", job.id, ex)
             db.rollback()
             db.refresh(job)
-            jobs.release_for_retry(db, job, str(ex)[:2000], self.settings.worker_max_attempts, "SPRING_UNAVAILABLE",
+            jobs.release_for_retry(db, job, f"A service DPS needs did not answer ({type(ex).__name__}); retried.",
+                                   self.settings.worker_max_attempts, "SPRING_UNAVAILABLE",
                                    self.settings.worker_retry_base_seconds, self.settings.worker_retry_max_seconds)
             return
         except Exception as ex:  # a bug: retry once, then DEAD
-            log.exception("ANALYZE job %s crashed", job.id)
+            log.exception("job %s crashed", job.id)
             db.rollback()
             db.refresh(job)
-            jobs.release_for_retry(db, job, f"{type(ex).__name__}: {str(ex)[:1900]}",
+            jobs.release_for_retry(db, job, f"Internal error ({type(ex).__name__}); the support team has the log.",
                                    min(2, self.settings.worker_max_attempts), "INTERNAL_ERROR",
                                    self.settings.worker_retry_base_seconds, self.settings.worker_retry_max_seconds)
             return
@@ -338,7 +346,7 @@ class Worker:
                 if ex.code == "INTEGRITY_MISMATCH":
                     log.error("Job %s: stored file does not match its SHA-256 (ops alert)", job.id)
                 jobs.finish(db, job, jobs.FAILED, str(ex)[:2000], ex.code,
-                            payload={"quarantine": True} if quarantine else None)
+                            payload={"quarantine": quarantine})  # always present (CTS review, 23 Nov 2026)
             self._sync_document(db, job)
             return False
         self.page_models[doc.sha256] = model

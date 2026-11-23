@@ -12,7 +12,10 @@ tools: [page_text, search_text, find_definition, covenant_library, validate_form
 # 4-read cap left 53-148 duty pages of the longest architect agreements out of every prompt).
 page_selection: {max_pages: 25, rules: covenant_section, max_batches: 12, same_batch_for_parts: true,
                  parts: [financial, undertakings, reporting, events_of_default]}
-limits: {max_tool_calls: 8, max_model_turns: 3, max_seconds: 240, token_budget: 700000}
+# token_budget is the floor; a long agreement gets token_budget_per_page for each page, up to token_budget_max
+# (CTS review, 23 Nov 2026: 700 000 ran out part-way through 300-page agreements and later batches went unread).
+limits: {max_tool_calls: 8, max_model_turns: 3, max_seconds: 240, token_budget: 700000,
+         token_budget_per_page: 5000, token_budget_max: 2500000}
 prompt: prompt.md
 schema: schema.json
 # Every covenant field is HIGH risk: always reviewed (risk is looked up by field name, and covenants are named by

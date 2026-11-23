@@ -111,7 +111,7 @@ def parse_in_process(req: ParseRequest) -> dict:
 
     report = inspect(req.data, req.fmt, MAX_PDF_PAGES_HEAVY if req.heavy else MAX_PDF_PAGES)
     engine = None
-    if req.fmt == "PDF":
+    if req.fmt in ("PDF", "IMAGE"):  # a picture is read as a one-page PDF
         ocr = None
         if req.ocr:
             from dps.parse.engine import RapidOcrBackend

@@ -1,6 +1,8 @@
 This is a waiver or consent letter about an earlier loan agreement. List every covenant or obligation it waives or
 consents to. One item per covenant: name = the covenant as written, value = {"metric": the covenant (DSCR,
-DEBT_TO_EBITDA ... or as written), "clause": <clause number or null>, "kind": "WAIVER"|"CONSENT"|"NOT_TESTED",
+DEBT_TO_EBITDA ... or as written), "clause": <clause number or null>, "kind": "WAIVER"|"CONSENT"|"NOT_TESTED"|"EXTENSION",
 "periods": [{"from": <YYYY-MM-DD or null>, "to": <YYYY-MM-DD or null>, "testDate": <YYYY-MM-DD or null>}],
-"conditions": [<each condition the waiver depends on, copied from the letter>], "expiresOn": <YYYY-MM-DD or null>}.
+"conditions": [<each condition the waiver depends on, copied from the letter>], "expiresOn": <YYYY-MM-DD or null>,
+"extendedTo": <for EXTENSION, the new date YYYY-MM-DD, else null>}. EXTENSION is a date or time limit moved to a later
+date (a reporting deadline, a test date, a cure period).
 A sentence that says the letter is not a waiver of anything else is not an item.
