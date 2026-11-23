@@ -2,7 +2,7 @@
  "schema_version": 2,
  "diagram_type": "workflow",
  "meta": {
-  "title": "CTS DPS full flow: one pipeline, every skill, rules first, then the Document Agent, compared, checked, reviewed",
+  "title": "CTS DPS full flow: one pipeline, every skill, rules first, then the Document Agent, compared, checked, reviewed (updated 23 Nov 2026: traces, Phase 1-2)",
   "output": "docs/cts-dps/diagrams/dps-full-flow.html",
   "locale": "en",
   "quality_profile": "standard",
@@ -10,7 +10,7 @@
    "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
    "provider": "github",
    "link_mode": "web",
-   "revision": "1fa0723bb3ca2a401924f30f80edf7be2511740e"
+   "revision": "6d0ff8db9dd8e8d5c2749db5f96b2d8d3ed10607"
   },
   "views": [
    {
@@ -106,7 +106,7 @@
    },
    {
     "id": "v5",
-    "label": "11-13 Every skill, DB tables",
+    "label": "11-14 Every skill, DB tables, traces",
     "focus": [
      "sk_cov",
      "sk_sched",
@@ -124,9 +124,15 @@
      "t_artifact",
      "t_ai",
      "t_run",
-     "t_review"
+     "t_review",
+     "tr_job",
+     "tr_steps",
+     "tr_read",
+     "tr_call",
+     "tr_link",
+     "langfuse"
     ],
-    "note": "11 · Skills: rules + agent / 12 · Skills with their own path / 13 · DB tables"
+    "note": "11 · Skills: rules + agent / 12 · Skills with their own path / 13 · DB tables / 14 · Traces and audit links"
    }
   ]
  },
@@ -186,6 +192,10 @@
   {
    "id": "l13",
    "label": "13 · DB tables (models.py)"
+  },
+  {
+   "id": "l14",
+   "label": "14 · Traces and audit links (ops/observability.py, Langfuse)"
   }
  ],
  "nodes": [
@@ -212,9 +222,9 @@
     },
     {
      "path": "contracts/dps-jobs-api.yaml",
-     "line": 225,
+     "line": 227,
      "label": "GET / POST review",
-     "end_line": 260
+     "end_line": 262
     }
    ]
   },
@@ -260,7 +270,7 @@
      "path": "contracts/schemas/page-model.json",
      "line": 1,
      "label": "pages, lines, boxes, tables, quality",
-     "end_line": 343
+     "end_line": 345
     },
     {
      "path": "dps/src/dps/parse/page_model.py",
@@ -315,12 +325,12 @@
     },
     {
      "path": "contracts/schemas/result.json",
-     "line": 1043,
+     "line": 1050,
      "label": "classification"
     },
     {
      "path": "contracts/schemas/result.json",
-     "line": 1162,
+     "line": 1170,
      "label": "document: route, coverage, pages"
     }
    ]
@@ -523,9 +533,9 @@
     },
     {
      "path": "dps/src/dps/worker.py",
-     "line": 328,
+     "line": 347,
      "label": "heartbeat thread",
-     "end_line": 344
+     "end_line": 363
     }
    ]
   },
@@ -536,13 +546,13 @@
    "type": "backend",
    "width": 192,
    "label": "2.4 _run: one pipeline",
-   "sublabel": "worker.py:218",
+   "sublabel": "worker.py:229",
    "sources": [
     {
      "path": "dps/src/dps/worker.py",
-     "line": 218,
+     "line": 229,
      "label": "SKILL_PACK or ANALYZE",
-     "end_line": 225
+     "end_line": 236
     },
     {
      "path": "dps/src/dps/worker.py",
@@ -558,13 +568,19 @@
    "type": "backend",
    "width": 192,
    "label": "2.5 _analyze: read input",
-   "sublabel": "worker.py:227",
+   "sublabel": "worker.py:238",
    "sources": [
     {
      "path": "dps/src/dps/worker.py",
-     "line": 227,
+     "line": 238,
      "label": "manifest read, or ingest; errors to retry / HEAV",
-     "end_line": 295
+     "end_line": 306
+    },
+    {
+     "path": "dps/src/dps/ingest/pipeline.py",
+     "line": 101,
+     "label": "poor pages move the job to HEAVY",
+     "end_line": 101
     }
    ]
   },
@@ -575,19 +591,19 @@
    "type": "backend",
    "width": 192,
    "label": "3.1 read + SHA-256",
-   "sublabel": "worker.py:297",
+   "sublabel": "worker.py:308",
    "sources": [
     {
      "path": "dps/src/dps/worker.py",
-     "line": 297,
+     "line": 308,
      "label": "_ingest",
-     "end_line": 326
+     "end_line": 345
     },
     {
      "path": "dps/src/dps/ingest/pipeline.py",
-     "line": 48,
+     "line": 66,
      "label": "read the DMS version, hash checked",
-     "end_line": 54
+     "end_line": 72
     }
    ]
   },
@@ -598,13 +614,19 @@
    "type": "security",
    "width": 192,
    "label": "3.2 inspect file",
-   "sublabel": "ingest/inspect.py:63",
+   "sublabel": "ingest/inspect.py:65",
    "sources": [
     {
      "path": "dps/src/dps/ingest/inspect.py",
-     "line": 63,
+     "line": 65,
      "label": "real type, encrypted, macros, zip bombs",
-     "end_line": 69
+     "end_line": 73
+    },
+    {
+     "path": "dps/src/dps/ingest/inspect.py",
+     "line": 22,
+     "label": "1,000-page limit on HEAVY",
+     "end_line": 22
     }
    ]
   },
@@ -615,13 +637,13 @@
    "type": "security",
    "width": 192,
    "label": "3.3 sandbox parse",
-   "sublabel": "parse/sandbox.py:157",
+   "sublabel": "parse/sandbox.py:167",
    "sources": [
     {
      "path": "dps/src/dps/parse/sandbox.py",
-     "line": 157,
+     "line": 167,
      "label": "child process, no network, limits",
-     "end_line": 186
+     "end_line": 196
     }
    ]
   },
@@ -655,25 +677,25 @@
    "type": "backend",
    "width": 192,
    "label": "3.5 PDF text + local OCR",
-   "sublabel": "parse/engine.py:127",
+   "sublabel": "parse/engine.py:151",
    "sources": [
     {
      "path": "dps/src/dps/parse/engine.py",
-     "line": 127,
+     "line": 151,
      "label": "text layer first",
-     "end_line": 164
+     "end_line": 206
     },
     {
      "path": "dps/src/dps/parse/engine.py",
-     "line": 71,
-     "label": "OCR on this server",
-     "end_line": 124
+     "line": 79,
+     "label": "local OCR: PP-OCRv6 English model",
+     "end_line": 91
     },
     {
      "path": "dps/src/dps/parse/engine.py",
-     "line": 207,
+     "line": 249,
      "label": "Docling, HEAVY pool",
-     "end_line": 231
+     "end_line": 278
     }
    ]
   },
@@ -684,13 +706,13 @@
    "type": "database",
    "width": 192,
    "label": "3.6 page model saved",
-   "sublabel": "ingest/pipeline.py:56",
+   "sublabel": "ingest/pipeline.py:74",
    "sources": [
     {
      "path": "dps/src/dps/ingest/pipeline.py",
-     "line": 56,
+     "line": 74,
      "label": "write once, reused",
-     "end_line": 84
+     "end_line": 109
     },
     {
      "path": "dps/src/dps/models.py",
@@ -707,19 +729,19 @@
    "type": "backend",
    "width": 192,
    "label": "4.1 SkillJobFlow (CrewAI)",
-   "sublabel": "flows/skill_job.py:27",
+   "sublabel": "flows/skill_job.py:28",
    "sources": [
     {
      "path": "dps/src/dps/flows/skill_job.py",
-     "line": 27,
+     "line": 28,
      "label": "run_skills, then save_result",
-     "end_line": 49
+     "end_line": 50
     },
     {
      "path": "dps/src/dps/worker.py",
-     "line": 438,
+     "line": 457,
      "label": "wires gateway, Spring tools, statement reader",
-     "end_line": 460
+     "end_line": 479
     }
    ]
   },
@@ -730,13 +752,13 @@
    "type": "backend",
    "width": 192,
    "label": "4.2 run_job",
-   "sublabel": "skills/runner.py:812",
+   "sublabel": "skills/runner.py:1006",
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 812,
+     "line": 1006,
      "label": "ONBOARD, or the job type's pack",
-     "end_line": 819
+     "end_line": 1013
     }
    ]
   },
@@ -770,25 +792,25 @@
    "type": "backend",
    "width": 192,
    "label": "4.4 ONBOARD: classify",
-   "sublabel": "analyze/classify.py:333",
+   "sublabel": "analyze/classify.py:382",
    "sources": [
     {
      "path": "dps/src/dps/analyze/classify.py",
-     "line": 333,
+     "line": 382,
      "label": "rules first, agent second opinion",
-     "end_line": 374
+     "end_line": 423
     },
     {
      "path": "dps/src/dps/analyze/classify.py",
-     "line": 230,
-     "label": "rules decide at 0.8 with a 0.3 lead",
-     "end_line": 235
+     "line": 19,
+     "label": "trust deeds, waivers, amendment deeds",
+     "end_line": 19
     },
     {
      "path": "dps/src/dps/analyze/classify.py",
-     "line": 277,
+     "line": 326,
      "label": "agent with quotes",
-     "end_line": 298
+     "end_line": 347
     }
    ]
   },
@@ -799,19 +821,19 @@
    "type": "backend",
    "width": 192,
    "label": "4.5 type to skill",
-   "sublabel": "skills/runner.py:744",
+   "sublabel": "skills/runner.py:930",
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 744,
+     "line": 930,
      "label": "LOAN_AGREEMENT -> covenants ...",
-     "end_line": 747
+     "end_line": 933
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 750,
+     "line": 938,
      "label": "run_onboard",
-     "end_line": 809
+     "end_line": 1003
     }
    ]
   },
@@ -845,13 +867,13 @@
    "type": "backend",
    "width": 192,
    "label": "5.1 runner.run",
-   "sublabel": "skills/runner.py:390",
+   "sublabel": "skills/runner.py:544",
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 390,
+     "line": 544,
      "label": "token budget, then the pack's path",
-     "end_line": 483
+     "end_line": 645
     }
    ]
   },
@@ -862,19 +884,19 @@
    "type": "backend",
    "width": 192,
    "label": "5.2 approved base",
-   "sublabel": "skills/runner.py:352",
+   "sublabel": "skills/runner.py:506",
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 352,
+     "line": 506,
      "label": "Spring's approved covenants",
-     "end_line": 366
+     "end_line": 520
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 369,
+     "line": 523,
      "label": "else DPS's own earlier result",
-     "end_line": 387
+     "end_line": 541
     }
    ]
   },
@@ -895,9 +917,9 @@
     },
     {
      "path": "dps/src/dps/extraction/agreement.py",
-     "line": 934,
+     "line": 1083,
      "label": "clauses, metrics, thresholds",
-     "end_line": 950
+     "end_line": 1103
     }
    ]
   },
@@ -908,13 +930,13 @@
    "type": "security",
    "width": 192,
    "label": "5.4 safety net + tables",
-   "sublabel": "extraction/safety_net.py:136",
+   "sublabel": "extraction/safety_net.py:137",
    "sources": [
     {
      "path": "dps/src/dps/extraction/safety_net.py",
-     "line": 136,
+     "line": 137,
      "label": "covenant-shaped sentences",
-     "end_line": 179
+     "end_line": 180
     },
     {
      "path": "dps/src/dps/skills/covenants/rules.py",
@@ -931,13 +953,13 @@
    "type": "backend",
    "width": 192,
    "label": "5.5 other skills' rules",
-   "sublabel": "skills/sanction/rules.py:39",
+   "sublabel": "skills/sanction/rules.py:43",
    "sources": [
     {
      "path": "dps/src/dps/skills/sanction/rules.py",
-     "line": 39,
+     "line": 43,
      "label": "sanction terms",
-     "end_line": 87
+     "end_line": 96
     },
     {
      "path": "dps/src/dps/skills/amendment_diff/rules.py",
@@ -960,19 +982,19 @@
    "type": "backend",
    "width": 192,
    "label": "5.6 schedule terms rules",
-   "sublabel": "skills/schedule_terms/rules.py:45",
+   "sublabel": "skills/schedule_terms/rules.py:46",
    "sources": [
     {
      "path": "dps/src/dps/skills/schedule_terms/rules.py",
-     "line": 45,
+     "line": 46,
      "label": "test dates, deadlines, cures",
-     "end_line": 85
+     "end_line": 87
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 499,
+     "line": 661,
      "label": "_extract: the whole order",
-     "end_line": 631
+     "end_line": 798
     }
    ]
   },
@@ -1062,9 +1084,9 @@
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 35,
+     "line": 37,
      "label": "keywords per skill",
-     "end_line": 40
+     "end_line": 42
     }
    ]
   },
@@ -1085,9 +1107,9 @@
     },
     {
      "path": "dps/src/dps/skills/common.py",
-     "line": 206,
+     "line": 222,
      "label": "one read per batch",
-     "end_line": 230
+     "end_line": 265
     }
    ]
   },
@@ -1172,19 +1194,19 @@
    "type": "security",
    "width": 192,
    "label": "7.4 model gateway",
-   "sublabel": "agent/gateway.py:153",
+   "sublabel": "agent/gateway.py:162",
    "sources": [
     {
      "path": "dps/src/dps/agent/gateway.py",
-     "line": 153,
+     "line": 162,
      "label": "routes, retries, breaker, budget",
-     "end_line": 286
+     "end_line": 330
     },
     {
      "path": "dps/src/dps/agent/gateway.py",
-     "line": 245,
+     "line": 289,
      "label": "schema + one repair",
-     "end_line": 260
+     "end_line": 304
     },
     {
      "path": "dps/src/dps/agent/guard.py",
@@ -1201,13 +1223,13 @@
    "type": "cloud",
    "width": 192,
    "label": "7.5 Bank Azure OpenAI",
-   "sublabel": "agent/gateway.py:75",
+   "sublabel": "agent/gateway.py:76",
    "sources": [
     {
      "path": "dps/src/dps/agent/gateway.py",
-     "line": 75,
+     "line": 76,
      "label": "small / strong / vision routes",
-     "end_line": 102
+     "end_line": 103
     }
    ]
   },
@@ -1235,19 +1257,19 @@
    "type": "security",
    "width": 192,
    "label": "8.1 answer matches schema?",
-   "sublabel": "agent/gateway.py:139",
+   "sublabel": "agent/gateway.py:148",
    "sources": [
     {
      "path": "dps/src/dps/agent/gateway.py",
-     "line": 139,
+     "line": 148,
      "label": "JSON only",
-     "end_line": 150
+     "end_line": 159
     },
     {
      "path": "dps/src/dps/agent/gateway.py",
-     "line": 51,
+     "line": 52,
      "label": "MODEL_OUTPUT_INVALID",
-     "end_line": 56
+     "end_line": 57
     }
    ]
   },
@@ -1292,25 +1314,25 @@
    "type": "backend",
    "width": 192,
    "label": "8.4 vote: rules vs agent",
-   "sublabel": "skills/runner.py:314",
+   "sublabel": "skills/runner.py:409",
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 314,
+     "line": 409,
      "label": "per pack",
-     "end_line": 327
+     "end_line": 424
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 281,
+     "line": 376,
      "label": "one to one, by party and basis",
-     "end_line": 311
+     "end_line": 406
     },
     {
      "path": "dps/src/dps/skills/common.py",
-     "line": 263,
+     "line": 298,
      "label": "agree / disagree",
-     "end_line": 286
+     "end_line": 321
     }
    ]
   },
@@ -1321,13 +1343,13 @@
    "type": "backend",
    "width": 192,
    "label": "8.5 agent-only finds",
-   "sublabel": "skills/runner.py:198",
+   "sublabel": "skills/runner.py:285",
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 198,
+     "line": 285,
      "label": "AI_ONLY: to a person",
-     "end_line": 237
+     "end_line": 332
     }
    ]
   },
@@ -1354,9 +1376,9 @@
     },
     {
      "path": "dps/src/dps/skills/covenants/omissions.py",
-     "line": 82,
+     "line": 84,
      "label": "residual agent read",
-     "end_line": 139
+     "end_line": 141
     }
    ]
   },
@@ -1373,7 +1395,7 @@
      "path": "dps/src/dps/skills/covenants/codes.py",
      "line": 34,
      "label": "code on every covenant",
-     "end_line": 75
+     "end_line": 81
     }
    ]
   },
@@ -1384,13 +1406,13 @@
    "type": "backend",
    "width": 192,
    "label": "9.2 who, basis, conditions",
-   "sublabel": "skills/covenants/obligation.py:296",
+   "sublabel": "skills/covenants/obligation.py:305",
    "sources": [
     {
      "path": "dps/src/dps/skills/covenants/obligation.py",
-     "line": 296,
+     "line": 305,
      "label": "scope, conditions, first test date",
-     "end_line": 371
+     "end_line": 381
     }
    ]
   },
@@ -1401,13 +1423,13 @@
    "type": "external",
    "width": 192,
    "label": "9.3 Spring Java check",
-   "sublabel": "skills/runner.py:151",
+   "sublabel": "skills/runner.py:155",
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 151,
+     "line": 155,
      "label": "library match + formula check",
-     "end_line": 191
+     "end_line": 195
     }
    ]
   },
@@ -1434,9 +1456,9 @@
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 78,
+     "line": 82,
      "label": "number in its own quote",
-     "end_line": 97
+     "end_line": 101
     }
    ]
   },
@@ -1447,25 +1469,25 @@
    "type": "backend",
    "width": 192,
    "label": "9.5 confidence + route",
-   "sublabel": "scoring/__init__.py:211",
+   "sublabel": "scoring/__init__.py:246",
    "sources": [
     {
      "path": "dps/src/dps/scoring/__init__.py",
-     "line": 211,
+     "line": 246,
      "label": "per field",
-     "end_line": 236
+     "end_line": 271
     },
     {
      "path": "dps/src/dps/scoring/__init__.py",
-     "line": 62,
+     "line": 90,
      "label": "0.97 minus penalties",
-     "end_line": 95
+     "end_line": 128
     },
     {
      "path": "dps/src/dps/scoring/__init__.py",
-     "line": 193,
+     "line": 228,
      "label": "thresholds, HIGH always reviewed",
-     "end_line": 208
+     "end_line": 243
     }
    ]
   },
@@ -1476,25 +1498,25 @@
    "type": "security",
    "width": 192,
    "label": "9.6 document route",
-   "sublabel": "skills/runner.py:100",
+   "sublabel": "skills/runner.py:104",
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 100,
+     "line": 104,
      "label": "injection, language",
-     "end_line": 118
+     "end_line": 122
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 42,
+     "line": 44,
      "label": "blocking warnings",
-     "end_line": 49
+     "end_line": 51
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 390,
+     "line": 544,
      "label": "route: AUTO_ACCEPTED / NEEDS_REVIEW",
-     "end_line": 483
+     "end_line": 645
     }
    ]
   },
@@ -1505,19 +1527,19 @@
    "type": "database",
    "width": 192,
    "label": "10.1 save the run",
-   "sublabel": "skills/runner.py:716",
+   "sublabel": "skills/runner.py:883",
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 716,
+     "line": 883,
      "label": "dps_run + job status",
-     "end_line": 723
+     "end_line": 891
     },
     {
      "path": "dps/src/dps/analyze/analysis.py",
      "line": 107,
      "label": "save_run",
-     "end_line": 117
+     "end_line": 120
     },
     {
      "path": "dps/src/dps/models.py",
@@ -1579,19 +1601,19 @@
    "type": "external",
    "width": 192,
    "label": "10.4 person reviews",
-   "sublabel": "api/review.py:67",
+   "sublabel": "api/review.py:68",
    "sources": [
     {
      "path": "dps/src/dps/api/review.py",
-     "line": 67,
+     "line": 68,
      "label": "GET review",
-     "end_line": 90
+     "end_line": 91
     },
     {
      "path": "dps/src/dps/api/review.py",
-     "line": 155,
+     "line": 156,
      "label": "CONFIRM / CORRECT / REJECT / ADD",
-     "end_line": 226
+     "end_line": 227
     }
    ]
   },
@@ -1602,19 +1624,19 @@
    "type": "database",
    "width": 192,
    "label": "10.5 after review",
-   "sublabel": "api/review.py:229",
+   "sublabel": "api/review.py:233",
    "sources": [
     {
      "path": "dps/src/dps/api/review.py",
-     "line": 229,
+     "line": 233,
      "label": "checks again",
-     "end_line": 236
+     "end_line": 240
     },
     {
      "path": "dps/src/dps/skills/statement_lines/reader.py",
-     "line": 535,
+     "line": 540,
      "label": "statement figures stored",
-     "end_line": 610
+     "end_line": 615
     }
    ]
   },
@@ -1625,13 +1647,13 @@
    "type": "external",
    "width": 192,
    "label": "10.6 Spring decides",
-   "sublabel": "contracts/dps-jobs-api.yaml:225",
+   "sublabel": "contracts/dps-jobs-api.yaml:227",
    "sources": [
     {
      "path": "contracts/dps-jobs-api.yaml",
-     "line": 225,
+     "line": 227,
      "label": "review contract",
-     "end_line": 260
+     "end_line": 262
     }
    ]
   },
@@ -1681,9 +1703,9 @@
     },
     {
      "path": "dps/src/dps/skills/schedule_terms/rules.py",
-     "line": 45,
+     "line": 46,
      "label": "rules.py: rules (no AI)",
-     "end_line": 85
+     "end_line": 87
     },
     {
      "path": "dps/src/dps/skills/schedule_terms/prompt.md",
@@ -1710,9 +1732,9 @@
     },
     {
      "path": "dps/src/dps/skills/sanction/rules.py",
-     "line": 39,
+     "line": 43,
      "label": "rules.py: rules (no AI)",
-     "end_line": 87
+     "end_line": 96
     },
     {
      "path": "dps/src/dps/skills/sanction/prompt.md",
@@ -1744,10 +1766,10 @@
      "end_line": 124
     },
     {
-     "path": "dps/src/dps/skills/amendment_diff/prompt.md",
-     "line": 1,
-     "label": "prompt.md: the agent's task",
-     "end_line": 5
+     "path": "dps/src/dps/skills/amendment_diff/rules.py",
+     "line": 145,
+     "label": "amended set: skips non-change fields",
+     "end_line": 173
     }
    ]
   },
@@ -1797,9 +1819,9 @@
     },
     {
      "path": "dps/src/dps/skills/certificate/rules.py",
-     "line": 45,
+     "line": 54,
      "label": "rules.py: rules (no AI)",
-     "end_line": 73
+     "end_line": 83
     },
     {
      "path": "dps/src/dps/skills/certificate/prompt.md",
@@ -1828,13 +1850,13 @@
      "path": "dps/src/dps/skills/statement_lines/reader.py",
      "line": 160,
      "label": "the statement reader",
-     "end_line": 482
+     "end_line": 487
     },
     {
-     "path": "dps/src/dps/skills/runner.py",
-     "line": 634,
-     "label": "_statement",
-     "end_line": 652
+     "path": "dps/src/dps/money.py",
+     "line": 147,
+     "label": "Rs. / $: the currency the report names",
+     "end_line": 161
     }
    ]
   },
@@ -1857,7 +1879,7 @@
      "path": "dps/src/dps/extraction/statement_pdf.py",
      "line": 1,
      "label": "table reader (rules)",
-     "end_line": 727
+     "end_line": 733
     }
    ]
   },
@@ -1884,9 +1906,9 @@
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 655,
+     "line": 822,
      "label": "_reconcile",
-     "end_line": 679
+     "end_line": 846
     }
    ]
   },
@@ -1913,9 +1935,9 @@
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 682,
+     "line": 849,
      "label": "_commentary",
-     "end_line": 713
+     "end_line": 880
     }
    ]
   },
@@ -1936,9 +1958,9 @@
     },
     {
      "path": "dps/src/dps/analyze/identify.py",
-     "line": 156,
+     "line": 172,
      "label": "PAN, CIN, account, period",
-     "end_line": 217
+     "end_line": 233
     }
    ]
   },
@@ -2017,14 +2039,14 @@
    "col": 3,
    "type": "database",
    "width": 192,
-   "label": "13.4 dps_ai_call",
+   "label": "13.4 dps_ai_call + trace",
    "sublabel": "models.py:447",
    "sources": [
     {
      "path": "dps/src/dps/models.py",
      "line": 447,
      "label": "every model call",
-     "end_line": 471
+     "end_line": 475
     },
     {
      "path": "dps/src/dps/models.py",
@@ -2063,9 +2085,9 @@
     },
     {
      "path": "dps/src/dps/models.py",
-     "line": 474,
+     "line": 478,
      "label": "document history",
-     "end_line": 488
+     "end_line": 494
     }
    ]
   },
@@ -2095,6 +2117,114 @@
      "line": 352,
      "label": "learned labels",
      "end_line": 370
+    }
+   ]
+  },
+  {
+   "id": "tr_job",
+   "lane": "l14",
+   "col": 0,
+   "type": "backend",
+   "width": 192,
+   "label": "14.1 job trace",
+   "sublabel": "worker.py:209",
+   "sources": [
+    {
+     "path": "dps/src/dps/worker.py",
+     "line": 209,
+     "label": "dps.job: type, ids, status; session = document",
+     "end_line": 217
+    }
+   ]
+  },
+  {
+   "id": "tr_steps",
+   "lane": "l14",
+   "col": 1,
+   "type": "backend",
+   "width": 192,
+   "label": "14.2 step spans",
+   "sublabel": "skills/runner.py:947",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 947,
+     "label": "classify, pack, ledger, enrich, scoring",
+     "end_line": 951
+    }
+   ]
+  },
+  {
+   "id": "tr_read",
+   "lane": "l14",
+   "col": 2,
+   "type": "backend",
+   "width": 192,
+   "label": "14.3 one span per AI read",
+   "sublabel": "skills/common.py:237",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/common.py",
+     "line": 237,
+     "label": "dps.ai.read <pack>: part, pages, proposals",
+     "end_line": 243
+    }
+   ]
+  },
+  {
+   "id": "tr_call",
+   "lane": "l14",
+   "col": 3,
+   "type": "security",
+   "width": 192,
+   "label": "14.4 one span per model call",
+   "sublabel": "agent/gateway.py:237",
+   "sources": [
+    {
+     "path": "dps/src/dps/agent/gateway.py",
+     "line": 237,
+     "label": "chat <deployment>: model, tokens, prompt version",
+     "end_line": 241
+    }
+   ]
+  },
+  {
+   "id": "tr_link",
+   "lane": "l14",
+   "col": 4,
+   "type": "database",
+   "width": 192,
+   "label": "14.5 value to AI call",
+   "sublabel": "skills/runner.py:894",
+   "sources": [
+    {
+     "path": "dps/src/dps/skills/runner.py",
+     "line": 894,
+     "label": "SHOWN/FOUND rows with trace_id + ai_span_id",
+     "end_line": 909
+    }
+   ]
+  },
+  {
+   "id": "langfuse",
+   "lane": "l14",
+   "col": 5,
+   "type": "external",
+   "width": 192,
+   "label": "14.6 Langfuse (traces)",
+   "sublabel": "docker-compose.langfuse.yml",
+   "sources": [
+    {
+     "path": "deploy/observability/docker-compose.langfuse.yml",
+     "line": 1,
+     "label": "Langfuse v4.83.0 on 127.0.0.1, telemetry off",
+     "end_line": 161
+    },
+    {
+     "path": "dps/src/dps/ops/observability.py",
+     "line": 83,
+     "label": "setup: traces only when an endpoint is set",
+     "end_line": 93
     }
    ]
   }
@@ -2466,6 +2596,32 @@
    "from": "publish",
    "to": "decide",
    "variant": "emphasis"
+  },
+  {
+   "id": "trjob-trsteps",
+   "from": "tr_job",
+   "to": "tr_steps"
+  },
+  {
+   "id": "trsteps-trread",
+   "from": "tr_steps",
+   "to": "tr_read"
+  },
+  {
+   "id": "trread-trcall",
+   "from": "tr_read",
+   "to": "tr_call"
+  },
+  {
+   "id": "trcall-trlink",
+   "from": "tr_call",
+   "to": "tr_link"
+  },
+  {
+   "id": "trlink-langfuse",
+   "from": "tr_link",
+   "to": "langfuse",
+   "variant": "dashed"
   }
  ],
  "cards": [
@@ -2474,7 +2630,7 @@
    "title": "Step 0-1 · Spring sends the job (api/jobs.py)",
    "items": [
     "The RM uploads in CTS; Spring stores the file in the DMS (one fixed copy per version) and calls POST /dps/v1/jobs",
-    "api/jobs.py:328 submit_job; api/jobs.py:173 validate_job: job type allowed, format supported, SHA-256 of the stored file equals what Spring sent, EXTRACT_WAIVER without context.baseCovenants refused (BASE_REQUIRED)",
+    "api/jobs.py:329 submit_job; api/jobs.py:173 validate_job: job type allowed, format supported, SHA-256 of the stored file equals what Spring sent, EXTRACT_WAIVER without context.baseCovenants refused (BASE_REQUIRED)",
     "api/jobs.py:283 _input_key = document + context + pipeline version: the same input returns the same job (duplicate: true) = 'extraction in progress'",
     "api/jobs.py:254 create_job, then 202 Accepted with jobId at once; no reading in the API",
     "DB writes: dps_document (id, type, file_name, sha256, size_bytes, object_key, external_version_id, tenant_id, status=QUEUED, uploaded_by), dps_document_cp_link (document_id, cp_id), dps_job (id, document_id, job_type, flow=SKILL_PACK, status=QUEUED, pool, priority, due_at, request_json, input_key, idempotency_key, correlation_id, pipeline_version, rollout), dps_event_feed (seq, type=dps.job.accepted, job_id, payload_json)"
@@ -2487,7 +2643,7 @@
     "worker.py:126 run_once: the worker polls dps_job; empty queue = sleep 2 s",
     "jobs.py:85 claim: one UPDATE 'RUNNING, locked_by me, locked_until now + lease, attempts + 1, only if still QUEUED' so two workers never take one job",
     "jobs.py:190 renew_lease (heartbeat) and jobs.py:54 guard_attempt: a stale worker cannot overwrite",
-    "worker.py:218 _run: one pipeline, every reading job has flow SKILL_PACK (worker.py:37); ANALYZE is the classify-only job",
+    "worker.py:229 _run: one pipeline, every reading job has flow SKILL_PACK (worker.py:37); ANALYZE is the classify-only job",
     "Errors: Spring or storage down = RETRY_WAIT with a growing wait; a bug = retry once then DEAD; a slow scan = moved to the HEAVY pool",
     "DB: dps_job (status QUEUED -> RUNNING, locked_by, locked_until, attempts, started_at, steps_json, current_step), dps_job_attempt (job_id, attempt_no, worker_id, started_at, ended_at, outcome, error_code)"
    ]
@@ -2496,10 +2652,10 @@
    "dot": "rose",
    "title": "Step 3 · Extraction: file to page model (ingest/, parse/)",
    "items": [
-    "ingest/pipeline.py:48 read the DMS version; the SHA-256 is checked again (INTEGRITY_MISMATCH)",
-    "ingest/inspect.py:63 inspect: real type (TYPE_SPOOFED), encrypted, macros, zip bombs, too many pages; flags: tracked changes, hidden sheets, repaired PDF",
-    "parse/sandbox.py:157 parse in a child process with no network, memory and time limits",
-    "parse/page_model.py:30 build: PDF text layer first (parse/engine.py:127), local RapidOCR only for pages without text, Docling in the HEAVY pool; XLSX/XLS/CSV rows; DOCX paragraphs",
+    "ingest/pipeline.py:66 read the DMS version; the SHA-256 is checked again (INTEGRITY_MISMATCH)",
+    "ingest/inspect.py:65 inspect: real type (TYPE_SPOOFED), encrypted, macros, zip bombs, too many pages; flags: tracked changes, hidden sheets, repaired PDF",
+    "parse/sandbox.py:167 parse in a child process with no network, memory and time limits",
+    "parse/page_model.py:30 build: PDF text layer first (parse/engine.py:151), local RapidOCR only for pages without text, Docling in the HEAVY pool; XLSX/XLS/CSV rows; DOCX paragraphs",
     "Output (page model): for every page no, text, lines with boxes, tables, sourceMethod (TEXT / OCR / BLANK) and quality 0-1",
     "DB + files: derived/<tenant>/<version>/page-model/<pipeline>/page-model.json.gz written once; dps_artifact (version_id, kind=PAGE_MODEL, path, sha256, bytes, source_sha256, pipeline_version); reused for the same bytes"
    ]
@@ -2508,10 +2664,10 @@
    "dot": "violet",
    "title": "Step 4 · Which skill runs (skills/runner.py, skills/__init__.py, analyze/classify.py)",
    "items": [
-    "flows/skill_job.py:27 SkillJobFlow: one CrewAI Flow per job, two steps: run_skills, save_result",
-    "skills/runner.py:812 run_job: ONBOARD classifies first; every other job type picks its pack from pack.yaml job_types (skills/__init__.py:83)",
+    "flows/skill_job.py:28 SkillJobFlow: one CrewAI Flow per job, two steps: run_skills, save_result",
+    "skills/runner.py:1006 run_job: ONBOARD classifies first; every other job type picks its pack from pack.yaml job_types (skills/__init__.py:83)",
     "Job type -> skill: EXTRACT_AGREEMENT -> covenants · EXTRACT_STATEMENT -> statement_lines · EXTRACT_SANCTION -> sanction · EXTRACT_AMENDMENT -> amendment_diff · EXTRACT_WAIVER -> waiver · EXTRACT_CERTIFICATE -> certificate · RECONCILE_SET -> reconcile_set · DRAFT_COMMENTARY -> commentary",
-    "ONBOARD: analyze/classify.py:333 classify (rules score pages 1-2; sure at 0.8 with a 0.3 lead; the agent gives a second opinion with quotes; disagreement = TYPE_DISPUTED)",
+    "ONBOARD: analyze/classify.py:382 classify (rules score pages 1-2; sure at 0.8 with a 0.3 lead; the agent gives a second opinion with quotes; disagreement = TYPE_DISPUTED)",
     "Document type -> skill (ONBOARD_PACKS): LOAN_AGREEMENT, GUARANTEE, AMENDED_AND_RESTATED -> covenants · SANCTION_LETTER -> sanction · AMENDMENT -> amendment_diff · WAIVER_CONSENT -> waiver · anything else -> TYPE_NOT_ONBOARDING",
     "covenants, sanction and amendment_diff also run schedule_terms inside the same job"
    ]
@@ -2521,10 +2677,10 @@
    "title": "Step 5 · Rules first, no AI (skills/<pack>/rules.py)",
    "items": [
     "Every pack reads with its rules before any model: deterministic, free, and the base the agent is compared against",
-    "covenants: extraction/agreement.py:934 numbered clauses, metric aliases (DSCR, ICR, Debt/EBITDA ...), 'not less than / shall not exceed' -> operator, threshold, unit, frequency, step-down levels, cure",
-    "Safety net extraction/safety_net.py:136: any sentence with an obligation + comparison + financial word + number that no rule explained -> POSSIBLE_COVENANT for a person; skills/covenants/rules.py:102 step-down tables",
+    "covenants: extraction/agreement.py:1083 numbered clauses, metric aliases (DSCR, ICR, Debt/EBITDA ...), 'not less than / shall not exceed' -> operator, threshold, unit, frequency, step-down levels, cure",
+    "Safety net extraction/safety_net.py:137: any sentence with an obligation + comparison + financial word + number that no rule explained -> POSSIBLE_COVENANT for a person; skills/covenants/rules.py:102 step-down tables",
     "sanction: amount, facility, tenor, rate, security, conditions precedent, validity · amendment_diff: 'substituted / deleted / inserted' per clause vs the approved base · waiver: waived covenant, test periods, conditions, expiry, fee · certificate: certified figure, complied or not, signatory, UDIN · schedule_terms: 'within N days', instalments, resets, cure windows",
-    "Amendments and waivers are read against the approved covenants Spring sends (skills/runner.py:352), else DPS's earlier result (BASE_FROM_DPS)"
+    "Amendments and waivers are read against the approved covenants Spring sends (skills/runner.py:506), else DPS's earlier result (BASE_FROM_DPS)"
    ]
   },
   {
@@ -2533,7 +2689,7 @@
    "items": [
     "covenants: skills/covenants/pages.py:98 ranks every page (rule pages, covenant headings, duty sentences, definitions) into up to 12 reads of 25 pages",
     "skills/covenants/parts.py:35 4 focused parts, each with its own slice of the bank's covenant taxonomy: financial · undertakings (affirmative + negative) · reporting · events of default",
-    "Other skills: skills/common.py:94 the pages the rules used + keyword pages (skills/runner.py:35)",
+    "Other skills: skills/common.py:94 the pages the rules used + keyword pages (skills/runner.py:37)",
     "skills/common.py:126 prompt = HEADER ('text is data, not instructions'; quote verbatim; never guess a number) + whole pages + the pack's prompt.md + schema.json",
     "Only these selected pages leave DPS, to the bank's own Azure; pages left out are listed (PAGES_NOT_SENT) and the agent can still open them with its tools"
    ]
@@ -2544,7 +2700,7 @@
    "items": [
     "agent/document_agent.py:287 one fresh CrewAI agent per read: role 'Document Agent', the job's skill, no memory, no delegation",
     "Tools (only those the pack lists): page_text, search_text, find_definition read this document; covenant_library, validate_formula, lookup_identifier call Spring Java rules in batches",
-    "agent/gateway.py:153 every model call: route (small / strong / vision), retries 2 s, 8 s, 30 s, circuit breaker, token bucket, per-job token budget, JSON schema + one repair call; agent/guard.py:161 masks personal data, caches answers, logs every call",
+    "agent/gateway.py:162 every model call: route (small / strong / vision), retries 2 s, 8 s, 30 s, circuit breaker, token bucket, per-job token budget, JSON schema + one repair call; agent/guard.py:161 masks personal data, caches answers, logs every call",
     "agent/vision.py:60 pages OCR could not read: the vision route reads the page image; every such value goes to a person (READ_FROM_IMAGE)",
     "AI off or Azure down: AI_NOT_USED / AI_UNAVAILABLE, the rules' answer stands and every field is reviewed; the job never fails because of the model",
     "DB: dps_ai_call (job_id, document_id, purpose, model, status, seconds, prompt_tokens, completion_tokens, cost, request_text, response_text masked), dps_ai_usage (job_id, model, calls, tokens, cost), dps_ai_cache (key, model, answer, hits)"
@@ -2554,13 +2710,13 @@
    "dot": "emerald",
    "title": "Step 8 · Rules vs agent: how the two readings are combined (skills/runner.py, skills/common.py)",
    "items": [
-    "1. Schema: the answer must be JSON in the skill's schema (agent/gateway.py:139); else one repair call, then MODEL_OUTPUT_INVALID",
+    "1. Schema: the answer must be JSON in the skill's schema (agent/gateway.py:148); else one repair call, then MODEL_OUTPUT_INVALID",
     "2. Grounding skills/common.py:53: every agent item must quote text that is really on the page it names; ungrounded items are dropped (AI_UNGROUNDED)",
-    "3. Vote skills/common.py:263: rules and agent read the same value -> method RULES+AI_CONFIRMED, confidence at least 0.95",
+    "3. Vote skills/common.py:298: rules and agent read the same value -> method RULES+AI_CONFIRMED, confidence at least 0.95",
     "4. They read different values -> MODELS_DISAGREE: the field keeps the rules' value, both readings are shown, status NEEDS_REVIEW (a person decides)",
-    "5. Only the agent found it -> skills/runner.py:198 method AI, issue AI_ONLY, NEEDS_REVIEW (every covenant and high-risk field)",
+    "5. Only the agent found it -> skills/runner.py:285 method AI, issue AI_ONLY, NEEDS_REVIEW (every covenant and high-risk field)",
     "6. Only the rules found it -> method RULES; the scorer lowers confidence (AI_MISSED reason) and HIGH-risk fields are reviewed anyway",
-    "7. Covenants: matched one to one by taxonomy code, then party (Borrower vs Guarantor), basis (standalone vs consolidated), page (skills/runner.py:281)",
+    "7. Covenants: matched one to one by taxonomy code, then party (Borrower vs Guarantor), basis (standalone vs consolidated), page (skills/runner.py:376)",
     "8. Ledger skills/covenants/ledger.py:205: every duty sentence of the whole document ends FINDING, COVERED, NOT_A_COVENANT (agent's residual read) or UNRESOLVED -> review item. Nothing is missed silently"
    ]
   },
@@ -2568,21 +2724,21 @@
    "dot": "rose",
    "title": "Step 9 · Checks and confidence (codes.py, obligation.py, scoring/)",
    "items": [
-    "skills/covenants/codes.py:34 taxonomy code on every covenant; skills/covenants/obligation.py:296 scope (obligor, basis, facility), conditions (springing), first test date, cure, baskets: unknown company or a condition -> review",
-    "skills/runner.py:151 covenant library match and Java formula check (FORMULA_INVALID, SPRING_UNAVAILABLE -> review)",
-    "Pack checks: direction (OPERATOR_UNEXPECTED, DIRECTION_MISMATCH), step-down order, skills/runner.py:78 the number must be in its own quote (NUMBER_NOT_IN_QUOTE)",
-    "scoring/__init__.py:62 confidence = 0.97 minus penalties (not grounded 0.45, disagree 0.35, failed check 0.30, poor OCR 0.20 ...); scoring/__init__.py:193 HIGH risk always reviewed, MEDIUM auto at 0.95, LOW at 0.90, 3% sampled for QA",
-    "skills/runner.py:100 prompt injection, other language; blocking warnings (skills/runner.py:42) send the whole document to review; ASSISTED rollout reviews every field"
+    "skills/covenants/codes.py:34 taxonomy code on every covenant; skills/covenants/obligation.py:305 scope (obligor, basis, facility), conditions (springing), first test date, cure, baskets: unknown company or a condition -> review",
+    "skills/runner.py:155 covenant library match and Java formula check (FORMULA_INVALID, SPRING_UNAVAILABLE -> review)",
+    "Pack checks: direction (OPERATOR_UNEXPECTED, DIRECTION_MISMATCH), step-down order, skills/runner.py:82 the number must be in its own quote (NUMBER_NOT_IN_QUOTE)",
+    "scoring/__init__.py:85 confidence = 0.97 minus penalties (not grounded 0.45, disagree 0.35, failed check 0.30, poor OCR 0.20 ...); scoring/__init__.py:228 HIGH risk always reviewed, MEDIUM auto at 0.95, LOW at 0.90, 3% sampled for QA",
+    "skills/runner.py:104 prompt injection, other language; blocking warnings (skills/runner.py:44) send the whole document to review; ASSISTED rollout reviews every field"
    ]
   },
   {
    "dot": "slate",
    "title": "Step 10 · Result, event, review (runner.py, jobs.py, feed.py, api/review.py)",
    "items": [
-    "skills/runner.py:716 save the result: dps_run (job_id, run_no=1, status, trigger=SUBMIT, result_json = dps.result/1.0)",
+    "skills/runner.py:883 save the result: dps_run (job_id, run_no=1, status, trigger=SUBMIT, result_json = dps.result/1.0)",
     "jobs.py:222 dps_job (status DONE or NEEDS_REVIEW, finished_at, locked_by cleared), dps_job_attempt (ended_at, outcome) and dps_event_feed (dps.extraction.completed / needs_review, payload resultUrl, skillPack, fields)",
     "Spring reads GET /dps/v1/events?after=seq (or DPS pushes them) and pulls api/jobs.py:368 GET /jobs/{id}/result",
-    "api/review.py:155 a person CONFIRMs, CORRECTs, REJECTs or ADDs: dps_review_decision (job_id, run_no, field_id, reviewer, action, old_value_json, new_value_json, reason_code), a new dps_run (trigger=REVIEW), dps_golden_candidate for corrections, dps_label_memory for statement labels",
+    "api/review.py:156 a person CONFIRMs, CORRECTs, REJECTs or ADDs: dps_review_decision (job_id, run_no, field_id, reviewer, action, old_value_json, new_value_json, reason_code), a new dps_run (trigger=REVIEW), dps_golden_candidate for corrections, dps_label_memory for statement labels",
     "When nothing is left to review: job DONE + event dps.extraction.completed; statements: the approved figures go to dps_statement_value (cp_id, key, value, unit, currency, as_of_date, period_months, document_id, page, cell)",
     "DPS proposes; Spring and a person decide. DPS never approves a covenant or a compliance outcome"
    ]
@@ -2606,11 +2762,21 @@
    "dot": "cyan",
    "title": "Skills with their own path (skills/runner.py)",
    "items": [
-    "statement_lines skills/runner.py:634: the statement reader: table reader for PDFs (positions, columns, periods), Excel/CSV rows, label memory per borrower, currency + bank FX rate, units, fiscal year, cycle checks; optional AI second reader (confirmed / SECOND_READER_DIFFERS / suggestion); nothing stored until review",
-    "reconcile_set skills/runner.py:655: no document is read again; applies each document's latest run in date order (restated replaces, amendment changes, waiver attaches)",
-    "commentary skills/runner.py:682: draft text from the outcome manifest; every number must exist in it",
+    "statement_lines skills/runner.py:801: the statement reader: table reader for PDFs (positions, columns, periods), Excel/CSV rows, label memory per borrower, currency + bank FX rate, units, fiscal year, cycle checks; optional AI second reader (confirmed / SECOND_READER_DIFFERS / suggestion); nothing stored until review",
+    "reconcile_set skills/runner.py:822: no document is read again; applies each document's latest run in date order (restated replaces, amendment changes, waiver attaches)",
+    "commentary skills/runner.py:849: draft text from the outcome manifest; every number must exist in it",
     "ANALYZE analyze/analysis.py:26: only the document type and identifiers (PAN, CIN, GSTIN, account, period) matched in Spring"
    ]
+  },
+  {
+   "title": "Step 14 · Traces and audit links (ops/observability.py, agent/gateway.py, skills/runner.py)",
+   "items": [
+    "Every job is one OpenTelemetry trace; each step and each model call is a span",
+    "Langfuse (open source) shows the traces on the laptop: 127.0.0.1, telemetry off; the bank can send them to its own platform",
+    "dps_ai_call has trace_id + span_id; each AI value writes a dps_trace_event row with its AI read's span id",
+    "No document text, prompt or answer in a trace unless DPS_AI_TRACE_TEXT is on (masked)"
+   ],
+   "dot": "violet"
   }
  ]
 }

@@ -10,7 +10,7 @@
    "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
    "provider": "github",
    "link_mode": "web",
-   "revision": "1fa0723bb3ca2a401924f30f80edf7be2511740e"
+   "revision": "6d0ff8db9dd8e8d5c2749db5f96b2d8d3ed10607"
   }
  },
  "participants": [
@@ -82,7 +82,7 @@
     {
      "path": "dps/src/dps/worker.py",
      "line": 202,
-     "end_line": 216,
+     "end_line": 227,
      "label": "_process"
     }
    ]
@@ -95,14 +95,14 @@
    "sources": [
     {
      "path": "dps/src/dps/ingest/pipeline.py",
-     "line": 56,
-     "end_line": 84,
+     "line": 74,
+     "end_line": 109,
      "label": "page_model"
     },
     {
      "path": "dps/src/dps/parse/sandbox.py",
-     "line": 157,
-     "end_line": 186,
+     "line": 167,
+     "end_line": 196,
      "label": "run (no network)"
     }
    ]
@@ -115,20 +115,20 @@
    "sources": [
     {
      "path": "dps/src/dps/flows/skill_job.py",
-     "line": 27,
-     "end_line": 49,
+     "line": 28,
+     "end_line": 50,
      "label": "SkillJobFlow"
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 750,
-     "end_line": 809,
+     "line": 938,
+     "end_line": 1003,
      "label": "run_onboard"
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 390,
-     "end_line": 483,
+     "line": 544,
+     "end_line": 645,
      "label": "_extract"
     }
    ]
@@ -147,8 +147,8 @@
     },
     {
      "path": "dps/src/dps/agent/gateway.py",
-     "line": 245,
-     "end_line": 260,
+     "line": 289,
+     "end_line": 304,
      "label": "call_json"
     }
    ]
@@ -198,7 +198,7 @@
    "y": 175,
    "label": "POST /dps/v1/jobs ONBOARD",
    "variant": "emphasis",
-   "note": "api/jobs.py:312 submit_job; same input queued = duplicate (in progress)"
+   "note": "api/jobs.py:329 submit_job; same input queued = duplicate (in progress)"
   },
   {
    "id": "insert",
@@ -207,7 +207,7 @@
    "y": 267,
    "label": "insert job + accepted event",
    "variant": "emphasis",
-   "note": "api/jobs.py:240 create_job; feed.py:39 event"
+   "note": "api/jobs.py:254 create_job; feed.py:40 event"
   },
   {
    "id": "accepted",
@@ -224,7 +224,7 @@
    "y": 393,
    "label": "poll + claim",
    "variant": "emphasis",
-   "note": "worker.py:131 run_once; jobs.py:85 claim, lease"
+   "note": "worker.py:126 run_once; jobs.py:85 claim, lease"
   },
   {
    "id": "read",
@@ -233,7 +233,7 @@
    "y": 485,
    "label": "read, inspect, parse",
    "variant": "security",
-   "note": "ingest/pipeline.py:56; parse/sandbox.py:157 no network"
+   "note": "ingest/pipeline.py:74; parse/sandbox.py:167 no network"
   },
   {
    "id": "model",
@@ -250,7 +250,7 @@
    "y": 611,
    "label": "kickoff CrewAI Flow",
    "variant": "emphasis",
-   "note": "flows/skill_job.py:27 → skills/runner.py:611"
+   "note": "flows/skill_job.py:28 → skills/runner.py:1006"
   },
   {
    "id": "classify",
@@ -258,7 +258,7 @@
    "to": "agent",
    "y": 703,
    "label": "AI 1 classify (only if rules unsure)",
-   "note": "analyze/classify.py:291 rules first"
+   "note": "analyze/classify.py:382 rules first"
   },
   {
    "id": "type",
@@ -275,7 +275,7 @@
    "y": 829,
    "label": "AI 2 covenants: 4 focused reads",
    "variant": "emphasis",
-   "note": "covenants/rules.py:61, pages.py:98, parts.py:75"
+   "note": "covenants/rules.py:84, pages.py:98, parts.py:75"
   },
   {
    "id": "java",
@@ -301,7 +301,7 @@
    "y": 1047,
    "label": "grounded proposals",
    "variant": "return",
-   "note": "skills/common.py:53 grounded; runner.py:223 vote"
+   "note": "skills/common.py:53 grounded; runner.py:409 vote"
   },
   {
    "id": "residual",
@@ -309,7 +309,7 @@
    "to": "agent",
    "y": 1139,
    "label": "second read: unexplained duties",
-   "note": "covenants/ledger.py:146; omissions.py:82"
+   "note": "covenants/ledger.py:168; omissions.py:84"
   },
   {
    "id": "decisions",
@@ -326,7 +326,7 @@
    "y": 1265,
    "label": "save dps_run + needs_review event",
    "variant": "emphasis",
-   "note": "schedule terms, codes, score; runner.py:557 finish"
+   "note": "schedule terms, codes, score; runner.py:883 finish; the job trace goes to Langfuse"
   },
   {
    "id": "pull",
