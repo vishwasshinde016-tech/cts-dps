@@ -57,10 +57,32 @@ def direction_issue(metric: str | None, operator: str | None) -> str | None:
     return None
 
 
+# "If the DSCR is less than 1.20, the Borrower shall cure ...": the sentence states the breach, so the covenant is the
+# opposite (DSCR >= 1.20). CTS review, 23 Nov 2026: the bare "less than" rule read it as DSCR < 1.20.
+BREACH_WORDING = re.compile(r"^\s*(?:\(?[a-z0-9]{1,4}[.)]\s*)?(?:if|in\s+the\s+event\s+(?:that\s+)?|where|should|"
+                            r"in\s+case)\b", re.I)
+OPPOSITE = {"<": ">=", "<=": ">", ">": "<=", ">=": "<"}
+
+
+def breach_to_covenant(f: dict) -> None:
+    """A covenant read from breach wording gets the opposite operator, and a person checks it."""
+    v = f.get("value") or {}
+    quote = (f.get("source") or {}).get("quote") or ""
+    op = v.get("operator")
+    if op in OPPOSITE and BREACH_WORDING.search(quote) and not any(
+            i.get("code") == "BREACH_WORDING" for i in f.get("issues") or []):
+        v["operator"] = OPPOSITE[op]
+        f.setdefault("issues", []).append(issue(
+            "BREACH_WORDING", f"the clause states when it is breached ({op}); the covenant is {OPPOSITE[op]}"))
+        f["status"] = "NEEDS_REVIEW"
+
+
 def checks_for(fields: list[dict]) -> list[dict]:
     warnings = []
     for f in fields:
         v = f["value"]
+        if f.get("group") == "FINANCIAL_COVENANT":
+            breach_to_covenant(f)
         unusual = direction_issue(v.get("metric"), v.get("operator"))
         if unusual and not any(i.get("code") == "OPERATOR_UNEXPECTED" for i in f.get("issues") or []):
             f["issues"].append(issue("OPERATOR_UNEXPECTED", unusual))

@@ -181,12 +181,18 @@
                 "null"
               ]
             },
+            "name": { "type": ["string", "null"], "description": "The library covenant's name" },
+            "candidates": {
+              "type": "array",
+              "description": "When several library covenants fit equally (two masters on the same measure): the choices, for a person (LIBRARY_AMBIGUOUS); covenantMasterId is then null",
+              "items": { "type": "object", "properties": { "covenantMasterId": { "type": "string" }, "name": { "type": ["string", "null"] } } }
+            },
             "expression": {
               "type": [
                 "string",
                 "null"
               ],
-              "description": "Condition in the bank app's formula DSL"
+              "description": "The library covenant's own (master) condition, for comparison only. The document's condition is value.expression"
             }
           }
         },
@@ -493,7 +499,18 @@
             "string",
             "null"
           ],
-          "description": "Condition in the bank app's formula DSL"
+          "description": "The document's covenant as a condition in the bank app's formula language: MEASURE OP NUMBER with the app's measure code (from the library match), the document's operator and threshold, '==' for equality, plain decimals, amounts in INR crore, percentages as points. Null when it cannot be written (see mapping.reasons)"
+        },
+        "mapping": {
+          "type": "object",
+          "description": "Whether expression is the whole covenant. mappable false: apply it only after a person has read the reasons (a condition, a qualifier, another obligor, a step-down, an amount in another currency, a formula the app refused)",
+          "properties": {
+            "mappable": { "type": "boolean" },
+            "reasons": { "type": "array", "items": { "type": "string" } },
+            "notes": { "type": "array", "items": { "type": "string" } },
+            "measure": { "type": ["string", "null"], "description": "The measure code used in expression" },
+            "unit": { "type": ["string", "null"], "description": "INR_CR when an amount was converted to INR crore" }
+          }
         },
         "schedule": {
           "type": [

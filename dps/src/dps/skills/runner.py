@@ -144,54 +144,26 @@ def page_accounting(pages: list[dict]) -> dict:
             "readable": counts["PARSED"] + counts["OCR"], "accounted": len(pages), "notParsed": listed[:200]}
 
 
-def _expression(value: dict) -> str | None:
-    metric, op, threshold = value.get("metric"), value.get("operator"), value.get("threshold")
-    if not metric or not op or threshold is None:
-        return None
-    number = f"{threshold:g}" if isinstance(threshold, float) else str(threshold)
-    return f"{metric} {op} {number}"
+def verify_with_spring(fields: list[dict], tools, correlation_id: str | None, as_of=None) -> list[dict]:
+    """Covenant fields: library match, the condition in the bank app's formula language and its validation in Java
+    (batched, one call each). Runs after the taxonomy stamp and the scope enrichment, so the formula is built on the
+    final metric and its mapping sees conditions and scope (CTS integration, 23 Nov 2026; see skills/app_formula)."""
+    from dps.skills import app_formula
 
-
-def verify_with_spring(fields: list[dict], tools, correlation_id: str | None) -> list[dict]:
-    """Covenant fields: library match and formula validation in Java (batched, one call each)."""
     warnings: list[dict] = []
-    covenants = [f for f in fields if f["group"] in COVENANT_GROUPS and f["value"].get("metric")]
-    if tools is None or not covenants:
+    covenants = [f for f in fields if f["group"] in COVENANT_GROUPS and isinstance(f.get("value"), dict)]
+    if not covenants:
         return warnings
-    library, fresh = tools.covenant_library()
-    if library:
-        index = {}
-        for item in library:
-            for key in [item.get("name", ""), *item.get("aliases", []), *item.get("metricKeys", [])]:
-                if key:
-                    index.setdefault(re.sub(r"[^a-z0-9]", "", key.lower()), item)
-        for f in covenants:
-            hit = index.get(re.sub(r"[^a-z0-9]", "", f["value"]["metric"].lower())) or index.get(
-                re.sub(r"[^a-z0-9]", "", f["name"].lower()))
-            if hit:
-                f["libraryMatch"] = {"covenantMasterId": hit["id"], "expression": hit.get("expression")}
-    elif not fresh:
-        warnings.append(issue("SPRING_UNAVAILABLE", "covenant library not reached; library matches missing"))
-    items = []
-    for f in covenants:
-        expr = (f.get("libraryMatch") or {}).get("expression") or _expression(f["value"])
-        if expr:
-            f["value"]["expression"] = f["value"].get("expression") or expr
-            items.append((f["id"], expr))
-    if not items:
+    library: list = []
+    if tools is not None:
+        library, fresh = tools.covenant_library()
+        if not library and not fresh:
+            warnings.append(issue("SPRING_UNAVAILABLE", "covenant library not reached; library matches missing"))
+    app_formula.apply(covenants, library, as_of=as_of)
+    items = [(f["id"], f["value"]["expression"]) for f in covenants if f["value"].get("expression")]
+    if tools is None or not items:
         return warnings
-    checks = tools.validate_formulas(items, correlation_id)
-    for f in covenants:
-        c = checks.get(f["id"])
-        if c is None:
-            continue
-        if not c.available:
-            f["issues"].append(issue("SPRING_UNAVAILABLE", "formula not validated in Core"))
-            f["status"] = "NEEDS_REVIEW"
-        elif not c.valid:
-            message = "; ".join(str(e.get("message") or e.get("code")) for e in c.errors)[:300]
-            f["issues"].append(issue("FORMULA_INVALID", message or "Core rejected the formula"))
-            f["status"] = "NEEDS_REVIEW"
+    app_formula.record_checks(covenants, tools.validate_formulas(items, correlation_id))
     return warnings
 
 
@@ -249,6 +221,15 @@ def _generic(f: dict) -> bool:
     return not code or code.endswith("OTHER")
 
 
+def _second_covenant(f: dict, keep: dict) -> bool:
+    """A reading of the same sentence that is another covenant: a specific code different from the kept one, with a
+    threshold of its own (CTS integration review, 23 Nov 2026: such a reading was merged away with its threshold)."""
+    if _generic(f) or _generic(keep) or _code_of(f) == _code_of(keep):
+        return False
+    mine, theirs = (f.get("value") or {}).get("threshold"), (keep.get("value") or {}).get("threshold")
+    return isinstance(mine, (int, float)) and not isinstance(mine, bool) and mine != theirs
+
+
 def merge_same_sentence(fields: list[dict]) -> list[dict]:
     """One sentence, one finding (review of 22 Nov 2026: 24 sentences gave 50 fields, mostly two AI parts reading the
     same sentence, one with a specific code and one with *_OTHER). Fields with the same page and quote are merged
@@ -271,6 +252,8 @@ def merge_same_sentence(fields: list[dict]) -> list[dict]:
                 continue
             if (f["group"] == "EVENT_OF_DEFAULT") != (keep["group"] == "EVENT_OF_DEFAULT"):
                 continue
+            if _second_covenant(f, keep):
+                continue  # "DSCR of at least 1.25 and Leverage of at most 3.5": two covenants, both kept
             dropped.add(id(f))
             code = _code_of(f)
             if code and code != _code_of(keep) and code not in merged:
@@ -302,9 +285,24 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
             value = {"covenant": value.get("covenant", p["name"]), "figure": value.get("figure"), **value}
         # the contract's covenant value has these keys on every covenant (22 Nov 2026), also on an amendment's
         # covenants the agent read (bulk run: Holly's six broke result.json, "'expression' is a required property")
+        unread_op = None
         if group in COVENANT_GROUPS:
+            from dps.skills.app_formula import normalise_operator
+
             value = {**{k: None for k in COVENANT_KEYS}, **value,
                      "metric": value.get("metric") or p.get("_written") or p["name"]}
+            # the agent's operator in the contract's terms ("≥", "minimum" -> ">="); anything else is not an operator
+            raw_op = value.get("operator")
+            value["operator"] = normalise_operator(raw_op)
+            if raw_op is not None and value["operator"] is None:
+                unread_op = str(raw_op)[:40]
+            threshold = value.get("threshold")
+            if isinstance(threshold, str):  # "1.25x", "3.50:1" -> 1.25, 3.5
+                m = re.search(r"-?\d+(?:\.\d+)?", threshold.replace(",", ""))
+                value["threshold"] = float(m.group(0)) if m else None
+            elif isinstance(threshold, bool):
+                value["threshold"] = None
+            value["expression"] = None  # always built by DPS in the app's formula language (app_formula)
         if group == "WAIVER":  # the agent's reading in the waiver shape; the target is matched by a person
             value = {"kind": value.get("kind") or "WAIVER",
                      "target": {"metric": value.get("metric"), "clause": value.get("clause"),
@@ -319,6 +317,10 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
                        key=method.lower() + (f"-{p['_residual']}" if p.get("_residual") else ""))
         if p.get("_span"):  # the agent read's trace span; moved into dps_trace_event by finish(), never sent to Spring
             f["_aiSpan"] = p["_span"]
+        if unread_op:
+            f["status"] = "NEEDS_REVIEW"
+            f["issues"].append(issue("OPERATOR_UNREAD", f"the Document Agent wrote '{unread_op}', which is not an "
+                                                        "operator; set it from the quote"))
         if group == "SCHEDULE_TERM" and value["kind"] == "OTHER":
             f["status"] = "NEEDS_REVIEW"
             f["issues"].append(issue("AI_ONLY", "found by the Document Agent only; its kind is not one the bank knows"))
@@ -586,6 +588,11 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
 
         with obs.span("dps.enrich", **{"dps.fields": len(fields)}):
             enrich(fields, (model or {}).get("pages"), ctx)  # WP6: company, facility, conditions, first test date
+    if pack.name not in ("commentary", "reconcile_set", "statement_lines"):
+        from dps.skills.app_formula import parse_date
+
+        # library match + the bank app's formula, on the final metric and scope (CTS integration, 23 Nov 2026)
+        warnings += verify_with_spring(fields, tools, job.correlation_id, as_of=parse_date(ctx.get("asOfDate")))
     if fields and not built:  # phase 5: every field's confidence from the scorer, routed by the pack's thresholds
         from dps.scoring import Scorer
 
@@ -763,7 +770,7 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     if page_note and page_note["notSent"] and gateway is not None:
         warnings.append(issue("PAGES_NOT_SENT", "duty pages not in the agent's prompt (it could open them with its "
                                                 "tools): " + ", ".join(map(str, page_note["notSent"][:30]))))
-    warnings += verify_with_spring(fields, tools, job.correlation_id)
+    # the library match and the app formula run in run(), after the taxonomy stamp and the scope enrichment
     warnings += pack.checks(fields, ctx)
     extra = {}
     if entries is not None:

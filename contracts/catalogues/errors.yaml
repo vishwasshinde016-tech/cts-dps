@@ -150,5 +150,8 @@ errors:
   - { code: PARSE_TIMEOUT, class: RESOURCE, http: null, retry: false, message: "The file is too large or complex. Split it and upload the parts." }
   - { code: OUT_OF_MEMORY, class: RESOURCE, http: null, retry: false, message: "The file is too large or complex. Split it and upload the parts." }
   - { code: PARSER_CRASH, class: RESOURCE, http: null, retry: false, message: "The file could not be read. Support has been informed." }
+  - { code: OPERATOR_UNREAD, class: QUALITY, http: null, retry: false, message: "The reader wrote something that is not an operator; set it from the quote." }
+  - { code: BREACH_WORDING, class: QUALITY, http: null, retry: false, message: "The clause states when the covenant is breached; the covenant is the opposite. Check the operator." }
+  - { code: LIBRARY_AMBIGUOUS, class: QUALITY, http: null, retry: false, message: "Several library covenants fit this covenant equally; a person picks one." }
   # --- internal ---
   - { code: INTERNAL_ERROR, class: INTERNAL, http: 500, retry: true, message: "Processing failed; support has been informed." }
