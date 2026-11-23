@@ -194,8 +194,10 @@ def verify_with_spring(fields: list[dict], tools, correlation_id: str | None) ->
     return warnings
 
 
+# An amendment's covenants the agent alone read are possible covenants, as an agreement's are: they were all filed as
+# FINANCIAL_COVENANT, so "Personal Data processing procedures" was a financial covenant (bulk run, 22 Nov 2026).
 AGENT_GROUPS = {"sanction": "AGREEMENT_TERM", "certificate": "CERTIFIED_FIGURE", "schedule_terms": "SCHEDULE_TERM",
-                "amendment_diff": "FINANCIAL_COVENANT", "covenants": "POSSIBLE_COVENANT", "waiver": "WAIVER"}
+                "amendment_diff": "POSSIBLE_COVENANT", "covenants": "POSSIBLE_COVENANT", "waiver": "WAIVER"}
 
 
 COVENANT_KEYS = ("metric", "operator", "threshold", "unit", "expression")
@@ -297,7 +299,9 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
             value = _schedule_value(value, p["name"])
         if group == "CERTIFIED_FIGURE":
             value = {"covenant": value.get("covenant", p["name"]), "figure": value.get("figure"), **value}
-        if group == "POSSIBLE_COVENANT":  # the contract's covenant value has these keys on every covenant (22 Nov 2026)
+        # the contract's covenant value has these keys on every covenant (22 Nov 2026), also on an amendment's
+        # covenants the agent read (bulk run: Holly's six broke result.json, "'expression' is a required property")
+        if group in COVENANT_GROUPS:
             value = {**{k: None for k in COVENANT_KEYS}, **value,
                      "metric": value.get("metric") or p.get("_written") or p["name"]}
         if group == "WAIVER":  # the agent's reading in the waiver shape; the target is matched by a person
@@ -415,6 +419,31 @@ def _vote(pack: Pack, fields: list[dict], proposals: list[dict] | None) -> list[
     if pack.name == "certificate" and proposals:
         return _vote_figures(fields, proposals)
     return vote(fields, proposals)
+
+
+def _same_sentence(field: dict, proposal: dict) -> bool:
+    """The rule's finding and the agent's proposal quote the same sentence of the same page."""
+    page = (field.get("source") or {}).get("page")
+    if not page or page != proposal.get("page"):
+        return False
+    a, b = squash((field.get("source") or {}).get("quote") or ""), squash(proposal.get("quote") or "")
+    if not a or not b:
+        return False
+    return a[:80] in b or b[:80] in a
+
+
+def _vote_schedule(fields: list[dict], proposals: list[dict] | None) -> list[dict]:
+    """Schedule terms are matched by kind AND sentence: an agreement has many reporting deadlines (accounts within
+    30 days, insurance certificates, the compliance certificate ...). Matched by kind alone, every one the agent read
+    was taken for the rules' single deadline, marked MODELS_DISAGREE and dropped (bulk run, 22 Nov 2026: 43 such)."""
+    if proposals is None:
+        return fields
+    for f in fields:
+        same = [p for p in proposals
+                if not p.get("_matched") and p.get("name") == f.get("name") and _same_sentence(f, p)]
+        if same:
+            vote([f], same[:1])
+    return fields
 
 
 def _figure(value) -> float | None:
@@ -681,7 +710,7 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
             # in batches that each fit one prompt: one prompt left 4 of the 20 schedule pages out (22 Nov 2026)
             sched_proposals = batched_proposals(sched, gateway, page_batches(sched_pages), notes=notes, spring=tools,
                                                 correlation_id=job.correlation_id, all_pages=pages)
-            sched_fields = vote(sched_fields, sched_proposals)
+            sched_fields = _vote_schedule(sched_fields, sched_proposals)
             sched_fields += _agent_only(sched, pages, sched_fields, sched_proposals)
         warnings += sched.checks(sched_fields, {**ctx, "sanctionedAmount": amount})
         fields += sched_fields

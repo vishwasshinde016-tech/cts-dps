@@ -212,3 +212,149 @@ def test_the_ocr_reads_english_with_the_pp_ocrv6_text_model(monkeypatch, tmp_pat
     monkeypatch.setattr(eng, "REC_MODEL_PLACES", (str(tmp_path / "none"),))
     eng.RapidOcrBackend()._ensure()
     assert made[-1] == {}  # RapidOCR's own model, with a warning in the log
+
+
+def test_one_european_looking_number_does_not_make_a_report_european():
+    """A UAE group's statements ("Total assets 921,741", "AED' million") were read as European because of one
+    "10,42" (two note numbers) on its pages: every amount 1,000 times too small (bulk run, 22 Nov 2026)."""
+    from dps.extraction.statement import detect_number_style
+
+    adq = "Notes 10,42 Total assets 921,741 Total liabilities 402,118 Equity 519,623"
+    assert detect_number_style(adq) == "WESTERN"
+    assert detect_number_style("Notes 10,42 and 7,11") is None  # weak signs alone tell nothing
+    assert detect_number_style("Total 1.234.567,89 Umsatz 200.000,00 Kosten 45.120,50") == "EUROPEAN"
+    assert detect_number_style("Revenue 1,234,567.89 Cost 45,120.50") == "WESTERN"
+
+
+def test_a_unit_with_an_apostrophe_after_the_currency_is_read():
+    """"AED' million" (and "AED’ million") is millions; it was read as crore, the default."""
+    from dps.extraction.statement import _unit, unit_stated
+
+    for head in ("Notes AED' million AED' million", "Notes AED’ million", "AED million"):
+        assert _unit(head) == "million", head
+        assert unit_stated(head)
+    assert _unit("Rs.'000") == "thousand"
+
+
+def test_a_shared_symbol_takes_the_currency_the_report_names():
+    """A Sri Lankan report in "Rs.'000" and an Australian one in "$'000" were read as Indian rupees, the loan's
+    default (bulk run, 22 Nov 2026). The bare symbol takes the currency the report names; None when it names none."""
+    from dps.money import shared_symbol_currency as shared
+
+    assert shared("Rs.'000", "Cargills (Ceylon) PLC amounts in Sri Lankan Rupees LKR") == "LKR"
+    assert shared("$'000", "ASX Limited all amounts in Australian dollars (AUD)") == "AUD"
+    assert shared("Rs. in crore", "figures in Indian Rupees INR") == "INR"
+    assert shared("Rs. in crore", "no currency is named here") is None
+    assert shared("AED' million", "Abu Dhabi AED") is None  # no shared symbol: the header names its own
+    assert shared(None, None) is None
+
+
+def test_dollar_m_over_the_columns_is_millions():
+    """An Australian half-year report heads its columns "$m" (UK reports "£m"): it was read as crore with
+    UNIT_NOT_STATED (bulk run, 23 Nov 2026). Only right after a money sign or code: "in m", "5m", "m2" are no unit."""
+    from dps.extraction.statement import _unit, unit_stated
+
+    for head in ("Note $m $m", "A$m", "US$m", "Notes £m", "€m", "AUD m"):
+        assert _unit(head) == "million", head
+        assert unit_stated(head), head
+    for text in ("area in m", "a 5m loan", "floor 120 m2", "The term"):
+        assert not unit_stated(text), text
+
+
+def test_a_statement_takes_the_currency_its_whole_report_names(monkeypatch):
+    """An annual report's statement pages head their columns "Rs.'000" or "$m" and name the currency only on other
+    pages; the reader looked only at the statement pages and took the loan's default, INR (bulk run, 23 Nov 2026).
+    The PDF reader keeps every page's text, and the currency rule reads it."""
+    import io
+
+    from dps.extraction import statement_pages as sp
+    from dps.extraction import statement_pdf
+
+    statement = "Statement of financial position As at 31 March Note Rs.'000 2024 Total assets 12 49,493,157"
+    other = "All figures in this annual report are in Sri Lankan Rupees unless stated otherwise."
+    monkeypatch.setattr(sp, "document_texts", lambda data, ocr=None: ([other, statement], True))
+    monkeypatch.setattr(sp, "order_pages", lambda texts, short, entity="STANDALONE": ([1], 1))
+
+    class Page:
+        def __init__(self, text):
+            self.text = text
+
+        def extract_text(self):
+            return self.text
+
+        def extract_words(self, **kw):
+            return []
+
+    class Pdf:
+        pages = [Page(other), Page(statement)]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    import pdfplumber
+
+    monkeypatch.setattr(pdfplumber, "open", lambda f: Pdf())
+    monkeypatch.setattr(statement_pdf, "_text_words", lambda page: [])
+    got = statement_pdf.read_pdf_statement(io.BytesIO(b"%PDF").getvalue())
+    assert "Sri Lankan Rupees" in got.document_text
+    assert "Sri Lankan" not in got.header_text  # the statement page alone names no currency
+    from dps.money import shared_symbol_currency
+
+    assert shared_symbol_currency(got.header_text, got.document_text) == "LKR"
+
+
+def test_note_printed_over_this_years_column_does_not_hide_it():
+    """ASX's half-year report prints "Note" over its current column ("31 December 2024 Note $m"): the year's
+    figures were taken for note numbers and last year's (30 June 2024) were read (bulk run, 23 Nov 2026)."""
+    from dps.extraction.statement_pdf import _is_note_column, choose_column
+
+    headers = {1: "31 December 2024 Note $m", 2: "30 June 2024 $m"}
+    figures = {1: [546.4, 12265.9, 733.8, 16471.1], 2: [1243.1, 12176.9, 641.8, 16886.5]}
+    assert not _is_note_column(headers[1], figures[1])
+    assert choose_column(headers, figures) == 1
+    assert _is_note_column("Note", [4.0, 5.0, 6.0])  # a real note column stays one
+    assert _is_note_column("Note", [4.1, 4.2, 5.0])  # with sub-notes too
+    assert _is_note_column("2024 Note", [12.0, 13.0, 14.0])  # dated heading, but note numbers below
+
+
+def test_a_page_with_group_and_company_columns_is_not_weighed_as_the_group_only():
+    """Sierra Cables heads its statements "Group | Company" on one page; each page was weighed as the group's only
+    (-4), so a highlights page that names "the Company" (+4) was read: Total Assets 4.4 million rupees instead of
+    13.08 billion (bulk run, 23 Nov 2026)."""
+    from dps.extraction.statement_pages import _entity_weight
+
+    both = "STATEMENT OF FINANCIAL POSITION Group Company As at 31st March Note 2025 2024 2025 2024 Rs. Rs."
+    assert _entity_weight(both, "STANDALONE") == 0.0
+    assert _entity_weight(both, "CONSOLIDATED") == 0.0
+    assert _entity_weight("STATEMENT OF FINANCIAL POSITION - GROUP As at 31 March", "STANDALONE") == -4.0
+    assert _entity_weight("COMPANY STATEMENT OF FINANCIAL POSITION As at 31 March", "STANDALONE") == 4.0
+
+
+def test_revenues_is_revenue_and_revenue_in_advance_is_not():
+    """ADQ's income statement says "Revenues 127,890": the plural was no revenue line, and a cash-flow adjustment
+    "Revenue recognised from operating financial assets (1,584)" was read instead. ASX's balance sheet line "Revenue
+    received in advance" (a liability) was read as the year's revenue (bulk run, 23 Nov 2026)."""
+    from dps.extraction.statement import extract_values, match_key
+
+    assert match_key("Revenues 7") == "REVENUE"
+    for liability in ("Revenue received in advance B3", "Deferred revenue", "Unearned revenue", "Payments in advance"):
+        assert match_key(liability) is None, liability
+    rows = [("Revenues", 127890.0, 13, None), ("Revenue recognised from operating financial assets", -1584.0, 17, None)]
+    got = {v.key: v for v in extract_values(rows, "AED million", currency="AED").values}
+    assert got["REVENUE"].value == 127890.0 and got["REVENUE"].page == 13
+
+
+def test_a_key_financial_ratios_page_is_no_statement():
+    """ASX's annual report has a "Key financial ratios" page (five years of ratios, "EBIT/operating revenue 5, 6
+    58.5%"): with no total revenue line in the income statement, its footnote mark 5 was read as revenue (bulk run,
+    23 Nov 2026). Such a page is no statement; a revenue the statements do not print stays missing."""
+    from dps.extraction.statement_pages import page_score
+
+    ratios = ("Key financial ratios FY24 FY23 FY22 FY21 FY20 Basic earnings per share 244.8c 163.9c "
+              "Total revenue 1,000.0 900.0 Total assets 16,886.5 16,342.7 Total liabilities 13,161.8")
+    plain = ratios.replace("Key financial ratios", "Consolidated balance sheet")
+    for kind in ("BS", "PL"):
+        assert page_score(ratios, kind) <= page_score(plain, kind) - 6, kind

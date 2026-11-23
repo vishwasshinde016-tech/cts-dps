@@ -85,6 +85,7 @@ class PdfStatement:
     texts: list[str] = field(default_factory=list)  # full text of each page read, for the second reader
     pages: list[int] = field(default_factory=list)  # the 1-based page number of each text
     periods: Periods = field(default_factory=Periods)
+    document_text: str = ""  # the text of every page, for what only the whole report names (its currency)
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -268,7 +269,11 @@ def _is_note_column(header: str, values: list[float]) -> bool:
     small = sum(1 for v in values if v.is_integer() and 0 < v <= 99) >= max(1, 0.6 * len(values))
     # Unnamed: nearly all small whole numbers ("25", "26", ... with a "34.07" sub-note among them).
     mostly = len(values) >= 3 and sum(1 for v in values if v.is_integer() and 0 < v <= 60) >= 0.8 * len(values)
-    return (named and (len(words) <= 6 or small)) or mostly
+    # ASX (bulk run, 23 Nov 2026): "Note" printed over this year's column ("31 December 2024 Note $m") made the year's
+    # figures a note column, and last year's were read. A heading that names a year is a column of figures unless
+    # its values are note numbers.
+    dated = bool(re.search(r"\b(?:19|20)\d{2}\b", header))
+    return (named and ((len(words) <= 6 and not dated) or small)) or mostly
 
 
 _ENTITY_WORDS = {"group": "consolidated", "consolidated": "consolidated", "company": "standalone",
@@ -682,9 +687,10 @@ def read_pdf_statement(data: bytes, ocr=None, dpi: int = 200, entity: str = "STA
     import pdfplumber
 
     from dps.extraction.statement import _unit, unit_stated
-    from dps.extraction.statement_pages import statement_pages
+    from dps.extraction.statement_pages import document_texts, order_pages
 
-    selection = statement_pages(data, ocr, entity)
+    every_page, short = document_texts(data, ocr)
+    selection = order_pages(every_page, short, entity)
     chosen, main = selection if selection is not None else (None, 0)
     main_unit = None
     pages: list[list[Word]] = []
@@ -724,4 +730,4 @@ def read_pdf_statement(data: bytes, ocr=None, dpi: int = 200, entity: str = "STA
 
         rows, periods.prior, periods.annual = relabel(rows), relabel(periods.prior), relabel(periods.annual)
     quality = round(sum(confidences) / len(confidences), 3) if confidences else None
-    return PdfStatement(rows, header, ocr_pages, quality, texts, numbers, periods)
+    return PdfStatement(rows, header, ocr_pages, quality, texts, numbers, periods, "\n".join(every_page))

@@ -141,6 +141,26 @@ def document_currencies(text: str | None) -> dict[str, str | None]:
     return out
 
 
+_SHARED_IN_HEADER = re.compile(r"\bRs\b\.?|(?<![A-Za-z])\$|¥", re.I)
+
+
+def shared_symbol_currency(header: str | None, text: str | None) -> str | None:
+    """The currency of a statement whose header shows only a shared symbol ("Rs.'000", "$'000"): the one of that
+    family the document names most, or None when it names none of them (the loan's currency is used then). A Sri
+    Lankan annual report in "Rs.'000" and an Australian one in "$'000" were read as Indian rupees (bulk run, 22 Nov
+    2026)."""
+    m = _SHARED_IN_HEADER.search(header or "")
+    if not m:
+        return None
+    symbol = "$" if m.group(0) == "$" else "¥" if m.group(0) == "¥" else "Rs"
+    family = SHARED_SYMBOLS[symbol][1]
+    words = dict(_CURRENCY_WORDS)
+    counts = {code: sum(1 for x in words[code].finditer(text or "") if x.group(0).strip() not in ("$", "¥"))
+              for code in family}
+    best = max(family, key=lambda code: counts[code])
+    return best if counts[best] else None
+
+
 def document_rupee(text: str | None) -> str:
     """The rupee a document names ("Sri Lankan Rupees", "LKR"), for its bare "Rs."; INR when it names none."""
     return document_currencies(text)["Rs"] or "INR"

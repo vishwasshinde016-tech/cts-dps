@@ -211,3 +211,59 @@ def test_the_type_is_read_past_a_filing_cover_line_and_a_blank_page():
              "interest for each Interest Period. Event of Default means any of the events. ") * 3
     model = model_of("EX-10.20 3 exhibit1020sunseekercred.htm EX-10.20", "", title, terms)
     assert classify(model).type == "LOAN_AGREEMENT"
+
+
+def test_an_amendment_read_with_ai_holds_findings_that_are_not_changes():
+    """Bulk run with AI: every amendment ended DEAD on KeyError 'change'. The amended set is built from the changes;
+    the agent's own findings and the schedule terms in the same result are not changes and are left out."""
+    from dps.skills.amendment_diff.rules import amended_set
+
+    base = [{"group": "FINANCIAL_COVENANT", "value": {"metric": "ICR", "threshold": 2.5}, "issues": []}]
+    change = {"group": "FINANCIAL_COVENANT", "issues": [],
+              "value": {"metric": "ICR", "threshold": 2.0, "change": {"type": "MODIFY", "clause": "7.11"}}}
+    agent_only = {"group": "POSSIBLE_COVENANT", "issues": [], "value": {"metric": "OTHER", "code": "AFF_OTHER"}}
+    schedule = {"group": "SCHEDULE_TERM", "issues": [], "value": {"kind": "TESTING_CALENDAR"}}
+    out = amended_set(base, [change, agent_only, schedule])
+    assert [f["value"]["threshold"] for f in out] == [2.0]
+
+
+def test_each_reporting_deadline_the_ai_reads_is_kept_not_taken_for_the_rules_one():
+    """MAC: the rules read one reporting deadline ("within 30 days after the end of each quarter"); the agent read
+    eight others (insurance certificates, the register of members, the compliance certificate ...). Matched by kind
+    alone, all eight were marked MODELS_DISAGREE against the rules' one and dropped."""
+    from dps.skills import load
+    from dps.skills.runner import _agent_only, _vote_schedule
+
+    sched = load("schedule_terms")
+    text = ("23.1 Financial statements\n(c) as soon as they become available, but in any event within 30 days after "
+            "the end of each quarter of its financial years: its unaudited financial statements.\n")
+    pages = model_of(text)["pages"]
+    fields = [f for f in sched.rules(pages, {}) if f["name"] == "REPORTING_DEADLINE"]
+    assert fields
+    same = {"name": "REPORTING_DEADLINE", "page": 1, "quote": "(c) as soon as they become available, but in any event "
+            "within 30 days after the end of each quarter of its financial years:", "value": dict(fields[0]["value"])}
+    other = {"name": "REPORTING_DEADLINE", "page": 1, "quote": "its unaudited financial statements",
+             "value": {"kind": "REPORTING_DEADLINE", "rule": "Provide the insurance certificates within 30 days"}}
+    fields = _vote_schedule(fields, [same, other])
+    assert fields[0]["method"] == "RULES+AI_CONFIRMED"
+    assert not any(i["code"] == "MODELS_DISAGREE" for i in fields[0]["issues"])
+    assert [p["quote"] for p in [same, other] if not p.get("_matched")] == ["its unaudited financial statements"]
+    assert len(_agent_only(sched, pages, fields, [same, other])) == 1
+
+
+def test_an_amendments_covenant_read_by_the_ai_alone_is_a_possible_covenant_with_every_contract_key():
+    """Bulk run with AI: every covenant the agent read in an amendment was filed as FINANCIAL_COVENANT ("Personal
+    Data processing procedures" too) and lacked value keys result.json requires ("'expression' is a required
+    property": 44 places in three amendments)."""
+    from dps.skills import load
+    from dps.skills.runner import COVENANT_KEYS, _agent_only
+
+    pack = load("amendment_diff")
+    pages = model_of("SECOND AMENDMENT\nSection 5.12 is amended: the Borrower shall maintain personal data "
+                     "processing and collection procedures acceptable to the Bank.\n")["pages"]
+    proposal = {"name": "Personal Data processing and collection procedures", "page": 1,
+                "quote": "the Borrower shall maintain personal data processing and collection procedures",
+                "value": {"metric": None, "change": {"type": "ADD", "clause": "5.12"}}}
+    [field] = _agent_only(pack, pages, [], [proposal])
+    assert field["group"] == "POSSIBLE_COVENANT" and field["status"] == "NEEDS_REVIEW"
+    assert set(COVENANT_KEYS) <= set(field["value"]) and field["value"]["change"]["type"] == "ADD"

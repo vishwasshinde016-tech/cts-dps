@@ -133,8 +133,8 @@ def _targets(base: list[dict], metric: str | None, clause: str | None) -> list[d
 
 
 def _change_key(value: dict) -> str:
-    change = value["change"]
-    return change.get("appliedCovenantId") or change.get("clause") or value["metric"]
+    change = value.get("change") or {}
+    return change.get("appliedCovenantId") or change.get("clause") or value.get("metric")
 
 
 def _hold(field: dict, code: str, message: str) -> None:
@@ -149,8 +149,12 @@ def amended_set(base: list[dict], changes: list[dict]) -> list[dict]:
         if any(i["code"] in ("AMBIGUOUS_AMENDMENT_TARGET", "UNRESOLVED_AMENDMENT", "CHANGED_TWICE")
                for i in c.get("issues", [])):
             continue
-        value = c["value"]
-        change = value["change"]
+        value = c.get("value") or {}
+        change = value.get("change")
+        if not isinstance(change, dict) or not change.get("type"):
+            # Not a change: with the AI on, an amendment's result also holds the agent's own findings and the
+            # schedule terms (bulk run, 22 Nov 2026: every amendment read with AI ended DEAD on KeyError 'change').
+            continue
         if change["type"] == "ADD":
             result.append(c)
             continue

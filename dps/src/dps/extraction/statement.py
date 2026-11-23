@@ -18,7 +18,7 @@ from dps.parse.engine import ParseError
 
 # Catalog key → label phrases (lower case, matched on whole words; longest phrase wins).
 LINE_ALIASES: dict[str, list[str]] = {
-    "REVENUE": ["revenue from operations", "total revenue", "net sales", "revenue", "turnover"],
+    "REVENUE": ["revenue from operations", "total revenue", "net sales", "revenue", "revenues", "turnover"],
     "EBITDA": ["ebitda", "operating profit before depreciation"],
     "EBIT": ["ebit", "operating profit"],
     "DEPRECIATION": ["depreciation and amortisation", "depreciation and amortization", "depreciation"],
@@ -204,20 +204,29 @@ SECTIONS: dict[str, list[str]] = {
                        "PRINCIPAL_PAID_TTM", "CFO_TTM"],
 }
 # Lines that contain an alias but mean something else.
-_EXCLUDE = re.compile(r"\b(ratio|margin|%|per\s+share|growth|cover|impairment|changes?\s+in|increase|decrease)\b",
-                      re.I)
+# Phase 2 (ASX, 23 Nov 2026): "Revenue received in advance" (a liability) was read as the year's revenue; deferred
+# and unearned revenue are liabilities too.
+_EXCLUDE = re.compile(r"\b(ratio|margin|%|per\s+share|growth|cover|impairment|changes?\s+in|increase|decrease|"
+                      r"in\s+advance|deferred\s+revenues?|unearned)\b", re.I)
 
 TO_CRORE = {"crore": 1.0, "lakh": 0.01, "million": 0.1, "billion": 100.0, "thousand": 0.0001, "hundred": 1e-5,
             "rupee": 1e-7}
 # The rupee sign often comes out of a PDF as a stray character: "All amounts are in ` Lakhs".
 # Money for any country (10 November 2026): "Amounts in USD thousands", "AED '000", "PKR in million".
 _CODES = CODE_WORDS + r"|us\$|£|€|¥|slrs?"
-_UNIT_HINT = re.compile(r"(?:in|amounts?\s+in|₹|rs\.?|inr|lkr|rupees|\$|" + _CODES + r")\s*(?:[`´₹]\s*|I\s+)?(?:in\s+)?"
+# "AED' million" (a UAE group, bulk run of 22 Nov 2026): a quote between the currency and the scale; it was read as
+# plain dirhams, every amount a million times too small.
+_UNIT_HINT = re.compile(r"(?:in|amounts?\s+in|₹|rs\.?|inr|lkr|rupees|\$|" + _CODES + r")"
+                        r"\s*['’‘`´]?\s*(?:[`´₹]\s*|I\s+)?(?:in\s+)?"
                         r"(crores?|cr\b|lakhs?|lacs?|millions?|mn\b|billions?|bn\b|thousands?|hundreds?|"
                         r"'?000(?![\d,])|rupees?)"
                         r"|\b(millions?|thousands?)\s+of\s+(?:u\.?s\.?\s+)?(?:dollars|rupees)"
                         # Phase 2: "Amounts in KShs million": any currency word a country profile adds.
-                        r"|amounts?\s+in\s+[A-Za-z$.]{2,12}\s+(millions?|thousands?|billions?|'?000(?![\d,]))", re.I)
+                        r"|amounts?\s+in\s+[A-Za-z$.]{2,12}\s+(millions?|thousands?|billions?|'?000(?![\d,]))"
+                        # Phase 2: an Australian half-year report heads its columns "$m" (UK reports "£m"): millions.
+                        # Only right after a money sign or code, never after "in" ("in m" is no unit).
+                        r"|(?:(?<![A-Za-z])[A-Za-z]{0,2}\$|£|€|\b(?:usd|aud|nzd|sgd|hkd|cad|gbp|eur|aed)\s?)(m)\b",
+                        re.I)
 # "Amounts in INR" / "in rupees" with no scale word after it: plain rupees (golden set: such a statement
 # was read as crore, every amount 10^7 too large).
 _RUPEE_HINT = re.compile(r"(?:amounts?\s+in|figures?\s+in|in)\s+(?:inr|rs\.?|₹|rupees?|" + _CODES
@@ -287,7 +296,7 @@ def _unit(text: str) -> str:
         return "crore"
     if word.startswith(("lakh", "lac")):
         return "lakh"
-    if word.startswith(("mill", "mn")):
+    if word.startswith(("mill", "mn")) or word == "m":
         return "million"
     if word.startswith(("bill", "bn")):
         return "billion"
@@ -404,11 +413,25 @@ def number_style(style: str):
         _STYLE.reset(token)
 
 
+# A whole number with one thousands comma ("921,741"): the comma style. Financial statements in the European style
+# write it "921.741"; a comma followed by exactly three digits is no European decimal there.
+_THOUSANDS_TOKEN = re.compile(r"(?<![\d.,])\d{1,3},\d{3}(?![\d.,])")
+# A strong sign of the European style: thousands with dots ("1.234.567", "200.000,00"). "10,42" alone is weak: it is
+# also a list of two note numbers.
+_EUROPEAN_STRONG = re.compile(r"(?<![\d.,])\d{1,3}(?:\.\d{3})+(?:,\d{1,3})?(?![\d.,])")
+
+
 def detect_number_style(text: str) -> str | None:
     """The style a document's numbers are written in: "EUROPEAN", "WESTERN" (India's too), "UNCLEAR" when it uses
-    both alike, or None when nothing tells (whole numbers under 1,000, or "1.234" alone)."""
+    both alike, or None when nothing tells (whole numbers under 1,000, or "1.234" alone).
+
+    Bulk run (22 Nov 2026): a UAE group's statements in "AED' million" ("Total assets 921,741") were read as
+    European because of one "10,42" on its pages, every amount 1,000 times too small. Single-comma thousands count
+    for the comma style, and the European style needs a strong sign or three weak ones."""
     euro = len(_EUROPEAN_TOKEN.findall(text or ""))
-    comma = len(_COMMA_TOKEN.findall(text or ""))
+    comma = len(_COMMA_TOKEN.findall(text or "")) + len(_THOUSANDS_TOKEN.findall(text or ""))
+    if euro and not _EUROPEAN_STRONG.search(text or "") and euro < 3:
+        euro = 0  # one or two "10,42": not a style
     if euro and comma:
         if euro >= 10 * comma:
             return "EUROPEAN"
