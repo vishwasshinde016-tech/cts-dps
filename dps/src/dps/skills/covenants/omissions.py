@@ -24,7 +24,9 @@ from dps.skills.common import HEADER, grounded, issue
 log = logging.getLogger(__name__)
 
 MAX_ITEMS = 25
-MAX_CALLS = 4
+# The job's token budget is the real limit; this only stops a runaway document. 4 calls left 21 of 121 open sentences
+# of a 100-page agreement unread (review of 22 Nov 2026).
+MAX_CALLS = 12
 MAX_CONTEXT = 360
 DECISIONS = ("COVENANT", "NOT_A_COVENANT", "UNSURE")
 

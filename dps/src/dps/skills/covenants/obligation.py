@@ -123,6 +123,11 @@ def obligors(quote: str | None) -> list[str]:
     return kept
 
 
+def _basis(raw) -> str | None:
+    text = str(raw or "").strip().upper()
+    return text if text in ("STANDALONE", "CONSOLIDATED") else None
+
+
 def basis_of(quote: str | None) -> str | None:
     text = _flat(quote)
     if STANDALONE.search(text):
@@ -313,7 +318,7 @@ def enrich(fields: list[dict], pages: list[dict] | None = None, ctx: dict | None
         texts = [quote, *[q for q in value.get("qualifiers") or [] if isinstance(q, str)]]
         stated = obligors(quote)
         test = f.get("test") if isinstance(f.get("test"), dict) else {}
-        basis = basis_of(quote) or test.get("basis") or value.get("basis")
+        basis = basis_of(quote) or _basis(test.get("basis")) or _basis(value.get("basis"))
         ai_obligor = hints.get("obligor")
         if stated:
             obligor, confidence = "; ".join(stated), "STATED"

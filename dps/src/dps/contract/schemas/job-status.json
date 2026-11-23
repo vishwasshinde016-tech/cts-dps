@@ -4,6 +4,7 @@
   "title": "dps.job-status/1.0",
   "description": "GET /dps/v1/jobs/{jobId}. The job's status, attempts and steps, with its result link once there is one.",
   "type": "object",
+  "additionalProperties": false,
   "required": ["id", "jobType", "status", "priority", "attempts", "createdAt"],
   "properties": {
     "id": { "type": "string" },
@@ -28,6 +29,18 @@
     "startedAt": { "type": ["string", "null"], "format": "date-time" },
     "finishedAt": { "type": ["string", "null"], "format": "date-time" },
     "dueAt": { "type": ["string", "null"], "format": "date-time" },
-    "resultUrl": { "type": ["string", "null"] }
+    "resultUrl": { "type": ["string", "null"] },
+    "flow": { "type": "string", "description": "SKILL_PACK (every reading job) or ANALYZE" },
+    "currentStep": { "type": ["string", "null"], "description": "The last step recorded (same as stage)." },
+    "steps": {
+      "type": "array",
+      "description": "Every step recorded, in order: {step, at, ...} with the attempt, worker or error code.",
+      "items": { "type": "object", "required": ["step", "at"], "properties": { "step": { "type": "string" }, "at": { "type": "string" } } }
+    },
+    "updatedAt": { "type": ["string", "null"], "format": "date-time" },
+    "fileName": { "type": ["string", "null"], "description": "GET /dps/v1/jobs only: the uploaded file's name." },
+    "cpIds": { "type": "array", "items": { "type": "string" }, "description": "GET /dps/v1/jobs only: the CPs it is linked to." },
+    "revision": { "type": "integer", "minimum": 1, "description": "POST .../review only: the run number just saved." },
+    "remaining": { "type": "integer", "minimum": 0, "description": "POST .../review only: fields still to review." }
   }
 }

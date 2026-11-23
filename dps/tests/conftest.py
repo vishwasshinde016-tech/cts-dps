@@ -11,6 +11,17 @@ from dps.db import Base, make_engine
 from dps.main import create_app
 from dps.settings import AuthMode, Settings
 
+# The tests never read a developer's own .env (the AI switched on, real paths) nor model keys left in the process
+# environment: they run the same on a laptop with Azure configured as in CI.
+Settings.model_config["env_file"] = None
+
+
+@pytest.fixture(autouse=True)
+def _no_local_env(monkeypatch):
+    for key in list(os.environ):
+        if key.startswith(("DPS_", "AZURE_", "OPENAI_")) and key != "DPS_TEST_DATABASE_URL":
+            monkeypatch.delenv(key, raising=False)
+
 
 class FakeChecker:
     """Ownership map: user -> CPs. ADMIN/SERVICE bypass, AUDITOR and SUPPORT read (same rule as Core)."""
@@ -37,7 +48,8 @@ def settings(tmp_path: Path) -> Settings:
         engine = make_engine(url)
         Base.metadata.drop_all(engine)
         engine.dispose()
-    return Settings(database_url=url, storage_dir=tmp_path / "store",
+    # _env_file=None: a developer's own .env (AI switched on, real paths) never changes what the tests run against
+    return Settings(_env_file=None, database_url=url, storage_dir=tmp_path / "store",
                     auth_mode=AuthMode.DEV_HEADER, max_upload_mb=1)
 
 

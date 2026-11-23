@@ -97,6 +97,8 @@ NON_FINANCIAL_RULES: list[tuple[str, list[str], list[str]]] = [
     ("COMPLIANCE_CERTIFICATE",
      [r"\bcompliance\s+certificate\b", r"\bofficer\s+certificate\b", r"\bcertificate\s+of\s+compliance\b",
       r"\bcertificate\s+signed\s+by\b",
+      r"\bofficer[\u2019']?s\s+(?:compliance\s+)?certificate\b",
+      r"\bcertificate\s+of\s+(?:a|the|its)\s+(?:financial|responsible|chief\s+financial)\s+officer\b",
       r"\bcertif\w*\b[^.;]{0,80}\bchief\s+financial\s+officer\b|\bchief\s+financial\s+officer\b[^.;]{0,80}\bcertif"],
      [r"\bcompliance\s+certificate\b", r"\bofficer\s+certificate\b", r"\bcertificate\s+of\s+compliance\b"]),
     ("REPORTING_COVENANT",
@@ -479,6 +481,9 @@ def _quote(doc: _Doc, start: int, end: int) -> tuple[str, int | None]:
         lo = max(line_start, start - 100)
         if end - lo > 300:
             lo = end - 300
+        if lo > line_start and not doc.text[lo - 1].isspace():  # start at a word, not inside one
+            space = doc.text.find(" ", lo, end)
+            lo = space + 1 if space != -1 else lo
         quote = normalize_ws(doc.text[lo:min(line_end, max(end, lo + 300))]).strip()
     return quote, page.no
 
@@ -583,6 +588,10 @@ def _own_threshold(doc: _Doc, metric: str, offset: int,
 def _financial(doc: _Doc, clauses: list[_Clause]) -> list[Term]:
     terms: list[Term] = []
     for c in clauses:
+        # The definitions article names every ratio and holds unrelated numbers (a 0.75 % benchmark floor was read as
+        # ICR < 0.75, review of 22 Nov 2026). Thresholds set by a defined word are read by _scan_defined.
+        if _NOT_A_COVENANT_CLAUSE.search(normalize_ws(c.heading)):
+            continue
         metric = _metric_for_clause(c.heading, c.body)
         if not metric:
             continue
@@ -890,16 +899,100 @@ def _control_is_a_payment_trigger(metric: str, text: str) -> bool:
     return not re.search(r"\b(?:shall|will)\s+not\b[^.]{0,80}?\b(?:change|permit|allow|cause)\b", text, re.I)
 
 
+# Clauses that only name covenants (review of 22 Nov 2026: four covenants of a US agreement quoted "1.1 Definitions."
+# and one the table of contents): the definitions or interpretation article, and a contents line ("6.3 Books and
+# Records 57").
+_NOT_A_COVENANT_CLAUSE = re.compile(r"\b(?:definitions?|defined\s+terms|interpretation|construction)\b", re.I)
+_CONTENTS_LINE = re.compile(r"\s\d{1,3}\s*$")
+_DEFINES = re.compile(r"[“\"][^”\"]{2,80}[”\"]\s+(?:means|shall\s+mean|has\s+the\s+meaning)\b", re.I)
+# A sentence ends at a full stop that is not a decimal point ("Schedule 7.5"); long US sentences run past 1,000 chars.
+_SENTENCE = re.compile(r"[^.\n](?:[^.]|\.(?=\d)){10,3000}?(?:\.(?!\d)|$)")
+_PAGE_NUMBER_LINE = re.compile(r"\s*\d{1,4}\s*\n")
+
+
+def _duty_sentence(doc: _Doc, c: _Clause, patterns: list[str]) -> tuple[int, int, int] | None:
+    """Where in the clause the duty is said, as (sentence start, sentence end, where the covenant is named): the
+    first sentence of its body that names the covenant and is not a definition; else (the heading names it: "7.5
+    Subsidiary Indebtedness.") the body's first sentence with a duty word; None when the body has neither."""
+    body_start = c.start + doc.text[c.start:].find(c.body) if c.body else -1
+    if body_start < c.start:
+        return None
+    first_duty = None
+    sentences = list(_SENTENCE.finditer(c.body))
+    for n, m in enumerate(sentences):
+        sentence = m.group(0)
+        if _DEFINES.search(sentence):
+            continue
+        hit = next((h for p in patterns for h in [re.search(p, sentence, re.I)] if h), None)
+        start = _sentence_start(c.body, m.start()) + body_start
+        if hit:
+            end = m.end()
+            # a sub-heading ("(g) Change of Control; Reorganization.") names it; the duty is the next sentence
+            if (len(sentence.strip()) < 80 and not (_INTENT.search(sentence) or _WILL.search(sentence))
+                    and n + 1 < len(sentences)):
+                end = sentences[n + 1].end()
+            return start, body_start + end, body_start + m.start() + hit.start()
+        if first_duty is None and (_INTENT.search(sentence) or _WILL.search(sentence)):
+            first_duty = (start, body_start + m.end(), start)
+    return first_duty
+
+
+def _sentence_start(body: str, at: int) -> int:
+    """A sentence longer than the pattern allows is matched from inside a word: go back to where it begins."""
+    if at == 0 or body[at - 1] in ".\n" or body[at - 1].isspace():
+        return at
+    back = max(body.rfind(". ", 0, at), body.rfind("\n", 0, at), body.rfind(": ", 0, at))
+    return back + 1 if back != -1 and at - back < 1200 else at
+
+
+def _sentence_quote(doc: _Doc, start: int, end: int, hit: int) -> tuple[str, int | None]:
+    """The duty sentence, verbatim on one page and at most 300 characters: from its first word, or from a few words
+    before the covenant's name when that comes late in a long sentence. Page-number lines are skipped."""
+    while True:
+        while start < end and doc.text[start].isspace():
+            start += 1
+        m = _PAGE_NUMBER_LINE.match(doc.text, start)
+        if not m or m.end() >= end:
+            break
+        start = m.end()
+    if hit - start > 200:
+        start = doc.text.find(" ", max(start, hit - 120), hit) + 1 or hit
+    span = doc.page_span(start)
+    if span is None:
+        return "", None
+    page, page_start = span
+    stop = min(end, page_start + len(page.text), start + 300)
+    return normalize_ws(doc.text[start:stop]), page.no
+
+
+# US style duties: "The Borrower will, and will cause each of its Subsidiaries to, ..."
+_WILL = re.compile(r"\b(?:Borrower|Company|Obligors?|Guarantors?|Parent|it)\s+will\b(?!\s+be\b)|\bwill\s+cause\b", re.I)
+# "ARTICLE VI" then its title on the same or the next line ("AFFIRMATIVE COVENANTS")
+_ARTICLE = re.compile(r"(?m)^[ \t]*ARTICLE[ \t]+[IVXLC\d]+\.?[ \t]*(?:\n[ \t]*)?([A-Z][A-Z ,;&\-]{3,80})[ \t]*$")
+_NOT_COVENANTS = re.compile(r"DEFINITION|INTERPRETATION|CONDITION|REPRESENTATION|CREDIT\s+FACILIT|AGENCY|MISCELLANEOUS")
+
+
+def _article_score(articles: list[tuple[int, str]], pos: int) -> int:
+    """A covenant is best read in a covenant article; worst in the definitions, conditions or representations."""
+    title = next((t for p, t in reversed(articles) if p <= pos), "")
+    return 2 if "COVENANT" in title else -1 if _NOT_COVENANTS.search(title) else 0
+
+
 def _non_financial(doc: _Doc, clauses: list[_Clause]) -> list[Term]:
     out: dict[str, Term] = {}
+    best: dict[str, int] = {}
+    articles = [(m.start(), m.group(1).upper()) for m in _ARTICLE.finditer(doc.text)]
     for c in clauses:
         heading = normalize_ws(c.heading)
+        if _NOT_A_COVENANT_CLAUSE.search(heading) or _CONTENTS_LINE.search(heading):
+            continue
         context = normalize_ws(f"{c.heading} {c.body}")
         for metric, patterns, heading_patterns in NON_FINANCIAL_RULES:
-            if metric in out:
-                continue
             heading_hit = any(re.search(p, heading, re.I) for p in heading_patterns)
-            if not heading_hit and not _INTENT.search(context):
+            score = _article_score(articles, c.start) + (1 if heading_hit else 0)
+            if metric in out and best[metric] >= score:
+                continue  # a clause found earlier, in as good a place, stays
+            if not heading_hit and not _INTENT.search(context) and not _WILL.search(context):
                 continue
             if not any(re.search(p, context, re.I) for p in patterns):
                 continue
@@ -908,13 +1001,18 @@ def _non_financial(doc: _Doc, clauses: list[_Clause]) -> list[Term]:
                 continue
             if _control_is_a_payment_trigger(metric, context):
                 continue
-            quote, page = _quote(doc, c.start, c.start + len(c.heading) + 1)
+            where = _duty_sentence(doc, c, patterns)
+            quote, page = (_sentence_quote(doc, *where) if where
+                           else _quote(doc, c.start, c.start + len(c.heading) + 1))
             out[metric] = Term(metric, "NON_FINANCIAL", None, None, None, _frequency(context), page, quote,
                                context[:320], 0.8)
+            best[metric] = score
     # Not in a numbered clause ("(b) The Borrower shall not create any Lien ..." or a plain paragraph): the first
-    # sentence that says it, with less confidence, so a person confirms it.
+    # sentence that says it, with less confidence, so a person confirms it. A definition is not a duty.
     for m in re.finditer(r"[^.\n][^.]{20,600}?(?:\.(?!\d)|$)", doc.text):
         sentence = normalize_ws(m.group(0))
+        if _DEFINES.search(sentence):
+            continue
         if not _INTENT.search(sentence) and not re.search(r"\bchange\s+of\s+control\b", sentence, re.I):
             continue
         for metric, patterns, _ in NON_FINANCIAL_RULES:

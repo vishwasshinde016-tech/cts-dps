@@ -1,5 +1,5 @@
 name: schedule_terms
-version: 1.0.0
+version: 1.0.1
 # Runs inside EXTRACT_AGREEMENT and EXTRACT_SANCTION results (no job type of its own).
 job_types: []
 routes: {extract: strong}

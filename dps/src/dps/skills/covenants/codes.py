@@ -41,6 +41,12 @@ def stamp(fields: list[dict], defaults: bool = True) -> None:
             continue
         v = f["value"]
         code = code_for_field(f)
+        if f.get("group") in COVENANT_GROUPS and str(code or "").endswith("OTHER"):
+            # The AI gives OTHER when its part's taxonomy slice lacks the type ("Officer's Certificate" read by the
+            # undertakings part); the finding's own name may be a known covenant alias (review of 22 Nov 2026).
+            named = tax.code_for(f.get("name"))
+            if named and named != code and tax.category_of(named) in COVENANT_CATEGORIES:
+                code = named
         narrower = tax.more_specific((f.get("source") or {}).get("quote"), code)
         if narrower:  # "First Lien Leverage Ratio" is not total leverage: the quote names the narrower test
             code = narrower

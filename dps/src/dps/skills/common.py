@@ -203,14 +203,31 @@ def agent_proposals(pack, gateway, pages: list[dict], extra: str = "", route: st
     return list(answer.get("items", []))
 
 
+def page_batches(pages: list[dict], limit: int = MAX_PROMPT_CHARS) -> list[list[dict]]:
+    """Whole pages, in order, packed into batches that each fit one prompt (``fit_pages``' measure). A page larger
+    than the limit is a batch of its own, and fit_pages says it did not fit. The schedule read cut 4 of its 20 pages
+    before (review of 22 Nov 2026)."""
+    batches: list[list[dict]] = []
+    used = 0
+    for p in pages:
+        size = len(f"<<<page {p['no']}>>>\n{p.get('text') or ''}\n<<<end page {p['no']}>>>") + 1
+        if not batches or used + size > limit:
+            batches.append([])
+            used = 0
+        batches[-1].append(p)
+        used += size
+    return batches
+
+
 def batched_proposals(pack, gateway, batches: list[list[dict]], notes: list | None = None, **kw) -> list[dict] | None:
     """One agent read per batch of pages (long agreements), merged; None only when no batch gave an answer. A spent
     token budget stops the remaining batches, and says which were not read."""
     out: list[dict] | None = None
     seen: set[tuple] = set()
     for i, batch in enumerate(batches):
-        extra = (f"These are part {i + 1} of {len(batches)} of the agreement's covenant pages: list the covenants on "
-                 "these pages.") if len(batches) > 1 else ""
+        what = "the agreement's covenant pages: list the covenants" if pack.name == "covenants" else \
+            "the pages for this task: list what is"
+        extra = f"These are part {i + 1} of {len(batches)} of {what} on these pages." if len(batches) > 1 else ""
         before = len(notes) if notes is not None else 0
         got = agent_proposals(pack, gateway, batch, extra=extra, notes=notes, **kw)
         if got is None:
