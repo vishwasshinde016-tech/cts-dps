@@ -10,7 +10,7 @@
    "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
    "provider": "github",
    "link_mode": "web",
-   "revision": "1fa0723bb3ca2a401924f30f80edf7be2511740e"
+   "revision": "6d0ff8db9dd8e8d5c2749db5f96b2d8d3ed10607"
   }
  },
  "components": [
@@ -134,7 +134,7 @@
     {
      "path": "dps/src/dps/worker.py",
      "line": 202,
-     "end_line": 216,
+     "end_line": 227,
      "label": "_process + heartbeat"
     },
     {
@@ -161,14 +161,14 @@
    "sources": [
     {
      "path": "dps/src/dps/ingest/pipeline.py",
-     "line": 56,
-     "end_line": 84,
+     "line": 74,
+     "end_line": 109,
      "label": "page_model"
     },
     {
      "path": "dps/src/dps/parse/sandbox.py",
-     "line": 157,
-     "end_line": 186,
+     "line": 167,
+     "end_line": 196,
      "label": "child process, no network"
     },
     {
@@ -223,7 +223,7 @@
     },
     {
      "path": "contracts/dps-jobs-api.yaml",
-     "line": 333,
+     "line": 335,
      "label": "GET /dps/v1/events"
     }
    ]
@@ -244,14 +244,14 @@
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 750,
-     "end_line": 809,
+     "line": 938,
+     "end_line": 1003,
      "label": "run_onboard"
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 390,
-     "end_line": 483,
+     "line": 544,
+     "end_line": 645,
      "label": "_extract order"
     },
     {
@@ -278,14 +278,14 @@
    "sources": [
     {
      "path": "dps/src/dps/flows/skill_job.py",
-     "line": 27,
-     "end_line": 49,
+     "line": 28,
+     "end_line": 50,
      "label": "SkillJobFlow"
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 66,
-     "end_line": 75,
+     "line": 70,
+     "end_line": 79,
      "label": "run (skills flow)"
     }
    ]
@@ -410,14 +410,14 @@
    "sources": [
     {
      "path": "dps/src/dps/agent/gateway.py",
-     "line": 245,
-     "end_line": 260,
+     "line": 289,
+     "end_line": 304,
      "label": "call_json"
     },
     {
      "path": "dps/src/dps/agent/gateway.py",
-     "line": 293,
-     "end_line": 301,
+     "line": 337,
+     "end_line": 345,
      "label": "from_settings"
     }
    ]
@@ -440,6 +440,34 @@
      "path": "deploy/config/routes.example.yaml",
      "line": 6,
      "label": "model routes"
+    }
+   ]
+  },
+  {
+   "id": "langfuse",
+   "type": "external",
+   "label": "Langfuse (traces)",
+   "sublabel": "deploy/observability · 127.0.0.1",
+   "pos": [
+    1450,
+    600
+   ],
+   "size": [
+    180,
+    62
+   ],
+   "sources": [
+    {
+     "path": "deploy/observability/docker-compose.langfuse.yml",
+     "line": 1,
+     "end_line": 161,
+     "label": "Langfuse v4.83.0, 127.0.0.1, telemetry off"
+    },
+    {
+     "path": "dps/src/dps/ops/observability.py",
+     "line": 83,
+     "end_line": 89,
+     "label": "setup: OTLP traces when an endpoint is set"
     }
    ]
   }
@@ -571,6 +599,18 @@
    "variant": "dashed",
    "fromSide": "left",
    "toSide": "bottom"
+  },
+  {
+   "from": "worker",
+   "to": "langfuse",
+   "label": "OTLP traces",
+   "variant": "dashed"
+  },
+  {
+   "from": "gateway",
+   "to": "langfuse",
+   "label": "AI call spans",
+   "variant": "dashed"
   }
  ],
  "cards": [
@@ -608,6 +648,15 @@
    "items": [
     "Business rules stay in Spring (one rule engine); DPS calls them as batched tools",
     "If Spring is down the field gets SPRING_UNAVAILABLE and goes to review; the job carries on"
+   ]
+  },
+  {
+   "dot": "violet",
+   "title": "Traces and audit (23 Nov 2026)",
+   "items": [
+    "Every job is one OpenTelemetry trace: dps.job, ingest, classify, pack, each AI read, each model call (chat <deployment>), ledger, scoring",
+    "Langfuse (open source) shows them on the laptop; in the bank the same traces go to the bank's platform by changing one address",
+    "dps_ai_call and dps_trace_event carry the trace and span ids: a value opens the AI call that produced it; no document text in a trace by default"
    ]
   }
  ]

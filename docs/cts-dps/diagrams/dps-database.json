@@ -10,7 +10,7 @@
    "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
    "provider": "github",
    "link_mode": "web",
-   "revision": "1fa0723bb3ca2a401924f30f80edf7be2511740e"
+   "revision": "6d0ff8db9dd8e8d5c2749db5f96b2d8d3ed10607"
   }
  },
  "layout": {
@@ -1045,13 +1045,21 @@
     {
      "name": "response_text",
      "type": "ntext"
+    },
+    {
+     "name": "trace_id",
+     "type": "varchar(32)"
+    },
+    {
+     "name": "span_id",
+     "type": "varchar(16)"
     }
    ],
    "sources": [
     {
      "path": "dps/src/dps/models.py",
      "line": 447,
-     "end_line": 471,
+     "end_line": 475,
      "label": "class AiCall"
     }
    ],
@@ -1209,13 +1217,17 @@
     {
      "name": "detail_json",
      "type": "ntext"
+    },
+    {
+     "name": "trace_id",
+     "type": "varchar(32)"
     }
    ],
    "sources": [
     {
      "path": "dps/src/dps/models.py",
-     "line": 474,
-     "end_line": 488,
+     "line": 478,
+     "end_line": 494,
      "label": "class TraceEvent"
     }
    ],

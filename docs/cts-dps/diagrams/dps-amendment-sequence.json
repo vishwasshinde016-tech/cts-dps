@@ -10,7 +10,7 @@
    "url": "https://github.com/vishwasshinde016-tech/cts-dps.git",
    "provider": "github",
    "link_mode": "web",
-   "revision": "1fa0723bb3ca2a401924f30f80edf7be2511740e"
+   "revision": "6d0ff8db9dd8e8d5c2749db5f96b2d8d3ed10607"
   }
  },
  "participants": [
@@ -50,13 +50,13 @@
     {
      "path": "dps/src/dps/worker.py",
      "line": 202,
-     "end_line": 216,
+     "end_line": 227,
      "label": "_process"
     },
     {
      "path": "dps/src/dps/ingest/pipeline.py",
-     "line": 56,
-     "end_line": 84,
+     "line": 74,
+     "end_line": 109,
      "label": "page_model"
     }
    ]
@@ -69,14 +69,14 @@
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 352,
-     "end_line": 366,
+     "line": 506,
+     "end_line": 520,
      "label": "approved_base"
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 390,
-     "end_line": 483,
+     "line": 544,
+     "end_line": 645,
      "label": "_extract"
     }
    ]
@@ -96,7 +96,7 @@
     {
      "path": "dps/src/dps/skills/amendment_diff/rules.py",
      "line": 145,
-     "end_line": 169,
+     "end_line": 173,
      "label": "amended_set"
     }
    ]
@@ -115,8 +115,8 @@
     },
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 338,
-     "end_line": 349,
+     "line": 492,
+     "end_line": 503,
      "label": "_explain_changes"
     }
    ]
@@ -129,8 +129,8 @@
    "sources": [
     {
      "path": "dps/src/dps/skills/runner.py",
-     "line": 716,
-     "end_line": 723,
+     "line": 883,
+     "end_line": 891,
      "label": "finish"
     }
    ]
@@ -187,7 +187,7 @@
    "y": 393,
    "label": "kickoff CrewAI Flow",
    "variant": "emphasis",
-   "note": "flows/skill_job.py:27 → skills/runner.py:313 run"
+   "note": "flows/skill_job.py:28 → skills/runner.py:544 run"
   },
   {
    "id": "base",
@@ -196,7 +196,7 @@
    "y": 485,
    "label": "compare with approved base",
    "variant": "emphasis",
-   "note": "runner.py:275 approved_base; fallback DPS earlier run = BASE_FROM_DPS"
+   "note": "runner.py:506 approved_base; fallback DPS earlier run = BASE_FROM_DPS"
   },
   {
    "id": "changes",
@@ -247,7 +247,7 @@
    "y": 979,
    "label": "save dps_run + needs_review event",
    "variant": "emphasis",
-   "note": "codes, score, checks; runner.py:557 finish"
+   "note": "codes, score, checks; runner.py:883 finish"
   },
   {
    "id": "pull",
