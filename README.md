@@ -7,6 +7,8 @@ CrewAI Flow; one Document Agent with several skills and tools; business rules in
 This folder holds DPS only. The Spring app and the DMS are built by other teams and are not here.
 
 **New here?** Install, check and demo in 20 minutes: [docs/cts-dps/install-and-demo.md](docs/cts-dps/install-and-demo.md).
+One command installs everything (packages, OCR model, optional Docling and Langfuse, also offline):
+`powershell -NoProfile -ExecutionPolicy Bypass -File dps\scripts\setup.ps1 [-Heavy] [-Observability] [-Offline]`.
 
 Copied on 18 Nov 2026 from `Vishwas2311/loan-covenant-platform`, branch `feat/dps-v2-phase1`, commit `55996cc`.
 
@@ -16,7 +18,7 @@ Copied on 18 Nov 2026 from `Vishwas2311/loan-covenant-platform`, branch `feat/dp
 | --- | --- |
 | `dps/` | The service: `src/dps` (code), `tests/`, `migrations/` (database), `Dockerfile`, `pyproject.toml` |
 | `contracts/` | The agreed interfaces: job API, result schema, page-model schema, Spring tools, error codes |
-| `deploy/` | Running on the bank VM: `docker-compose.cts-dps.yml`, alerts, model routes example |
+| `deploy/` | Running on the bank VM: `docker-compose.cts-dps.yml`, alerts, model routes example; `observability/`: Langfuse for traces on a laptop |
 | `docs/cts-dps/` | Design, schema explained, runbook, go-live, model inventory, check against the architect |
 | `golden-set/` | Labelled sample agreements and statements used to measure extraction quality |
 
@@ -33,6 +35,7 @@ Copied on 18 Nov 2026 from `Vishwas2311/loan-covenant-platform`, branch `feat/dp
 | PDF (text or image), Excel, Word | `dps/src/dps/parse/engine.py`, `dps/src/dps/parse/page_model.py` |
 | Data quality, confidence | `dps/src/dps/scoring/`, page `quality` in the page model |
 | Logging, exceptions | `dps/src/dps/ops/observability.py`, `dps/src/dps/contract/catalogues/errors.yaml` |
+| Traceability and observability (traces) | OpenTelemetry spans in `dps/src/dps/ops/observability.py`, `agent/gateway.py`, `skills/runner.py`; Langfuse in `deploy/observability/`; guide `docs/cts-dps/observability-demo.md` |
 | Model calls (Azure GPT) | `dps/src/dps/agent/gateway.py` (budget, masking, retries, call log) |
 
 ## Run the tests

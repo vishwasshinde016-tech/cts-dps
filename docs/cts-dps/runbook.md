@@ -15,6 +15,8 @@ ops endpoints need the SUPPORT or ADMIN role.
 | QA sample error rate, golden-set candidates | `GET /dps/v1/ops/quality`, `GET /dps/v1/ops/golden-candidates` |
 | Audit hash chain | `GET /dps/v1/ops/audit-seals` (`intact` must be true) |
 | A job's attempts and error code | `GET /dps/v1/jobs/{id}` |
+| A job's trace: each step's time, each AI call (model, tokens, prompt version, failures) | Langfuse (laptop: `http://localhost:3000`) or the bank's OpenTelemetry platform; the job's `trace_id` is on `dps_ai_call` and `dps_trace_event` |
+| Which AI call produced a finding | `dps_trace_event` row (`SHOWN`/`FOUND`) → `detail_json.ai_span_id` → the `dps.ai.read` span → its `chat` span = `dps_ai_call.span_id` |
 
 ## Alerts and first actions
 
@@ -32,6 +34,7 @@ ops endpoints need the SUPPORT or ADMIN role.
 | AiUnavailable | Documents are read by rules only and sent to review (no job fails). Check the Azure deployment health and quota (429), the key in the vault and `DPS_AI_ALLOWED_HOSTS`; the gateway's breaker closes by itself 30 s after Azure recovers. |
 | COVERAGE_GAP on many agreements | The listed duty sentences are not explained by any extracted covenant. Open a few: real undertakings the rules do not know (escrow, subordination, insurance ...) are wording to teach the rules or the skill; noise (board resolutions, arbitration) is a duty-word to exclude in `skills/covenants/pages.py`. |
 | SECOND_READER_EMPTY on statements | The AI checker answered nothing twice. Check the Azure deployment and the statement's page text; the figures were not double-checked, so the statement waits for a person. |
+| No traces arriving | Check the `OTEL_EXPORTER_OTLP_*` settings of the API and worker (they are read at start), and the collector or Langfuse health (`/api/public/health`). Jobs are not affected: spans are exported in the background and dropped when nothing answers. |
 | AiBudget | Check `/ops/usage` for the job type using the most tokens; lower `page_selection.max_pages` or the pack's token budget (pull request), or raise the monthly budget with approval. |
 
 ## Sizing

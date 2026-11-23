@@ -26,11 +26,13 @@ METHOD_NAMES = {"TEXT": "text", "OCR": "OCR", "DOCLING": "Docling", "BLANK": "bl
 
 
 def add(db: Session, document_id: str, step: str, summary: str, *, actor: str = DPS, job_id: str | None = None,
-        **detail: Any) -> None:
-    """One step of the document's history (the caller commits), and the same as a line in the log."""
+        trace_id: str | None = None, **detail: Any) -> None:
+    """One step of the document's history (the caller commits), and the same as a line in the log. ``trace_id``
+    (default: the current trace) links the row to its trace in Langfuse."""
     summary = summary[:1000]
     db.add(TraceEvent(document_id=document_id, job_id=job_id, step=step, actor=actor, summary=summary,
-                      detail_json=json.dumps(detail, ensure_ascii=False, default=str)))
+                      detail_json=json.dumps(detail, ensure_ascii=False, default=str),
+                      trace_id=trace_id or obs.current_ids()[0]))
     with obs.bound(document_id=document_id, job_id=job_id):
         obs.event(step, summary, actor=actor, **{k: v for k, v in detail.items() if isinstance(v, (str, int, float))})
 

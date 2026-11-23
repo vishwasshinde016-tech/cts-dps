@@ -520,6 +520,7 @@ Four files on the list could not be downloaded on 19 Nov 2026: three links retur
 | How is quality measured? | The golden gate over 44 labelled documents (recall 1.0, values 0.9924), about 900 tests at 95% coverage, and runs on real agreements. |
 | Does DPS decide compliance? | No. It proposes values with evidence; Spring and a person decide. |
 | Where are the logs? | JSON app logs per container, document history and AI calls in `scripts\show_job.py <jobId>`, AI cost at `GET /dps/v1/ops/usage`, and the run log from the demo. |
+| Can we trace one document and see why the AI proposed something? | Yes: every job is an OpenTelemetry trace (Langfuse on the laptop, the bank's platform in production), and each AI finding links by id to the AI read and the model call in `dps_trace_event` / `dps_ai_call`. Guide: `docs/cts-dps/observability-demo.md`. |
 | How is it deployed? | Containers on the same VM as Spring with CPU and memory limits: [`deploy/docker-compose.cts-dps.yml`](../../deploy/docker-compose.cts-dps.yml). |
 
 ### 0.17 Words you will use (glossary)
@@ -1017,6 +1018,8 @@ The AI agent is used *during* extraction (steps 9–17 in §3), never after it, 
 | AI calls and cost | Each model call: purpose, model, tokens, cost, seconds | `GET /dps/v1/ops/usage`; per job in `scripts\show_job.py <jobId>` |
 | Operations | Queues, review backlog, scaling signals, go-live readiness, audit seals | `GET /dps/v1/ops/queues`, `/ops/scaling`, `/ops/go-live`, `/ops/audit-seals` |
 | Alerts | Queue age, DEAD jobs, review backlog, AI failures | [`deploy/alerts/cts-dps-alerts.yaml`](../../deploy/alerts/cts-dps-alerts.yaml); runbook [`docs/cts-dps/runbook.md`](runbook.md) |
+| **Traces (OpenTelemetry)** | One trace per job: each step with its time (`dps.ingest`, `dps.classify`, `dps.pack <pack>`, `dps.ai.read <pack>` per batch, `dps.ledger`, `dps.enrich`, `dps.scoring`) and each model call (`chat <deployment>`: model, tokens, prompt version, attempt, failure). Ids, counts and times only; text only with `DPS_AI_TRACE_TEXT=true`, masked | Langfuse on the laptop (`http://localhost:3000`), see [observability-demo.md](observability-demo.md); code: [`ops/observability.py`](../../dps/src/dps/ops/observability.py), [`agent/gateway.py`](../../dps/src/dps/agent/gateway.py), [`skills/common.py`](../../dps/src/dps/skills/common.py), [`skills/runner.py`](../../dps/src/dps/skills/runner.py) |
+| **Finding to AI call** | Each AI finding's history row carries the job's `trace_id` and the agent read's `ai_span_id`; each `dps_ai_call` row its `trace_id` and `span_id` | tables `dps_trace_event`, `dps_ai_call`; the same ids open the trace in Langfuse |
 
 **Reading the run log:**
 - A `->` line means "this function was entered". The path after it is the file to open.

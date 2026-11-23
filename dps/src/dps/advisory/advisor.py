@@ -80,15 +80,16 @@ def crewai_completion(model: str, temperature: float | None = None,  # pragma: n
         llm = (LLM(model=model, timeout=timeout) if temperature is None
                else LLM(model=model, temperature=temperature, timeout=timeout))
         timer = observability.Timer()
-        with observability.span("ai.call", **{"gen_ai.request.model": model}):
-            try:
-                text = llm.call(messages)
-            except Exception as ex:
-                # A failed call is traced too: the caller falls back to the rules, and the trace says why.
-                spent = llm.get_token_usage_summary()
-                usage.note(model, spent.prompt_tokens, spent.completion_tokens, seconds=timer.seconds,
-                           messages=messages, error=f"{type(ex).__name__}: {str(ex)[:300]}")
-                raise
+        # No span of its own: the gateway's "chat <model>" span is the trace of this call (observability, 23 Nov
+        # 2026); a second span here showed every model call twice in Langfuse.
+        try:
+            text = llm.call(messages)
+        except Exception as ex:
+            # A failed call is traced too: the caller falls back to the rules, and the trace says why.
+            spent = llm.get_token_usage_summary()
+            usage.note(model, spent.prompt_tokens, spent.completion_tokens, seconds=timer.seconds,
+                       messages=messages, error=f"{type(ex).__name__}: {str(ex)[:300]}")
+            raise
         spent = llm.get_token_usage_summary()
         usage.note(model, spent.prompt_tokens, spent.completion_tokens, seconds=timer.seconds, messages=messages,
                    answer=text)

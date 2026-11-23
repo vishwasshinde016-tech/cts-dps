@@ -20,6 +20,11 @@ dependencies = [
   "pypdf==6.21.4",
   "openpyxl==3.1.*",
   "PyYAML>=6,<7",
+  # Traces, metrics and logs (dps.ops.observability): OTLP over HTTP to Langfuse (traces) and/or a collector.
+  # Pinned here so pip-audit checks them; they were only a CrewAI dependency before (observability, 23 Nov 2026).
+  "opentelemetry-api==1.45.2",
+  "opentelemetry-sdk==1.45.2",
+  "opentelemetry-exporter-otlp-proto-http==1.45.2",
 ]
 
 [project.optional-dependencies]

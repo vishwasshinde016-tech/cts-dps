@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from dps import jobs
 from dps.models import Job
+from dps.ops import observability as obs
 from dps.skills import Pack, for_job_type, load
 from dps.skills.common import (
     MAX_PROMPT_CHARS,
@@ -316,6 +317,8 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
                        method=method,
                        confidence=0.6 if method == "AI_VISION" else 0.7,
                        key=method.lower() + (f"-{p['_residual']}" if p.get("_residual") else ""))
+        if p.get("_span"):  # the agent read's trace span; moved into dps_trace_event by finish(), never sent to Spring
+            f["_aiSpan"] = p["_span"]
         if group == "SCHEDULE_TERM" and value["kind"] == "OTHER":
             f["status"] = "NEEDS_REVIEW"
             f["issues"].append(issue("AI_ONLY", "found by the Document Agent only; its kind is not one the bank knows"))
@@ -546,19 +549,23 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
     ctx = dict(request.get("context") or {})
     budget = gateway.begin_job(pack.limits.get("token_budget")) if gateway is not None else None
     extra: dict = {}
-    try:
-        if pack.name == "commentary":
-            fields, warnings, extra = _commentary(pack, raw or b"{}", gateway)
-        elif pack.name == "reconcile_set":
-            fields, warnings, extra = _reconcile(job, raw or b"", db, pipeline_version, ctx)
-        elif pack.name == "statement_lines":
-            fields, warnings, extra = _statement(job, db, statement_deps)
-        else:
-            fields, warnings, extra = _extract(pack, job, model or {"pages": []}, ctx, gateway, tools, db,
-                                               pipeline_version)
-    finally:
-        if gateway is not None:
-            gateway.end_job()
+    with obs.span(f"dps.pack {pack.name}", **{"dps.pack": pack.name, "dps.ai": gateway is not None}) as span_obj:
+        try:
+            if pack.name == "commentary":
+                fields, warnings, extra = _commentary(pack, raw or b"{}", gateway)
+            elif pack.name == "reconcile_set":
+                fields, warnings, extra = _reconcile(job, raw or b"", db, pipeline_version, ctx)
+            elif pack.name == "statement_lines":
+                fields, warnings, extra = _statement(job, db, statement_deps)
+            else:
+                fields, warnings, extra = _extract(pack, job, model or {"pages": []}, ctx, gateway, tools, db,
+                                                   pipeline_version)
+        finally:
+            if gateway is not None:
+                gateway.end_job()
+        obs.set_attrs(span_obj, **{"dps.fields": len(fields), "dps.ai_fields": sum(
+            1 for f in fields if str(f.get("method", "")).startswith("AI")),
+            "dps.tokens": getattr(budget, "used", None), "dps.ai_calls": getattr(budget, "calls", None)})
     high = budget_warning(budget)
     if high:
         warnings.append(high)
@@ -577,13 +584,17 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
     if not built:
         from dps.skills.covenants.obligation import enrich
 
-        enrich(fields, (model or {}).get("pages"), ctx)  # WP6: company, facility, conditions, first test date
+        with obs.span("dps.enrich", **{"dps.fields": len(fields)}):
+            enrich(fields, (model or {}).get("pages"), ctx)  # WP6: company, facility, conditions, first test date
     if fields and not built:  # phase 5: every field's confidence from the scorer, routed by the pack's thresholds
         from dps.scoring import Scorer
 
         quality = {p["no"]: (float(p.get("quality", 1.0)), p.get("method", "NATIVE"))
                    for p in (model or {}).get("pages", [])}
-        Scorer(scorer_dir).apply(fields, pack.name, pack.risk, pack.thresholds, quality)
+        with obs.span("dps.scoring", **{"dps.fields": len(fields)}) as score_span:
+            Scorer(scorer_dir).apply(fields, pack.name, pack.risk, pack.thresholds, quality)
+            obs.set_attrs(score_span, **{"dps.auto_accepted": sum(
+                1 for f in fields if f.get("status") == "AUTO_ACCEPTED")})
     check_numbers(fields)  # after scoring: a number not in its own quote always goes to a person
     if pack.name not in ("commentary", "reconcile_set", "statement_lines"):  # the statement reader checks its own
         warnings += document_checks(model, gateway is not None)
@@ -719,19 +730,21 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     if pack.name == "covenants":  # every covenant-shaped sentence of the whole document ends with an outcome
         from dps.skills.covenants import ledger, omissions
 
-        entries = ledger.settle(ledger.candidates(pages), fields)
-        still_open = ledger.unresolved(entries)
-        if gateway is not None and still_open:  # the Document Agent looks again at what nothing explains
-            residual, decisions = omissions.read(gateway, still_open, pages, notes,
-                                                 pack.routes.get("extract", "strong"))
-            from dps.skills.covenants import names
+        with obs.span("dps.ledger") as ledger_obj:
+            entries = ledger.settle(ledger.candidates(pages), fields)
+            still_open = ledger.unresolved(entries)
+            if gateway is not None and still_open:  # the Document Agent looks again at what nothing explains
+                residual, decisions = omissions.read(gateway, still_open, pages, notes,
+                                                     pack.routes.get("extract", "strong"))
+                from dps.skills.covenants import names
 
-            residual = names.clean(residual, drop_mechanics=True, collapse=False) or []
-            fields += _agent_only(pack, pages, fields, residual, method="AI_RESIDUAL")
-            fields = merge_same_sentence(fields)
-            ledger.settle(entries, fields, decisions)
-        ledger.attach(entries, fields)
-        fields += ledger.review_items(entries, pages, pack.name)
+                residual = names.clean(residual, drop_mechanics=True, collapse=False) or []
+                fields += _agent_only(pack, pages, fields, residual, method="AI_RESIDUAL")
+                fields = merge_same_sentence(fields)
+                ledger.settle(entries, fields, decisions)
+            ledger.attach(entries, fields)
+            fields += ledger.review_items(entries, pages, pack.name)
+            obs.set_attrs(ledger_obj, **{"dps.unresolved": len(ledger.unresolved(entries))})
     if gateway is None and pack.routes:  # the switch is off or no model is configured (full review F12)
         warnings.append(issue("AI_NOT_USED", "read by the rules only: the Document Agent is not switched on, so no "
                                              "second reading and no residual check ran; review every field"))
@@ -870,11 +883,30 @@ def _commentary(pack: Pack, raw: bytes, gateway):
 def finish(db: Session, job: Job, result: dict) -> None:
     from dps.analyze.analysis import save_run
 
+    trace_ai_fields(db, job, result)
     save_run(db, job, result)
     status = jobs.NEEDS_REVIEW if result["status"] == "NEEDS_REVIEW" else jobs.DONE
     mapping = (result.get("document") or {}).get("route") == "MAPPING_REVIEW"
     jobs.finish(db, job, status, None, "MAPPING_REVIEW" if mapping and status == jobs.NEEDS_REVIEW else None,
                 payload={"skillPack": result["pipeline"]["skillPack"], "fields": len(result["fields"])})
+
+
+def trace_ai_fields(db: Session | None, job: Job, result: dict) -> None:
+    """Moves each AI field's agent-read span id out of the result (Spring's contract has no place for it) into the
+    document's history: one FOUND / SHOWN row per AI finding with its trace and span ids, so a finding opens the read
+    and the model calls that produced it in Langfuse (observability, 23 Nov 2026)."""
+    from dps import history
+
+    trace_id = obs.current_ids()[0]
+    for f in result.get("fields") or []:
+        span_id = f.pop("_aiSpan", None)
+        if not span_id or db is None or not job.document_id:
+            continue
+        step = "FOUND" if f.get("status") == "AUTO_ACCEPTED" else "SHOWN"
+        source = f.get("source") or {}
+        history.add(db, job.document_id, step, f"{f.get('name')} (page {source.get('page')}) [{f.get('method')}]",
+                    job_id=job.id, trace_id=trace_id, field_id=f.get("id"), method=f.get("method"),
+                    ai_span_id=span_id)
 
 
 def statement_warnings(fields: list[dict], approved: dict | None = None) -> list[dict]:
@@ -912,7 +944,10 @@ def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | N
 
     ctx = json.loads(job.request_json or "{}").get("context") or {}
     expected = ctx.get("expectedType")
-    c = classify(model, expected, gateway)
+    with obs.span("dps.classify", **{"dps.expected_type": expected}) as class_span:
+        c = classify(model, expected, gateway)
+        obs.set_attrs(class_span, **{"dps.type": c.type, "dps.confidence": round(float(c.confidence or 0), 3),
+                                     "dps.mismatch": bool(c.mismatch), "dps.uncertain": bool(c.uncertain)})
     pack_name = ONBOARD_PACKS.get(c.type)
     if pack_name is None:  # not an onboarding document (a statement, a certificate, an unreadable scan)
         result = run(load("covenants"), job, {"pages": []}, None, None, db, pipeline_version)
@@ -924,10 +959,13 @@ def run_onboard(job: Job, model: dict, gateway=None, tools=None, db: Session | N
                               "reasons": ["TYPE_NOT_ONBOARDING"], "pages": page_accounting(model.get("pages", []))}
     else:
         result = run(load(pack_name), job, model, gateway, tools, db, pipeline_version, scorer_dir=scorer_dir)
-    found = find_identifiers(model)
-    identifiers, id_warnings = match(found, tools, {"cpIds": ctx.get("cpIds") or [],
-                                                     "obligorId": ctx.get("obligorId"),
-                                                     "facilityIds": ctx.get("facilityIds") or []}, job.correlation_id)
+    with obs.span("dps.identify") as id_span:
+        found = find_identifiers(model)
+        identifiers, id_warnings = match(found, tools, {"cpIds": ctx.get("cpIds") or [],
+                                                         "obligorId": ctx.get("obligorId"),
+                                                         "facilityIds": ctx.get("facilityIds") or []},
+                                         job.correlation_id)
+        obs.set_attrs(id_span, **{"dps.identifiers": len(identifiers), "dps.warnings": len(id_warnings)})
     result["classification"] = c.as_result()
     result["identifiers"] = identifiers
     restates = None

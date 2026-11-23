@@ -118,9 +118,22 @@ def main() -> int:
     load_env(args.env)
 
     from dps.models import Job
+    from dps.ops import observability as obs
     from dps.parse import page_model
     from dps.skills.runner import run_onboard
 
+    obs.setup("dps-demo")  # with the OTEL_* lines of .env (setup.ps1 -Observability): the run is a trace in Langfuse
+    with obs.span("dps.job", **{"dps.job_type": "ONBOARD", "dps.flow": "DEMO", "langfuse.trace.name": "ONBOARD (demo)",
+                                "langfuse.trace.tags": "demo"}) as job_span:
+        result, model, gateway, _sha, secs, tracer, _fmt = _read(args, fmt, page_model, run_onboard, Job, obs,
+                                                                    job_span)
+    _report(args, result, model, gateway, secs, tracer)
+    return 0
+
+
+def _read(args, fmt, page_model, run_onboard, Job, obs, job_span):  # noqa: N803 - the class passed in
+    """Parse and read the document inside the demo's trace: a ``dps.parse`` span, then classify, skills, ledger,
+    scoring as spans of their own, and each model call under its agent read."""
     data = args.file.read_bytes()
     sha = hashlib.sha256(data).hexdigest()
     tracer = Tracer(args.trace) if args.trace else None
@@ -128,27 +141,41 @@ def main() -> int:
     if tracer:
         tracer.step(f"1. PARSE {args.file.name} ({fmt}, sha256 {sha[:12]}...) into the page model")
         tracer.start()
-    model = page_model.build(data, fmt, sha)
+    # The trace carries the file's hash, never its name: one Langfuse session per document version.
+    obs.set_attrs(job_span, **{"dps.document_id": sha[:16], "langfuse.session.id": sha[:16],
+                               "dps.ai": bool(args.agent)})
+    with obs.span("dps.parse", **{"dps.format": fmt, "dps.bytes": len(data)}) as parse_span:
+        model = page_model.build(data, fmt, sha)
+        methods = [str(p.get("sourceMethod") or p.get("method") or "") for p in model.get("pages", [])]
+        obs.set_attrs(parse_span, **{"dps.pages": len(methods), "dps.pages_ocr": sum(m == "OCR" for m in methods),
+                                     "dps.pages_docling": sum(m == "DOCLING" for m in methods)})
     gateway = None
     if args.agent:
         from dps.agent.gateway import from_settings
         from dps.settings import Settings
 
         gateway = from_settings(Settings())
-    job = Job(id="demo", document_id=args.file.stem, job_type="ONBOARD", tenant_id="default", sha256=sha,
+    job = Job(id="demo", document_id=sha[:16], job_type="ONBOARD", tenant_id="default", sha256=sha,
               document_version_id="demo-v1", request_json=json.dumps({"context": {"expectedType": args.type}}))
     if tracer:
         tracer.step(f"2. ONBOARD job: classify, pick the skill pack, extract, ledger, score "
                     f"({'rules + Document Agent' if gateway else 'rules only'})")
     result = run_onboard(job, model, gateway)
+    for f in result["fields"]:
+        f.pop("_aiSpan", None)  # kept in the history table by a real job; the demo has no database
     secs = time.time() - t
+    obs.set_attrs(job_span, **{"dps.status": result.get("status"), "dps.fields": len(result["fields"]),
+                               "dps.type": (result.get("classification") or {}).get("type")})
     if tracer:
         tracer.stop()
         tracer.step(f"3. RESULT dps.result/1.0: {len(result['fields'])} field(s), route {result['document']['route']}, "
                     f"{secs:.1f} s")
         tracer.close()
         print(f"run log written to {args.trace} ({tracer.lines} lines)")
+    return result, model, gateway, sha, secs, tracer, fmt
 
+
+def _report(args, result, model, gateway, secs, tracer) -> None:
     c = result.get("classification") or {}
     print(f"\n{args.file.name}: {len(model.get('pages', []))} page(s), {secs:.1f} s, "
           f"{'rules + Document Agent' if gateway else 'rules only'}")
@@ -175,7 +202,6 @@ def main() -> int:
     if args.json:
         args.json.write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
         print(f"full result written to {args.json}")
-    return 0
 
 
 if __name__ == "__main__":

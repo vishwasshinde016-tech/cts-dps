@@ -449,7 +449,8 @@ class AiCall(Base):
     version, how long it took and how it ended. ``dps_ai_usage`` keeps the totals per request."""
 
     __tablename__ = "dps_ai_call"
-    __table_args__ = (Index("ix_dps_ai_call_at", "at"), Index("ix_dps_ai_call_document", "document_id"))
+    __table_args__ = (Index("ix_dps_ai_call_at", "at"), Index("ix_dps_ai_call_document", "document_id"),
+                      Index("ix_dps_ai_call_trace", "trace_id"))
 
     id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
     at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
@@ -469,6 +470,9 @@ class AiCall(Base):
     cost: Mapped[float | None] = mapped_column(Float)
     request_text: Mapped[str | None] = mapped_column(UnicodeText)  # the messages sent, secrets masked
     response_text: Mapped[str | None] = mapped_column(UnicodeText)
+    # OpenTelemetry ids of the model call (observability, 23 Nov 2026): the row opens its trace in Langfuse.
+    trace_id: Mapped[str | None] = mapped_column(Varchar(32))
+    span_id: Mapped[str | None] = mapped_column(Varchar(16))
 
 
 class TraceEvent(Base):
@@ -476,7 +480,8 @@ class TraceEvent(Base):
     verdict, the outcome, and every review and correction a person made (the History section of the document)."""
 
     __tablename__ = "dps_trace_event"
-    __table_args__ = (Index("ix_dps_trace_document", "document_id", "at"),)
+    __table_args__ = (Index("ix_dps_trace_document", "document_id", "at"),
+                      Index("ix_dps_trace_event_trace", "trace_id"))
 
     id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
     document_id: Mapped[str] = mapped_column(Varchar(36))
@@ -486,4 +491,5 @@ class TraceEvent(Base):
     actor: Mapped[str] = mapped_column(Varchar(255))
     summary: Mapped[str] = mapped_column(Unicode(1000))
     detail_json: Mapped[str] = mapped_column(UnicodeText, default="{}")
+    trace_id: Mapped[str | None] = mapped_column(Varchar(32))  # the job's trace (observability, 23 Nov 2026)
 

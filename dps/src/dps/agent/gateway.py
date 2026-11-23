@@ -29,6 +29,7 @@ import yaml
 
 from dps.agent import usage
 from dps.integrations.spring_tools import CircuitBreaker
+from dps.ops import observability as obs
 
 log = logging.getLogger(__name__)
 
@@ -161,9 +162,11 @@ def parse_json(text: str):
 class Gateway:
     def __init__(self, routes: Routes, provider: Callable[[Route], Completion],
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-                 guard: Callable[[Completion, str], Completion] | None = None) -> None:
+                 guard: Callable[[Completion, str], Completion] | None = None, trace_text: bool = False) -> None:
         self.routes = routes
         self._provider = provider
+        # The text sent and the answer on the model call's trace span (masked), only when ``ai_trace_text`` is on.
+        self.trace_text = trace_text
         self._sleep, self._clock = sleep, clock
         self._guard = guard
         self._breakers = {n: CircuitBreaker(clock=clock) for n in routes.routes}
@@ -220,8 +223,6 @@ class Gateway:
             raise AiBudgetExceeded(f"Job token budget of {budget.limit} used")
         breaker = self._breakers[route_name]
         if not breaker.allow():
-            from dps.ops import observability as obs
-
             obs.count("dps.ai.unavailable", 1, route=route_name)
         completion = self._completion(route)
         last: Exception | None = None
@@ -230,18 +231,30 @@ class Gateway:
                 raise AiUnavailable(f"Route {route_name} circuit open")
             self._buckets[route_name].take()
             usage.begin_call()
-            try:
-                answer = completion(messages)
-            except TransientModelError as ex:
-                breaker.failure()
-                last = ex
+            retry = False
+            # One trace span per model call (observability, 23 Nov 2026): Langfuse shows it as a generation with its
+            # model, tokens and time; a retried attempt is its own span, marked failed.
+            with obs.span(f"chat {route.deployment}", kind="client", **{
+                    "gen_ai.operation.name": "chat", "gen_ai.request.model": route.deployment,
+                    "dps.route": route_name, "dps.attempt": attempt + 1,
+                    "dps.prompt_version": usage.prompt_version(messages)}) as model_span:
+                try:
+                    answer = completion(messages)
+                except TransientModelError as ex:
+                    breaker.failure()
+                    last, retry = ex, True
+                    obs.mark_failed(model_span, ex)
+                except Exception as ex:  # noqa: BLE001 - provider bugs and auth errors count as an outage
+                    breaker.failure()
+                    obs.mark_failed(model_span, ex)
+                    raise AiUnavailable(f"{type(ex).__name__}: {str(ex)[:200]}") from ex
+                else:
+                    self._on_span(model_span, messages, answer)
+            if retry:  # the back-off wait is outside the span: the span shows the call's own time
                 if attempt < route.retries:
                     delay = BACKOFF[min(attempt, len(BACKOFF) - 1)]
                     self._sleep(delay * random.uniform(0.8, 1.2))  # retry jitter  # noqa: S311  # nosec B311
                 continue
-            except Exception as ex:  # noqa: BLE001 - provider bugs and auth errors count as an outage
-                breaker.failure()
-                raise AiUnavailable(f"{type(ex).__name__}: {str(ex)[:200]}") from ex
             breaker.success()
             if budget is not None:
                 budget.used += usage.last_call_tokens()
@@ -249,6 +262,29 @@ class Gateway:
                 budget.models[route_name] = route.deployment
             return answer
         raise AiUnavailable(f"Route {route_name} failed after {route.retries + 1} attempts: {last}")
+
+    def _on_span(self, model_span, messages: list[dict], answer: str) -> None:
+        """Tokens of the call that just ended, and (with ``trace_text``) the masked text, on its trace span."""
+        if model_span is None or not model_span.is_recording():
+            return
+        span_id = format(model_span.get_span_context().span_id, "016x")
+        call = usage.last_call(span_id)
+        if call is not None:
+            # The current names and the older ones (still read by Langfuse): the GenAI conventions are in Development.
+            obs.set_attrs(model_span, **{
+                "gen_ai.usage.input_tokens": call.prompt_tokens, "gen_ai.usage.output_tokens": call.completion_tokens,
+                "gen_ai.usage.prompt_tokens": call.prompt_tokens,
+                "gen_ai.usage.completion_tokens": call.completion_tokens,
+                "gen_ai.response.model": call.model})
+        else:
+            obs.set_attrs(model_span, **{"dps.cache_hit": True})  # answered from dps_ai_cache: no model call made
+        if self.trace_text:
+            from dps.agent.guard import _masked
+
+            safe = [_masked(m) for m in messages]
+            obs.set_attrs(model_span, **{
+                "langfuse.observation.input": obs.redact(json.dumps(safe, ensure_ascii=False))[:usage.MAX_TEXT],
+                "langfuse.observation.output": obs.redact(answer or "")[:usage.MAX_TEXT]})
 
     def call_json(self, route_name: str, messages: list[dict], schema: dict | None = None,
                   check: Callable[[object], str | None] | None = None):
@@ -332,4 +368,4 @@ def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cove
         return call
 
     guard = (lambda c, model: guarded(c, model, session_factory, settings)) if session_factory else None
-    return Gateway(routes, provider, guard=guard)
+    return Gateway(routes, provider, guard=guard, trace_text=bool(getattr(settings, "ai_trace_text", False)))

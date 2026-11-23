@@ -421,6 +421,7 @@ Four links on the architect's list could not be downloaded (Workspace, Gresham H
 | A temporary error (database, network) | the job goes back to the queue with a growing wait, then retries | `show_job.py` section 4 (attempts) | "It retries by itself." |
 | A file that crashes the parser again and again | the job becomes DEAD with `PARSER_CRASH`, and an event tells Spring | `dps_job.status`, event `dps.job.dead` | "One bad file can never block the queue." |
 | A wrong or unsupported file | refused before parsing (`UNSUPPORTED_FORMAT`, encrypted, macro) | job error code | "Unsafe files are never opened." |
+| The tracing tool (Langfuse) is down | exports spans in the background and drops them; the job finishes normally | Langfuse shows no trace for that job | "Tracing never holds up a job." |
 
 The error and issue codes are all listed in [`contracts/catalogues/errors.yaml`](../../contracts/catalogues/errors.yaml).
 
@@ -442,6 +443,8 @@ The error and issue codes are all listed in [`contracts/catalogues/errors.yaml`]
 | Review decisions | table `dps_review_decision` | same | after Spring's review |
 | Settings | `dps\.env` | the vault and container settings | VS Code |
 | Logs | Terminals A and B | one JSON line per event, per container | the terminals |
+| Traces (each step, each AI call) | Langfuse, `http://localhost:3000` (after `deploy\observability\start-langfuse.ps1`) | the bank's OpenTelemetry platform | Langfuse: project CTS DPS, Tracing; guide `observability-demo.md` |
+| Finding to AI call link | `dps_trace_event.trace_id` / `detail_json.ai_span_id`, `dps_ai_call.trace_id` / `span_id` | same | DB viewer |
 
 The full database (21 tables, every column) is in the database panel of `dps-complete.html`.
 
