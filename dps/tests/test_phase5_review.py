@@ -213,7 +213,7 @@ def test_quality_and_golden_candidates(client, app, settings, tmp_path):
 def test_ai_covenant_status_contract(client, app, settings, tmp_path):
     from test_jobapi import _def  # noqa: F401 - shared helper
 
-    _run_certificate(client, app, settings, tmp_path, "cv-6", "key-cert-6")
+    job_id = _run_certificate(client, app, settings, tmp_path, "cv-6", "key-cert-6")
     body = {"cpId": "CP-1", "covenants": [
         {"appliedCovenantId": "AC-1", "covenantName": "Debt Service Coverage Ratio", "latestResult": "COMPLIANT"},
         {"appliedCovenantId": "AC-2", "covenantName": "ICR", "conditionExpression": "ICR >= 2"},
@@ -221,6 +221,14 @@ def test_ai_covenant_status_contract(client, app, settings, tmp_path):
     from test_jobapi import check_def
 
     check_def("compat-covenant-status", "request", body)
+    # Phase 3 fix 2: while the certificate waits for review, nothing is recommended
+    before = client.post("/api/v1/ai/covenant-status", json=body, headers=SERVICE).json()
+    assert before == {"recommendations": []}
+    review = client.get(f"/dps/v1/jobs/{job_id}/review", headers=SERVICE).json()
+    decisions = {"decisions": [{"fieldId": f["fieldId"], "action": "CONFIRM"} for f in review["fields"]]}
+    done = client.post(f"/dps/v1/jobs/{job_id}/review", json=decisions,
+                       headers={**SERVICE, "If-Match": str(review["revision"]), "X-User": "analyst-1"})
+    assert done.status_code == 202 and done.json()["status"] == jobs.DONE, done.text
     r = client.post("/api/v1/ai/covenant-status", json=body, headers=SERVICE).json()
     check_def("compat-covenant-status", "response", r)
     recs = {x["appliedCovenantId"]: x for x in r["recommendations"]}
@@ -228,6 +236,10 @@ def test_ai_covenant_status_contract(client, app, settings, tmp_path):
     assert recs["AC-2"]["recommendedStatus"] == "BREACHED" and "AC-3" not in recs
     empty = client.post("/api/v1/ai/covenant-status", json={**body, "cpId": "CP-404"}, headers=SERVICE).json()
     assert empty == {"recommendations": []}
+    with app.state.db.session_factory() as s:  # a SHADOW job never drives a recommendation, reviewed or not
+        s.get(Job, job_id).rollout = "SHADOW"
+        s.commit()
+    assert client.post("/api/v1/ai/covenant-status", json=body, headers=SERVICE).json() == {"recommendations": []}
 
 
 @pytest.mark.parametrize("pack_name", ["sanction", "certificate"])

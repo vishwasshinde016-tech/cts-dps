@@ -336,6 +336,30 @@ def test_model_calls_go_only_to_allowed_hosts():
         from_settings(Settings(llm_enabled=False, ai_model="azure/gpt-4.1"))
 
 
+def test_only_azure_models_may_be_called_even_with_an_allowed_host(tmp_path, monkeypatch):
+    """Phase 3 fix 4 (23 Nov 2026): an "openai/" or "anthropic/" model goes to that provider's public host, which the
+    host check never sees; such a model or route is refused before any call."""
+    from dps.agent import gateway as gateway_module
+
+    monkeypatch.setattr(gateway_module, "_live_gateway", lambda s, f=None: "live")
+    env = {"AZURE_API_BASE": "https://bank-ai.openai.azure.com/"}
+    allowed = "bank-ai.openai.azure.com"
+    for model in ("openai/gpt-4.1", "anthropic/claude-x", "gpt-4.1", "ollama/llama3"):
+        with pytest.raises(LlmDisabled, match="only azure/"):
+            from_settings(Settings(llm_enabled=True, ai_model=model, ai_allowed_hosts=allowed), env=env)
+    assert from_settings(Settings(llm_enabled=True, ai_model="Azure/gpt-4.1", ai_allowed_hosts=allowed),
+                         env=env) == "live"
+    routes = tmp_path / "routes.yaml"
+    routes.write_text("routes:\n  small: {deployment: azure/gpt-4.1-mini}\n  strong: {deployment: openai/gpt-4.1}\n",
+                      encoding="utf-8")
+    with pytest.raises(LlmDisabled, match="route strong"):
+        from_settings(Settings(llm_enabled=True, ai_routes_file=str(routes), ai_allowed_hosts=allowed), env=env)
+    routes.write_text("routes:\n  small: {deployment: azure/gpt-4.1-mini}\n  vision: {deployment: ''}\n",
+                      encoding="utf-8")
+    assert from_settings(Settings(llm_enabled=True, ai_routes_file=str(routes), ai_allowed_hosts=allowed),
+                         env=env) == "live"  # a route left empty is simply not used
+
+
 def test_personal_data_is_masked_in_multimodal_messages_and_no_text_is_kept_by_default():
     m = _masked({"role": "user", "content": [{"type": "text", "text": "PAN AAPFU0939F"},
                                              {"type": "image_url", "image_url": {"url": "data:x"}}]})

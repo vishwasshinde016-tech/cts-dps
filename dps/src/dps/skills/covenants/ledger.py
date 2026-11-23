@@ -7,7 +7,8 @@ candidate, and each one ends in exactly one state:
 - ``FINDING``: a field quotes it (same page or a neighbour);
 - ``COVERED``: a covenant of the same kind was extracted on that page or a neighbour (one insurance covenant covers
   the four "shall" sentences of its clause);
-- ``NOT_A_COVENANT``: the Document Agent's residual read said why it is not a covenant (``omissions.py``);
+- ``NOT_A_COVENANT``: the Document Agent's residual read said why it is not a covenant (``omissions.py``); a person
+  confirms every such answer (one review item per page), and none is taken when the document addresses an AI model;
 - ``UNRESOLVED``: none of the above. These become review items, so nothing can be missed silently.
 
 Candidates come from two routes:
@@ -28,7 +29,6 @@ covenant means.
 
 from __future__ import annotations
 
-import hashlib
 import re
 
 from dps.skills.common import issue
@@ -202,8 +202,12 @@ def candidates(pages: list[dict]) -> list[dict]:
     return out
 
 
-def settle(entries: list[dict], fields: list[dict], decisions: dict[str, dict] | None = None) -> list[dict]:
-    """Gives each candidate its state against the fields (and the residual read's decisions), in place."""
+def settle(entries: list[dict], fields: list[dict], decisions: dict[str, dict] | None = None,
+           trust_dismissals: bool = True) -> list[dict]:
+    """Gives each candidate its state against the fields (and the residual read's decisions), in place.
+
+    ``trust_dismissals=False`` (the document addresses an AI model, Phase 3 fix 1, 23 Nov 2026): the residual read's
+    "not a covenant" answers are not taken; each such sentence stays UNRESOLVED, a review item with the AI's reason."""
     quotes: dict[int, list[tuple[str, dict]]] = {}
     kinds: dict[int, dict[str, dict]] = {}
     for f in fields:
@@ -240,12 +244,15 @@ def settle(entries: list[dict], fields: list[dict], decisions: dict[str, dict] |
             e["state"], e["fieldId"], e["reason"] = COVERED, kind_hit.get("id"), None
             continue
         d = (decisions or {}).get(e["id"])
-        if d and d.get("decision") == "NOT_A_COVENANT":
+        if d and d.get("decision") == "NOT_A_COVENANT" and trust_dismissals:
             e["state"], e["reason"] = NOT_A_COVENANT, (d.get("reason") or "")[:200] or "not a covenant"
             continue
         e["state"] = UNRESOLVED
         if d and d.get("decision") == "UNSURE":
             e["reason"] = ("the Document Agent was unsure: " + (d.get("reason") or ""))[:200]
+        elif d and d.get("decision") == "NOT_A_COVENANT":
+            e["reason"] = ("the Document Agent said not a covenant (not taken: the document addresses an AI "
+                           "model): " + (d.get("reason") or ""))[:200]
     return entries
 
 
@@ -317,17 +324,25 @@ def review_items(entries: list[dict], pages: list[dict], pack_name: str) -> list
         for e in items:
             e["fieldId"] = f["id"]
         out.append(f)
-    for e in entries:  # F8: one in ten dismissed sentences, chosen by its id (reproducible), is checked by a person
-        if e["state"] != NOT_A_COVENANT or int(hashlib.sha256(e["id"].encode()).hexdigest()[:8], 16) % 10:
-            continue
-        value = {"metric": e["kind"] or "OTHER", "operator": None, "threshold": None, "unit": None,
-                 "expression": None, "candidates": [e["id"]], "sentences": [e["text"]]}
-        f = make_field(pack_name, pages, "POSSIBLE_COVENANT", f"Dismissed duty on page {e['page']} (QA sample)", value,
-                       e["page"], e["_full"], method="COVERAGE", confidence=0.3, key=f"dismissed-{e['id']}")
+    # Every sentence the Document Agent dismissed goes to a person, one review item per page (Phase 3 fix 1,
+    # 23 Nov 2026). Before, one in ten was sampled, so a document could talk the model into hiding nine in ten duties.
+    dismissed: dict[int, list[dict]] = {}
+    for e in entries:
+        if e["state"] == NOT_A_COVENANT:
+            dismissed.setdefault(e["page"], []).append(e)
+    for page, items in sorted(dismissed.items()):
+        first = items[0]
+        value = {"metric": "OTHER", "operator": None, "threshold": None, "unit": None, "expression": None,
+                 "candidates": [e["id"] for e in items], "sentences": [e["text"] for e in items[:8]],
+                 "reasons": [e["reason"] or "no reason" for e in items[:8]]}
+        f = make_field(pack_name, pages, "POSSIBLE_COVENANT", f"Dismissed by the Document Agent on page {page}", value,
+                       page, first["_full"], method="COVERAGE", confidence=0.3, key=f"dismissed-{first['id']}")
         f["status"] = "NEEDS_REVIEW"
-        f["issues"].append(issue("DISMISSED_SAMPLE", ("the Document Agent said this is not a covenant ("
-                                                      + (e["reason"] or "no reason")
-                                                      + "); a sampled check: confirm or reject")[:300]))
+        why = (first["reason"] or "no reason") + (", ..." if len(items) > 1 else "")
+        f["issues"].append(issue("AI_DISMISSED", (f"the Document Agent said {len(items)} duty sentence(s) on page "
+                                                  f"{page} are not covenants ({why}); confirm or reject")[:300]))
+        for e in items:
+            e["fieldId"] = f["id"]
         out.append(f)
     return out
 

@@ -341,16 +341,16 @@ def test_long_agreements_split_into_batches_and_short_ones_do_not():
 class Batches(Salvage):
     """Answers each batch with the covenants on its own pages; can run out of budget after N reads."""
 
-    def __init__(self, answers: dict[int, list[dict]], budget_after: int | None = None):
+    def __init__(self, answers: dict[int, list[dict]], budget_after: int | None = None, error=None):
         super().__init__([])
-        self.answers, self.budget_after, self.reads = answers, budget_after, 0
+        self.answers, self.budget_after, self.reads, self.error = answers, budget_after, 0, error
 
     def call_json(self, route, messages, schema, check):
         from dps.agent.gateway import AiBudgetExceeded
 
         self.reads += 1
         if self.budget_after is not None and self.reads > self.budget_after:
-            raise AiBudgetExceeded("job budget spent")
+            raise (self.error or AiBudgetExceeded)("job budget spent")
         content = messages[0]["content"]
         items = [i for page, items in self.answers.items() if f"<<<page {page}>>>" in content for i in items]
         return {"items": items}
@@ -372,6 +372,13 @@ def test_batch_answers_are_merged_once_and_a_spent_budget_stops_the_rest():
     assert sorted(p["name"] for p in out) == ["C1", "C2"] and gw.reads == 3  # stopped after the budget ran out
     assert any("batches 4 to 4" in n["message"] for n in notes if n["code"] == "AI_BUDGET_EXCEEDED")
     assert batched_proposals(load("sanction"), None, batches) is None  # no model at all
+    from dps.agent.gateway import AiMonthlyBudgetSpent  # the month's budget stops the rest too (Phase 3 fix 3)
+
+    notes = []
+    gw = Batches(item, budget_after=2, error=AiMonthlyBudgetSpent)
+    out = batched_proposals(load("sanction"), gw, batches, notes=notes, all_pages=doc)
+    assert gw.reads == 3 and {n["code"] for n in notes} == {"AI_MONTHLY_BUDGET_SPENT"}
+    assert any("batches 4 to 4" in n["message"] for n in notes)
 
 
 def test_the_covenants_skill_reads_a_long_agreement_in_several_batches():

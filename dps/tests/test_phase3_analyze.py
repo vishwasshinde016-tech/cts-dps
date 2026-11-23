@@ -278,6 +278,49 @@ def test_gateway_breaker_opens_then_unavailable():
         gw.call("small", [])
 
 
+def test_a_spent_month_and_a_refusal_are_not_outages_and_keep_the_breaker_closed():
+    """Phase 3 fix 3 (23 Nov 2026): before, both raised AiUnavailable and opened the breaker for the next jobs."""
+    from dps.agent.gateway import AiMonthlyBudgetSpent, AiRefused, ModelRefused
+    from dps.agent.guard import AiBudgetExhausted
+
+    gw, sent = gateway([AiBudgetExhausted("100 of 100 tokens used in 2026-11")] * 8, retries=3)
+    for _ in range(8):
+        with pytest.raises(AiMonthlyBudgetSpent) as spent:
+            gw.call("small", [])
+        assert spent.value.code == "AI_MONTHLY_BUDGET_SPENT" and isinstance(spent.value, AiBudgetExceeded)
+    assert gw.available("small") and len(sent) == 8  # no retries, breaker still closed
+    gw, sent = gateway([ModelRefused("content_filter")] * 8 + ['{"ok": 1}'], retries=3)
+    for _ in range(8):
+        with pytest.raises(AiRefused):
+            gw.call("small", [])
+    assert gw.available("small") and len(sent) == 8
+    assert gw.call_json("small", []) == {"ok": 1}  # the next document still gets the model
+
+
+def test_the_live_provider_maps_a_content_filter_error_to_a_refusal(monkeypatch):
+    from dps.advisory import advisor
+    from dps.agent import gateway as gw_module
+    from dps.agent.gateway import ModelRefused
+
+    errors = iter([RuntimeError("litellm.ContentPolicyViolationError: AzureException - content_filter (500)"),
+                   RuntimeError("503 Service Unavailable")])
+
+    def fake_completion(model, temperature=None, timeout=None):
+        def call(messages):
+            raise next(errors)
+        return call
+
+    monkeypatch.setattr(advisor, "crewai_completion", fake_completion)
+    settings = type("S", (), {"ai_routes_file": "", "ai_model": "azure/x", "ai_rpm_share": 1, "ai_trace_text": False,
+                              "ai_temperature": None})()
+    live = gw_module._live_gateway(settings)
+    provider = live._provider(live.routes.routes["strong"])
+    with pytest.raises(ModelRefused):  # even though its text holds "500"
+        provider([])
+    with pytest.raises(TransientModelError):
+        provider([])
+
+
 def test_gateway_repairs_once_then_invalid():
     gw, sent = gateway(["not json", '{"type": "X"}'])
     schema = {"type": "object", "required": ["type"]}

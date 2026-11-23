@@ -249,10 +249,11 @@ def batched_proposals(pack, gateway, batches: list[list[dict]], notes: list | No
                 if span_id and isinstance(p, dict):
                     p["_span"] = span_id
         if got is None:
-            spent = notes is not None and any(n["code"] == "AI_BUDGET_EXCEEDED" for n in notes[before:])
+            spent = next((n["code"] for n in (notes or [])[before:]
+                          if n["code"] in ("AI_BUDGET_EXCEEDED", "AI_MONTHLY_BUDGET_SPENT")), None)
             if spent and i + 1 < len(batches):
-                notes.append(issue("AI_BUDGET_EXCEEDED", f"{pack.name}: batches {i + 2} to {len(batches)} of "
-                                                         f"{len(batches)} not read by the agent"))
+                notes.append(issue(spent, f"{pack.name}: batches {i + 2} to {len(batches)} of "
+                                          f"{len(batches)} not read by the agent"))
                 break
             continue
         out = out or []
@@ -269,10 +270,8 @@ def _failed(pack, ex, notes: list | None) -> None:
     """Why the agent gave nothing usable, for the result's warnings; the rules' answer stands."""
     from dps.agent.gateway import AiBudgetExceeded
 
-    code = ex.code
-    if isinstance(ex, AiBudgetExceeded):
-        code = "AI_BUDGET_EXCEEDED"
-    elif str(ex).startswith(UNGROUNDED_PREFIX):
+    code = ex.code  # AI_BUDGET_EXCEEDED, AI_MONTHLY_BUDGET_SPENT, AI_REFUSED, AI_UNAVAILABLE ...
+    if not isinstance(ex, AiBudgetExceeded) and str(ex).startswith(UNGROUNDED_PREFIX):
         code = "AI_UNGROUNDED"
     log.info("%s agent unavailable: %s", pack.name, code)
     if notes is not None:
