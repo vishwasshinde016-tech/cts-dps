@@ -12,8 +12,13 @@ from dps.skills.common import amount, issue, make_field
 
 PACK = "certificate"
 FIGURE = re.compile(r"(?<![\w.])(\d{1,6}(?:,\d{2,3})*(?:\.\d+)?)\s*(x|times|%)?(?![\w.])", re.I)
-COMPLIED = re.compile(r"\b(not\s+complied|non[\s-]*compli\w*|breach(ed)?|not\s+met|no)\b|"
+# "No" counts only as the last word of a row (a Yes/No status column): "Covenant No. 4 ... Complied" is complied
+# (CTS review, 23 Nov 2026: the "No" of "No." read every such row as a breach).
+COMPLIED = re.compile(r"\b(not\s+complied|non[\s-]*compli\w*|breach(ed)?|not\s+met|no(?=\W*$))\b|"
                       r"\b(complied|compliant|in\s+compliance|met|yes|satisfied)\b", re.I)
+# "BREACHED (see 3)", "(refer note 4)", "(para 2.1)": a pointer to another part, not a figure.
+POINTER = re.compile(r"\(\s*(?:see|refer(?:\s+to)?|note|para(?:graph)?|section|clause|annex(?:ure)?)\b[^)]{0,20}\)",
+                     re.I)
 DESIGNATION = re.compile(r"\b(partner|proprietor|director|managing\s+director|chief\s+financial\s+officer|cfo|"
                          r"company\s+secretary|authori[sz]ed\s+signatory)\b", re.I)
 NAME_LINE = re.compile(r"^\s*(?:(?i:name)\s*[:\-]\s*|\(?\s*(?i:ca\.?|mr\.?|ms\.?|shri)\s+)"
@@ -57,7 +62,8 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
     seen = set()
     for p in pages:
         lines = [s for whole in (p.get("text") or "").splitlines() for s in _segments(_TO_ONE.sub(r"\1", whole))]
-        for line in lines:
+        for whole_line in lines:
+            line = POINTER.sub(" ", whole_line)
             metric = _best_metric(line)
             if not metric or metric in seen:
                 continue
@@ -67,7 +73,7 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
             fig = figures[-1]
             # The certified (actual) figure is the last number on the line; a required level comes before it.
             declared = None
-            c = COMPLIED.search(line.split(fig.group(0))[-1]) or COMPLIED.search(line)
+            c = COMPLIED.search(line[fig.end():]) or COMPLIED.search(line)
             if c:
                 declared = c.group(3) is not None
             seen.add(metric)
@@ -75,7 +81,7 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
             value = {"covenant": metric, "figure": amount(fig.group(1)), "unit": unit,
                      "declaredCompliant": declared, **signed}
             issues = [] if declared is not None else [issue("NO_DECLARATION", "no complied / not complied wording")]
-            f = make_field(PACK, pages, "CERTIFIED_FIGURE", metric, value, p["no"], line.strip(),
+            f = make_field(PACK, pages, "CERTIFIED_FIGURE", metric, value, p["no"], whole_line.strip(),
                            confidence=0.85 if declared is not None else 0.6, issues=issues)
             if issues:
                 f["status"] = "NEEDS_REVIEW"

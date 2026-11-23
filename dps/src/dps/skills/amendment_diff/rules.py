@@ -7,6 +7,7 @@ import re
 from datetime import date
 
 from dps.extraction.agreement import _best_metric, extract_terms
+from dps.skills.app_formula import same_threshold
 from dps.skills.common import issue, line_at, make_field
 from dps.skills.covenants.rules import as_pages, term_field
 
@@ -73,8 +74,9 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
             handled.add((op["page"], op["clause"], op["type"]))
         if old is None:
             kind = "CHANGE" if (op and op["type"] == "CHANGE") or (possible and not op) else "ADD"
-        elif (op or any(value.get(k) is not None and value[k] != old["value"].get(k)
-                        for k in ("threshold", "operator", "schedule", "cure", "expression"))
+        elif (op or (value.get("threshold") is not None and not same_threshold(value, old["value"]))
+              or any(value.get(k) is not None and value[k] != old["value"].get(k)
+                     for k in ("operator", "schedule", "cure", "expression"))
               or any((old.get("test") or {}).get(k) is not None and (f.get("test") or {}).get(k) is not None
                      and old["test"][k] != f["test"][k] for k in ("frequency", "basis"))):
             kind = "CHANGE"

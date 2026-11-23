@@ -50,6 +50,9 @@ JOB_TYPES = {
     # Full review WP9: waiver and consent letters; the covenants in force across a document set (JSON manifest).
     "EXTRACT_WAIVER": {"flow": "SKILL_PACK", "document_type": "WAIVER_CONSENT", "phase": 4},
     "RECONCILE_SET": {"flow": "SKILL_PACK", "document_type": "DOCUMENT_SET", "phase": 4},
+    # CTS integration, 23 Nov 2026: one upload for every document type. DPS classifies the document and reads it
+    # with the pack for its type: agreement, sanction letter, amendment, waiver, statement or compliance certificate.
+    "AUTO": {"flow": "SKILL_PACK", "document_type": "UNKNOWN", "phase": 4},
 }
 JSON_TYPES = ("DRAFT_COMMENTARY", "RECONCILE_SET")  # their document is a JSON manifest, not a file to read
 LATER_TYPES = {"REPROCESS": 5}
@@ -60,6 +63,8 @@ MEDIA_TYPES = {
     "text/csv": ".csv",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
     "application/json": ".json",  # DRAFT_COMMENTARY's outcome manifest only
+    "image/png": ".png",  # a photo or scan, read with OCR (CTS integration, 23 Nov 2026)
+    "image/jpeg": ".jpg",
 }
 
 
@@ -78,7 +83,7 @@ class DocumentRef(_Strict):
     mediaType: Literal["application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # noqa: N815
                        "application/vnd.ms-excel", "text/csv",
                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                       "application/json"]
+                       "application/json", "image/png", "image/jpeg"]
     sizeBytes: int = Field(ge=1)  # noqa: N815
 
 
@@ -120,7 +125,7 @@ class JobContext(_Strict):
 class JobRequest(_Strict):
     jobType: Literal["ANALYZE", "ONBOARD", "EXTRACT_AGREEMENT", "EXTRACT_AMENDMENT", "EXTRACT_SANCTION",  # noqa: N815
                      "EXTRACT_STATEMENT", "EXTRACT_CERTIFICATE", "DRAFT_COMMENTARY", "REPROCESS", "EXTRACT_WAIVER",
-                     "RECONCILE_SET"]
+                     "RECONCILE_SET", "AUTO"]
     document: DocumentRef
     context: JobContext
     priority: Literal["INTERACTIVE", "AMENDMENT", "ASSESSMENT", "BULK", "REPROCESS"] = "INTERACTIVE"
@@ -191,8 +196,6 @@ def validate_job(store, body: JobRequest, settings: Settings) -> dict:
     if body.jobType == "EXTRACT_AMENDMENT" and not (body.context.baseCovenants or body.context.amendsVersionId):
         raise ApiError(400, "BASE_REQUIRED", "context.baseCovenants (preferred) or context.amendsVersionId is "
                                              "required for EXTRACT_AMENDMENT.")
-    if spec["document_type"] == "FINANCIAL_STATEMENT" and body.context.asOfDate is None:
-        raise ApiError(400, "INVALID_INPUT", "context.asOfDate (period end) is required for statements.")
     if body.document.sizeBytes > settings.max_upload_mb * 1024 * 1024:
         raise ApiError(400, "INVALID_INPUT", f"The file is larger than {settings.max_upload_mb} MB.")
     if body.jobType == "ANALYZE" and not body.document.objectKey:
@@ -293,10 +296,20 @@ def _input_key(body: JobRequest, pipeline: str, rollout: str) -> str:
     return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+FAILED_ENDS = (jobs.FAILED, jobs.DEAD, jobs.CANCELLED)
+
+
 def _same_input(db: Session, body: JobRequest, settings: Settings) -> Job | None:
+    """The job that already read this input (same version, type, context and pipeline), or None. A job that ended
+    FAILED, DEAD or CANCELLED does not count: the same document may be sent again (CTS review, 23 Nov 2026: it was
+    stuck for ever). Its input key is released so the new job can take it (the key is unique)."""
     key = _input_key(body, settings.pipeline_version, _rollout(body, settings))
     tenant = Job.tenant_id == body.context.tenantId
     existing = db.scalars(select(Job).where(tenant, Job.input_key == key)).first()
+    if existing is not None and existing.status in FAILED_ENDS:
+        existing.input_key = None
+        db.flush()
+        return None
     if existing is not None:
         return existing
     # Preserve equivalent historical jobs without hashing incomplete legacy request records.
@@ -309,7 +322,7 @@ def _same_input(db: Session, body: JobRequest, settings: Settings) -> Job | None
             previous = JobRequest.model_validate_json(job.request_json)
         except ValueError:
             continue
-        if _input_key(previous, job.pipeline_version, job.rollout) == key:
+        if _input_key(previous, job.pipeline_version, job.rollout) == key and job.status not in FAILED_ENDS:
             return job
     return None
 
@@ -438,10 +451,12 @@ def retry_failed_job(job_id: str, db: DB, user: User) -> dict:
     if job.status not in (jobs.FAILED, jobs.DEAD):
         raise ApiError(409, "JOB_NOT_RETRYABLE", f"Job is {job.status}, not FAILED or DEAD")
     now = utcnow()
+    previous = job.status
     job.status, job.attempts, job.error, job.error_code = jobs.QUEUED, 0, None, None
     job.crash_count, job.due_at, job.finished_at, job.updated_at = 0, now, None, now
     job.cancel_requested = False
     services.audit(db, user.user, "JOB_RETRY", "job", job.id)
+    jobs.requeued(db, job, user.user, previous)
     db.commit()
     return job_view(job)
 
@@ -451,10 +466,15 @@ def cancel_job(job_id: str, db: DB, user: User,
                x_user: Annotated[str | None, Header(alias="X-User")] = None) -> dict:
     require_roles(user, SERVICE, ADMIN, SUPPORT)
     job = _job_or_404(db, job_id)
-    actor = x_user or user.user
+    from dps.api.review import acting_user
+
+    actor = acting_user(x_user, user)
     try:
         jobs.request_cancel(db, job, actor)
     except jobs.JobFinished as ex:
+        if str(ex) == jobs.NEEDS_REVIEW:
+            raise ApiError(409, "JOB_FINISHED", "The job is waiting for review: its result is kept. Close the "
+                                                "review (POST /dps/v1/jobs/{jobId}/close) instead.") from ex
         raise ApiError(409, "JOB_FINISHED", f"The job has already finished ({ex}).") from ex
     services.audit(db, actor, "JOB_CANCEL", "job", job.id)
     db.commit()
@@ -607,6 +627,7 @@ def rerun_batch(batch_id: str, db: DB, user: User) -> dict:
     for job in rerun:
         job.status, job.attempts, job.error, job.error_code = jobs.QUEUED, 0, None, None
         job.crash_count, job.due_at, job.finished_at, job.updated_at = 0, now, None, now
+        jobs.requeued(db, job, user.user, jobs.DEAD)
     if rerun:
         batch.status, batch.finished_at = "RUNNING", None
     services.audit(db, user.user, "BATCH_RERUN", "batch", batch.id, items=len(rerun))

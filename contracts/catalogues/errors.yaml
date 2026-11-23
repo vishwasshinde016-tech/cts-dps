@@ -153,5 +153,8 @@ errors:
   - { code: OPERATOR_UNREAD, class: QUALITY, http: null, retry: false, message: "The reader wrote something that is not an operator; set it from the quote." }
   - { code: BREACH_WORDING, class: QUALITY, http: null, retry: false, message: "The clause states when the covenant is breached; the covenant is the opposite. Check the operator." }
   - { code: LIBRARY_AMBIGUOUS, class: QUALITY, http: null, retry: false, message: "Several library covenants fit this covenant equally; a person picks one." }
+  - { code: PERIOD_FROM_DOCUMENT, class: QUALITY, http: null, retry: false, message: "No period date was sent; the period end was read from the statement's heading. Check it." }
+  - { code: PERIOD_DATE_MISSING, class: QUALITY, http: null, retry: false, message: "No period date was sent and the statement names none; send it with reclassify (asOfDate) or the figures cannot be stored." }
+  - { code: TYPE_NOT_READ, class: QUALITY, http: null, retry: false, message: "The document is of a type DPS does not read; reclassify it if the type is wrong." }
   # --- internal ---
   - { code: INTERNAL_ERROR, class: INTERNAL, http: 500, retry: true, message: "Processing failed; support has been informed." }

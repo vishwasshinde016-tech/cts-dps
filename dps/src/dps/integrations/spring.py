@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
+from contextvars import ContextVar
 from datetime import date
 
 import httpx
@@ -21,6 +22,12 @@ log = logging.getLogger(__name__)
 
 class SpringUnavailable(Exception):
     """Spring could not be reached or answered 5xx; the caller retries later."""
+
+
+# The correlation id of the job being processed (set by the worker for each job): every call to Spring carries it,
+# so one upload can be followed across the bank app and DPS (CTS review, 23 Nov 2026: library, currency, profile,
+# countries and FX calls had none).
+CORRELATION: ContextVar[str | None] = ContextVar("dps_spring_correlation", default=None)
 
 
 class SpringClient:
@@ -53,6 +60,9 @@ class SpringClient:
 
     def _request(self, method: str, path: str, **kw) -> httpx.Response:
         headers = {**(kw.pop("headers", None) or {}), **self._auth_headers()}
+        correlation = CORRELATION.get()
+        if correlation and "X-Correlation-Id" not in headers:
+            headers["X-Correlation-Id"] = correlation[:128]
         try:
             resp = self._client.request(method, path, headers=headers, **kw)
         except httpx.HTTPError as exc:

@@ -271,6 +271,9 @@ def release_for_retry(db: Session, job: Job, error: str, max_attempts: int, erro
     job.locked_by, job.locked_until, job.updated_at = None, None, now
     job.due_at = now + timedelta(seconds=retry_delay(job.attempts, base_seconds, max_seconds))
     _close_attempt(db, job, RETRY_WAIT, error_code)
+    # Spring sees the wait (CTS review, 23 Nov 2026: up to 15 minutes passed with no event)
+    feed.emit_for_job(db, "dps.job.retry_wait", job, {"errorCode": error_code, "attempts": job.attempts,
+                                                      "dueAt": job.due_at.isoformat()})
     db.commit()
 
 
@@ -281,12 +284,21 @@ def move_to_pool(db: Session, job: Job, pool: str) -> None:
     job.attempts = max(0, job.attempts - 1)
     job.locked_by, job.locked_until, job.updated_at = None, None, utcnow()
     _close_attempt(db, job, "MOVED_" + pool, None)
+    feed.emit_for_job(db, "dps.job.moved", job, {"pool": pool})  # a long document now waits for a HEAVY worker
     db.commit()
 
 
+def requeued(db: Session, job: Job, by: str, previous: str) -> None:
+    """A FAILED or DEAD job put back in the queue (support retry, batch re-run): Spring hears it, so a job it had
+    marked failed may still complete (CTS review, 23 Nov 2026)."""
+    feed.emit_for_job(db, "dps.job.requeued", job, {"requeuedBy": by, "previousStatus": previous})
+
+
 def request_cancel(db: Session, job: Job, user: str) -> Job:
-    """A waiting job is cancelled at once; a running one is flagged and stops at its next checkpoint."""
-    if job.status in FINAL:
+    """A waiting job is cancelled at once; a running one is flagged and stops at its next checkpoint. A job waiting
+    for review is finished reading: cancelling it would throw its result away, so it is refused (close the review
+    instead; CTS review, 23 Nov 2026)."""
+    if job.status in FINAL or job.status == NEEDS_REVIEW:
         raise JobFinished(job.status)
     if job.status == RUNNING:
         job.cancel_requested, job.updated_at = True, utcnow()

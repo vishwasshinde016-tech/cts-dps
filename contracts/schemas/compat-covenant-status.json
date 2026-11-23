@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cts.local/dps/schemas/compat-covenant-status.json",
   "title": "compat.covenant-status/1.0",
-  "description": "POST /api/v1/ai/covenant-status (phase 5): the bank app's AiStatusRecommender contract, unchanged (AiStatusRequest / AiStatusRecommendation records). Answered in at most 10 s from results DPS already extracted; never parses a file inside the call; an empty list means 'AI unavailable'. Only certificate figures a person confirmed or corrected count (a job waiting for review or run in SHADOW gives none).",
+  "description": "POST /api/v1/ai/covenant-status (phase 5): the bank app's AiStatusRecommender contract: the same request and response bodies (AiStatusRequest / AiStatusRecommendation records), but the call needs DPS's service token (Authorization Bearer, role SERVICE). Certificates: the ones named in certificateFileIds (DMS version ids), else the newest certificate DPS read for the CP; read by EXTRACT_CERTIFICATE or AUTO; a covenant is matched by its measure code, metric and name. Answered in at most 10 s from results DPS already extracted; never parses a file inside the call; an empty list means 'AI unavailable'. Only certificate figures a person confirmed or corrected count (a job waiting for review or run in SHADOW gives none).",
   "$defs": {
     "request": {
       "type": "object",

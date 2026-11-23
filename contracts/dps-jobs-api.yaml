@@ -27,7 +27,7 @@ tags:
   - name: catalogue
   - name: ops
   - name: compatibility
-    description: Endpoints the bank app already calls on external services, served by DPS unchanged.
+    description: "Endpoints the bank app already calls on external services, served by DPS with the same request and response bodies. Unlike the services they replace, they need DPS's service token (Authorization Bearer, role SERVICE); the bank app's DataApiClient and AiStatusRecommender must send it."
 paths:
   /dps/v1/jobs:
     post:
@@ -121,6 +121,9 @@ paths:
       operationId: cancelJob
       x-phase: 1
       summary: Cancel a queued or running job (a running job stops at its next stage)
+      description: >-
+        A job waiting for review (NEEDS_REVIEW) is not cancelled: it already has a result, so this returns 409
+        JOB_FINISHED. To end a review without deciding every field, use POST /dps/v1/jobs/{jobId}/close.
       parameters: [ { $ref: "#/components/parameters/JobId" }, { $ref: "#/components/parameters/ActingUser" } ]
       responses:
         "202":
@@ -128,6 +131,40 @@ paths:
           content:
             application/json:
               schema: { $ref: "schemas/job-status.json" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /dps/v1/jobs/{jobId}/close:
+    post:
+      tags: [review]
+      operationId: closeReview
+      x-phase: 5
+      summary: End a review; fields not decided become NOT_USED and the job is DONE
+      description: >-
+        For a job in NEEDS_REVIEW. Open fields become NOT_USED, open blocking warnings are acknowledged by the
+        close, the result route becomes CLOSED and dps.extraction.completed is sent once with closed true.
+        Calling it again on a DONE job returns the job and sends nothing. If-Match is optional; when sent it must
+        be the current revision.
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/ActingUser"
+        - { name: If-Match, in: header, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200":
+          description: The job status with closed true and notUsed (how many fields became NOT_USED)
+          content:
+            application/json:
+              schema: { $ref: "schemas/job-status.json" }
+        "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
@@ -266,7 +303,14 @@ paths:
       operationId: reclassify
       x-phase: 5
       summary: A reviewer sets the right document type; a new run starts
-      parameters: [ { $ref: "#/components/parameters/JobId" }, { $ref: "#/components/parameters/ActingUser" } ]
+      description: >-
+        The old job ends: a queued or running job is cancelled, a job in NEEDS_REVIEW becomes DONE with route
+        SUPERSEDED and its open fields NOT_USED, and dps.job.superseded is sent. Send an Idempotency-Key so a
+        retried call returns the same new job (200, duplicate true) instead of starting another.
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/ActingUser"
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string, minLength: 8, maxLength: 128 } }
       requestBody:
         required: true
         content:
@@ -277,13 +321,20 @@ paths:
               properties:
                 type: { type: string, enum: [SANCTION_LETTER, LOAN_AGREEMENT, AMENDMENT, FINANCIAL_STATEMENT, COMPLIANCE_CERTIFICATE, SECURITY_DOCUMENT, OTHER_EVIDENCE, WAIVER_CONSENT, GUARANTEE, AMENDED_AND_RESTATED, TRUST_DEED] }
                 reason: { type: string, maxLength: 500 }
+                asOfDate: { type: [string, "null"], format: date, description: "A statement's period end; kept from the first request when not sent" }
       responses:
         "202":
           description: New run started
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobAccepted" }
+        "200":
+          description: Same Idempotency-Key seen before; the job it started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
         "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 
   /dps/v1/versions/{versionId}/pages/{page}/image:
     get:

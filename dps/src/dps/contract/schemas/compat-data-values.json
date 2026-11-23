@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cts.local/dps/schemas/compat-data-values.json",
   "title": "compat.data-values/1.0",
-  "description": "POST /api/data/values (phase 4): the bank app's data-source contract, unchanged (DataApiClient, DataSeriesResponse/DataPoint records). DPS answers from approved statement figures only.",
+  "description": "POST /api/data/values (phase 4): the bank app's data-source contract: the same request and response bodies (DataApiClient, DataSeriesResponse/DataPoint records), but the call needs DPS's service token (Authorization Bearer, role SERVICE). DPS answers from approved statement figures only.",
   "$defs": {
     "request": {
       "type": "object",

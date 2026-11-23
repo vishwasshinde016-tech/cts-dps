@@ -13,11 +13,11 @@ events:
                mismatches: array, route: string, resultUrl: string }
   - type: dps.extraction.completed
     when: An extraction finished with every field accepted, or after its review was submitted.
-    payload: { skillPack: string, fields: integer, resultUrl: string, revision: integer, reviewedBy: string }
+    payload: { skillPack: string, fields: integer, toReview: integer, route: "string|null", documentType: "string|null", resultUrl: string, revision: integer, reviewedBy: string, closed: boolean, notUsed: integer }
     notes: skillPack and fields when the extraction itself finished; revision and reviewedBy when a review completed it.
   - type: dps.extraction.needs_review
     when: An extraction finished with at least one field for a person.
-    payload: { skillPack: string, fields: integer, resultUrl: string }
+    payload: { skillPack: string, fields: integer, toReview: integer, route: "string|null", documentType: "string|null", resultUrl: string }
     notes: GET /dps/v1/jobs/{jobId}/review lists the fields; the job's errorCode is MAPPING_REVIEW when the borrower or facility must be mapped first.
   - type: dps.extraction.shadow
     when: A job run in SHADOW rollout (phase 7 pilot) finished; the result is stored for comparison, not shown.
@@ -33,6 +33,18 @@ events:
     when: A job was cancelled before it finished.
     payload: { cancelledBy: string, cancelled: boolean, errorCode: string, message: string }
     notes: cancelledBy when it was cancelled while waiting; cancelled true when it was cancelled while running.
+  - type: dps.job.retry_wait
+    when: A temporary problem (Spring or the model unreachable, a parser hiccup); DPS tries again at dueAt.
+    payload: { errorCode: string, attempts: integer, dueAt: string }
+  - type: dps.job.moved
+    when: The job moved to the HEAVY pool (a long or poorly scanned document); it waits for a HEAVY worker.
+    payload: { pool: string }
+  - type: dps.job.requeued
+    when: Support put a FAILED or DEAD job back in the queue (retry, batch re-run); it may still complete.
+    payload: { requeuedBy: string, previousStatus: string }
+  - type: dps.job.superseded
+    when: The document was read again as another type (reclassify); this job ends, supersededBy carries the result.
+    payload: { supersededBy: string, status: string }
   - type: dps.batch.completed
     when: Every item of a batch has ended.
     payload: { batchId: string, counts: object, errorsUrl: "string|null" }

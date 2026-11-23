@@ -27,12 +27,22 @@ FINAL_EVENTS = {
 }
 
 
+def _db_now(db: Session):
+    """The database's own UTC clock, as a SQL expression: writers on several hosts and the reader all use one clock,
+    so a host whose clock runs fast or slow cannot make the reader skip an event (CTS review, 23 Nov 2026)."""
+    from sqlalchemy import func
+
+    dialect = db.get_bind().dialect.name
+    return func.sysutcdatetime() if dialect == "mssql" else func.current_timestamp()
+
+
 def emit(db: Session, type_: str, *, tenant_id: str = "default", job_id: str | None = None,
          document_version_id: str | None = None, correlation_id: str | None = None,
          payload: dict | None = None) -> EventFeed:
     """Adds an event to the session; the caller's commit publishes it together with the change."""
     event = EventFeed(type=type_, tenant_id=tenant_id, job_id=job_id, document_version_id=document_version_id,
-                      correlation_id=correlation_id, payload_json=json.dumps(payload or {}, default=str))
+                      correlation_id=correlation_id, payload_json=json.dumps(payload or {}, default=str),
+                      occurred_at=_db_now(db))
     db.add(event)
     return event
 
@@ -54,7 +64,14 @@ def view(event: EventFeed) -> dict:
 
 # A missing ``seq`` younger than this may be an event whose transaction has not committed yet (SQL Server hands out
 # IDENTITY values at insert, transactions commit in any order). Older gaps are rollbacks or identity-cache jumps.
-GAP_SETTLE_SECONDS = 60
+GAP_SETTLE_SECONDS = 300  # 5 minutes: longer than any DPS transaction that writes an event
+
+
+def _now(db: Session) -> datetime:
+    value = db.scalar(select(_db_now(db)))
+    if isinstance(value, str):  # SQLite answers text
+        value = datetime.fromisoformat(value)
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def read(db: Session, after: int, limit: int, tenant_id: str | None = None,
@@ -62,9 +79,9 @@ def read(db: Session, after: int, limit: int, tenant_id: str | None = None,
     """Events with ``seq > after``, oldest first, and the cursor to pass next time.
 
     The page stops before a recent gap in ``seq`` (full review G24): a reader that moved its cursor past a sequence
-    number still being written would never see that event. Once the gap is older than ``GAP_SETTLE_SECONDS`` it is
-    a rollback, not a pending write, and reading goes on past it."""
-    now = now or datetime.now(UTC)
+    number still being written would never see that event. Once the gap is older than ``GAP_SETTLE_SECONDS`` (both
+    times from the database's clock) it is a rollback, not a pending write, and reading goes on past it."""
+    now = now or _now(db)
     size = max(1, min(limit, 500))
     rows = list(db.scalars(select(EventFeed).where(EventFeed.seq > after).order_by(EventFeed.seq).limit(size)))
     kept, expected = [], after + 1

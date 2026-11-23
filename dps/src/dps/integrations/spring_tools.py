@@ -105,6 +105,15 @@ class _LibraryCache:
     items: list[dict] = field(default_factory=list)
 
 
+def _refused(resp, what: str) -> None:
+    """Any 4xx from the bank app (401 wrong token, 403, 400 a payload it does not take): the tool is unavailable for
+    this job (a warning on the result), never an error that kills the job (CTS review, 23 Nov 2026: one wrong token
+    made every job with covenants DEAD after three retries)."""
+    if resp.status_code >= 400:
+        log.warning("%s refused by the bank app: HTTP %s", what, resp.status_code)
+        raise SpringUnavailable(f"{what}: HTTP {resp.status_code}")
+
+
 def _chunks(items: Sequence, size: int) -> Iterable[Sequence]:
     for i in range(0, len(items), size):
         yield items[i:i + size]
@@ -169,7 +178,7 @@ class SpringTools:
                 log.info("batch formula tool not deployed; using the single-item endpoint")
                 self._batch_formulas = False
             else:
-                resp.raise_for_status()
+                _refused(resp, "formula validation")
                 return {str(r["id"]): FormulaCheck(str(r["id"]), True, bool(r.get("valid")),
                                                    tuple(r.get("errors") or ()))
                         for r in resp.json().get("items", [])}
@@ -181,7 +190,7 @@ class SpringTools:
             try:
                 resp = self._call("POST", "/api/v1/formulas/validate", correlation_id,
                                   json={"expression": expr, "requireBoolean": require_boolean})
-                resp.raise_for_status()
+                _refused(resp, "formula validation")
             except SpringUnavailable:
                 return FormulaCheck(fid, False, code=UNAVAILABLE)
             body = resp.json()
@@ -207,7 +216,7 @@ class SpringTools:
                 resp = self._call("POST", "/api/v1/dps-tools/lookups", correlation_id, json=body)
                 if resp.status_code == 404:
                     raise SpringUnavailable("lookup tool not deployed")
-                resp.raise_for_status()
+                _refused(resp, "identifier lookup")
             except SpringUnavailable as exc:
                 log.warning("identifier lookup unavailable for %d items: %s", len(chunk), exc)
                 out.update({i: LookupMatch(i, False, code=UNAVAILABLE) for i, _, _ in chunk})
@@ -230,8 +239,14 @@ class SpringTools:
             return list(self._library.items), True
         if resp.status_code == 404:
             return list(self._library.items), False
-        resp.raise_for_status()
-        body = resp.json()
-        self._library = _LibraryCache(resp.headers.get("ETag"), body.get("version"),
-                                      [i for i in body.get("items", []) if i.get("active", True)])
+        try:
+            _refused(resp, "covenant library")
+            body = resp.json()
+        except (SpringUnavailable, ValueError) as exc:  # refused or not JSON: the cached copy, a warning, no crash
+            log.warning("covenant library not usable, using cached copy: %s", exc)
+            return list(self._library.items), False
+        items = body.get("items") if isinstance(body, dict) else None
+        self._library = _LibraryCache(resp.headers.get("ETag"), body.get("version") if isinstance(body, dict) else None,
+                                      [i for i in items or [] if isinstance(i, dict) and i.get("id")
+                                       and i.get("active", True) is not False])
         return list(self._library.items), True

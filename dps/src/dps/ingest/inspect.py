@@ -26,8 +26,10 @@ MAX_UNPACKED = 200 * 1024 * 1024
 MAX_ZIP_RATIO = 100
 MAX_CSV_ROWS = 1_000_000
 MAX_CSV_COLS = 500
-FORMATS = ("PDF", "XLSX", "XLS", "CSV", "DOCX")
-EXTENSIONS = {".pdf": "PDF", ".xlsx": "XLSX", ".xls": "XLS", ".csv": "CSV", ".docx": "DOCX"}
+# IMAGE: a PNG or JPEG photo or scan, read as a one-page PDF with OCR (CTS integration, 23 Nov 2026)
+FORMATS = ("PDF", "XLSX", "XLS", "CSV", "DOCX", "IMAGE")
+EXTENSIONS = {".pdf": "PDF", ".xlsx": "XLSX", ".xls": "XLS", ".csv": "CSV", ".docx": "DOCX", ".png": "IMAGE",
+              ".jpg": "IMAGE", ".jpeg": "IMAGE"}
 MACRO_EXTENSIONS = {".xlsm", ".xltm", ".docm", ".dotm", ".xlsb"}
 ACTIVE_PDF_KEYS = ("/JavaScript", "/JS", "/Launch", "/EmbeddedFile", "/EmbeddedFiles", "/RichMedia", "/XFA")
 _DDE = re.compile(rb"DDEAUTO|\bDDE\b", re.I)
@@ -56,10 +58,10 @@ def declared_format(file_name: str | None, media_type: str | None = None) -> str
         return EXTENSIONS[ext]
     mt = (media_type or "").lower()
     for key, fmt in (("pdf", "PDF"), ("spreadsheetml", "XLSX"), ("ms-excel", "XLS"), ("csv", "CSV"),
-                     ("wordprocessingml", "DOCX")):
+                     ("wordprocessingml", "DOCX"), ("image/png", "IMAGE"), ("image/jpeg", "IMAGE")):
         if key in mt:
             return fmt
-    raise InspectionFailed("UNSUPPORTED_FORMAT", "Only PDF, XLSX, XLS, CSV and DOCX files are read.")
+    raise InspectionFailed("UNSUPPORTED_FORMAT", "Only PDF, XLSX, XLS, CSV, DOCX, PNG and JPEG files are read.")
 
 
 def inspect(data: bytes, fmt: str, max_pages: int | None = None) -> Inspection:
@@ -67,6 +69,14 @@ def inspect(data: bytes, fmt: str, max_pages: int | None = None) -> Inspection:
     page limit of the pool that reads the file (MAX_PDF_PAGES_HEAVY in the HEAVY pool)."""
     if fmt not in FORMATS:
         raise InspectionFailed("UNSUPPORTED_FORMAT", f"Unsupported format {fmt}.")
+    if fmt == "IMAGE":
+        from dps.parse.images import ImageRefused, inspect_image
+
+        try:
+            inspect_image(data)
+        except ImageRefused as ex:
+            raise InspectionFailed(ex.code, str(ex)) from ex
+        return Inspection("IMAGE", [], 1)
     _check_magic(data, fmt)
     if fmt == "PDF":
         return _inspect_pdf(data, fmt, max_pages or MAX_PDF_PAGES)

@@ -40,6 +40,11 @@ def build(data: bytes, fmt: str, sha256: str, version_id: str | None = None, fla
         model = build_csv(data, sha256, version_id, flags, encoding)
     elif fmt == "DOCX":
         model = build_docx(data, sha256, version_id, flags)
+    elif fmt == "IMAGE":  # a photo or scan: one PDF page, read with OCR (CTS integration, 23 Nov 2026)
+        from dps.parse.images import to_pdf
+
+        model = build_pdf(to_pdf(data), sha256, version_id, flags, engine or ParserEngine())
+        model["format"] = "IMAGE"
     else:
         raise ValueError(f"unsupported format {fmt}")
     from dps.parse.segment import segment

@@ -121,6 +121,41 @@ def _inr_crore(value: dict) -> tuple[float | None, str | None]:
     return float(threshold) * scale / 1e7, None
 
 
+# The bank app's measure codes (covenant-service) and the DPS metric each one is, to read its formulas back.
+APP_MEASURES = {"DSCR": "DSCR", "INTEREST_COVER": "ICR", "NET_LEVERAGE": "NET_LEVERAGE_RATIO",
+                "DEBT_EQUITY": "DEBT_TO_EQUITY", "DEBT_EBITDA": "DEBT_TO_EBITDA",
+                "TANGIBLE_NET_WORTH": "MIN_TANGIBLE_NET_WORTH", "CURRENT_RATIO": "CURRENT_RATIO",
+                "QUICK_RATIO": "QUICK_RATIO"}
+_SIMPLE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(>=|<=|==|>|<|=)\s*(-?\d+(?:\.\d+)?)\s*(%?)\s*$")
+
+
+def read_formula(expression) -> dict | None:
+    """The app's simple formula "MEASURE OP NUMBER" as DPS's metric, operator, threshold and unit (an amount in INR
+    crore, a percentage as written: "75%" is 75 with unit %). None for anything else (two conditions, a function):
+    such a covenant is compared by what was sent, never by a guess (CTS integration, 23 Nov 2026)."""
+    m = _SIMPLE.match(str(expression or ""))
+    if not m:
+        return None
+    measure, op, number, percent = m.groups()
+    metric = APP_MEASURES.get(measure.upper(), measure.upper())
+    unit = "%" if percent else ("INR_CR" if metric in AMOUNT_METRICS else None)
+    return {"metric": metric, "operator": normalise_operator(op), "threshold": float(number), "unit": unit}
+
+
+def same_threshold(new: dict, old: dict) -> bool:
+    """Two covenant values set the same level: amounts compared in INR crore (500 crore is 5,000 million rupees),
+    everything else as written."""
+    a, b = new.get("threshold"), old.get("threshold")
+    if a is None or b is None:
+        return a == b
+    if is_amount(new) and is_amount(old):
+        x, _ = _inr_crore(new)
+        y, _ = _inr_crore(old)
+        if x is not None and y is not None:
+            return round(x, 6) == round(y, 6)
+    return float(a) == float(b)
+
+
 def is_amount(value: dict) -> bool:
     unit = str(value.get("unit") or "").strip().lower().rstrip(".")
     return (unit in SCALE or unit in ("inr_cr", "inr cr") or bool(value.get("currency"))

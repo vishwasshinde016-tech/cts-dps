@@ -24,9 +24,10 @@
         "DRAFT_COMMENTARY",
         "REPROCESS",
         "EXTRACT_WAIVER",
-        "RECONCILE_SET"
+        "RECONCILE_SET",
+        "AUTO"
       ],
-      "description": "ONBOARD (Miro onboarding flow): one job classifies the document and extracts covenants and schedule terms with the right pack; EXTRACT_WAIVER (WP9): a waiver or consent letter, read against context.baseCovenants (required); RECONCILE_SET (WP9): the covenants in force on a date across a document set, from a JSON manifest {setId, asOfDate, documents: [{versionId, role, effectiveDate, jobId}], baseCovenants}; nothing is read again"
+      "description": "AUTO (CTS integration, 23 Nov 2026): one upload for every document type; DPS classifies the document and reads it with the pack for its type (agreement, sanction letter, amendment, waiver, statement, compliance certificate), and result.classification says what was read; ONBOARD (Miro onboarding flow): one job classifies the document and extracts covenants and schedule terms with the right pack; EXTRACT_WAIVER (WP9): a waiver or consent letter, read against context.baseCovenants (required); RECONCILE_SET (WP9): the covenants in force on a date across a document set, from a JSON manifest {setId, asOfDate, documents: [{versionId, role, effectiveDate, jobId}], baseCovenants}; nothing is read again"
     },
     "document": {
       "type": "object",
@@ -80,9 +81,11 @@
             "application/vnd.ms-excel",
             "text/csv",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/json"
+            "application/json",
+            "image/png",
+            "image/jpeg"
           ],
-          "description": "application/json only for DRAFT_COMMENTARY (the cycle's outcome manifest)"
+          "description": "application/json only for DRAFT_COMMENTARY and RECONCILE_SET (a JSON manifest); image/png and image/jpeg are photos or scans, read with OCR as one page"
         },
         "sizeBytes": {
           "type": "integer",
@@ -154,7 +157,7 @@
             "null"
           ],
           "format": "date",
-          "description": "Period end, required for statements."
+          "description": "Period end of a statement. Optional: when not sent, DPS reads it from the statement's heading (warning PERIOD_FROM_DOCUMENT) or asks for it (blocking warning PERIOD_DATE_MISSING)."
         },
         "basis": {
           "type": [

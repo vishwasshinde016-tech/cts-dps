@@ -58,6 +58,29 @@ Worked example (to replace with the bank's volumes): 100 documents at the peak h
 4. Smoke test: `GET /health/ready`, `GET /dps/v1/capabilities`, one ANALYZE job on a sample file.
 5. Roll back: set `DPS_IMAGE_TAG` to the previous tag and run step 3 again (under 15 minutes).
 
+## Settings for the CTS bank app (covenant-service)
+
+The bank app (Spring Boot, its own MySQL) calls DPS with one service token; DPS keeps its own database and never
+touches the app's. Set these on the DPS server (values come from the vault; nothing secret goes in git):
+
+| Setting | Value | Why |
+|---|---|---|
+| `DPS_AUTH_MODE` | `SERVICE_TOKEN` | The app sends one fixed token, not a user JWT. |
+| `DPS_SERVICE_TOKEN_SHA256` | SHA-256 (hex) of the token | DPS keeps only the hash; the token stays in the vault and in the app's config. |
+| `DPS_SERVICE_ALLOWED_NETWORKS` | the app servers' addresses or CIDR | A stolen token is refused from anywhere else. |
+| `FORWARDED_ALLOW_IPS` | the reverse proxy's address | Behind a proxy, uvicorn trusts its client address only (else the allowed-networks check sees the proxy). |
+| `DPS_STORAGE_DIR` | the app's `{base-path}/accepted`, read-only, on a shared filesystem | DPS reads the uploaded file where the app stored it. |
+| `DPS_DERIVED_DIR` | a separate folder DPS can write | Page models and page images; never inside the app's folder. |
+| `DPS_CORE_BASE_URL`, `DPS_CORE_SERVICE_TOKEN` | the app's URL and the token DPS sends it | Covenant library, formula check, currency. A refusal (401/403) is a warning on the result, never a dead job. |
+| `DPS_LLM_ENABLED`, `DPS_AI_MODEL`, `DPS_AI_ALLOWED_HOSTS` | `true`, `azure/<deployment>`, the Azure host | The Document Agent; without it every field is rules-only and reviewed. |
+| `DPS_QUEUE_MAX_RUNNING_PER_TENANT` | 8 to 12 | The default 4 makes a batch upload wait. |
+| `DPS_ROLLOUT_DEFAULT` | `SHADOW` for the pilot | Results are stored for comparison and not shown to analysts until switched to `NORMAL`. |
+| `DPS_DATABASE_URL` | SQLite on the server now; DPS's own SQL Server later (`READ_COMMITTED_SNAPSHOT ON`) | Never the app's MySQL. |
+
+Run the API, at least one STANDARD worker and one HEAVY worker (scans, photos and long documents go to HEAVY).
+The compose file passes all of these; `DPS_AUTH_MODE` defaults to `JWT` there, so set it to `SERVICE_TOKEN`
+for the bank app.
+
 ## Backup and disaster recovery
 
 | Item | Protection | Target (to confirm with the bank) |

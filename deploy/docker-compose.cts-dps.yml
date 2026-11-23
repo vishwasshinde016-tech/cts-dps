@@ -16,7 +16,13 @@ x-hardening: &hardening
   logging: { driver: json-file, options: { max-size: "50m", max-file: "5" } }
 x-dps-env: &dps-env
   DPS_ENV: prod
-  DPS_AUTH_MODE: JWT
+  # JWT for user tokens; SERVICE_TOKEN for the CTS bank app (one service token: its SHA-256 here, the token in the
+  # vault; only from the app servers' networks). See docs/cts-dps/runbook.md, "Settings for the CTS bank app".
+  DPS_AUTH_MODE: ${DPS_AUTH_MODE:-JWT}
+  DPS_SERVICE_TOKEN_SHA256: ${DPS_SERVICE_TOKEN_SHA256:-}
+  DPS_SERVICE_ALLOWED_NETWORKS: ${DPS_SERVICE_ALLOWED_NETWORKS:-}
+  # the default of 4 running jobs per tenant makes a batch upload wait
+  DPS_QUEUE_MAX_RUNNING_PER_TENANT: ${DPS_QUEUE_MAX_RUNNING_PER_TENANT:-10}
   DPS_DATABASE_URL: ${DPS_DATABASE_URL:?set from the vault}
   DPS_CORE_BASE_URL: ${DPS_CORE_BASE_URL:?Spring app URL}
   DPS_EVENTS_PUSH_PATH: ${DPS_EVENTS_PUSH_PATH:-}
@@ -73,7 +79,8 @@ services:
   dps-api:
     image: *dps-image
     <<: *hardening
-    environment: *dps-env
+    # behind the TLS reverse proxy: uvicorn trusts the client address it forwards, from the proxy only
+    environment: { <<: *dps-env, FORWARDED_ALLOW_IPS: "${FORWARDED_ALLOW_IPS:-127.0.0.1}" }
     volumes: *dms-volumes
     deploy: { replicas: 2 }
     cpus: 1

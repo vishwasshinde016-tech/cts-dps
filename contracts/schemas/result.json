@@ -235,8 +235,10 @@
             "NEEDS_REVIEW",
             "REJECTED",
             "CONFIRMED",
-            "CORRECTED"
-          ]
+            "CORRECTED",
+            "NOT_USED"
+          ],
+          "description": "NOT_USED: left undecided when the caller closed the review (POST /dps/v1/jobs/{jobId}/close); not a person's verdict"
         }
       },
       "allOf": [
@@ -662,7 +664,8 @@
       "description": "WP9 (F10): what a waiver or consent letter waives. Always reviewed",
       "required": ["kind", "target", "periods", "conditions", "expiresOn"],
       "properties": {
-        "kind": {"enum": ["WAIVER", "CONSENT", "NOT_TESTED"]},
+        "kind": {"enum": ["WAIVER", "CONSENT", "NOT_TESTED", "EXTENSION"], "description": "EXTENSION: a date or time limit moved to extendedTo"},
+        "extendedTo": {"type": ["string", "null"], "format": "date", "description": "EXTENSION only: the new date"},
         "target": {
           "type": "object",
           "properties": {
@@ -772,6 +775,25 @@
             "YEARLY",
             null
           ]
+        },
+        "appFrequency": {
+          "type": ["string", "null"],
+          "enum": ["MONTHLY", "QUARTERLY", "YEARLY", "CUSTOM", null],
+          "description": "The bank app's Frequency for this term. HALF_YEARLY has no value of its own there: it is CUSTOM with appCron"
+        },
+        "appCron": {
+          "type": ["string", "null"],
+          "description": "With appFrequency CUSTOM: the app's cron for the term (HALF_YEARLY: 0 0 2 1 1,7 ?, the 1st of January and July)"
+        },
+        "deliverable": {
+          "type": ["string", "null"],
+          "enum": ["COMPLIANCE_CERTIFICATE", "AUDITED_FINANCIAL_STATEMENTS", "INTERIM_FINANCIAL_STATEMENTS", "FINANCIAL_STATEMENTS", "STOCK_STATEMENT", "INSURANCE", null],
+          "description": "REPORTING_DEADLINE: what is to be delivered, as the clause says; null when it names none DPS knows"
+        },
+        "covenantIds": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "REPORTING_DEADLINE for statements or a compliance certificate: the ids of this result's financial covenants tested at the same frequency (empty when none or when the frequency is unknown)"
         },
         "daysAfterPeriodEnd": {
           "type": [
@@ -1204,9 +1226,11 @@
             "NEEDS_REVIEW",
             "MAPPING_REVIEW",
             "REJECTED",
-            "FAILED"
+            "FAILED",
+            "CLOSED",
+            "SUPERSEDED"
           ],
-          "description": "MAPPING_REVIEW: a mapping problem (wrong entity, wrong type, identifiers of another borrower); the job status is still NEEDS_REVIEW"
+          "description": "CLOSED: the caller closed the review (fields left undecided are NOT_USED); SUPERSEDED: read again as another type (the new job carries the result). MAPPING_REVIEW: a mapping problem (wrong entity, wrong type, identifiers of another borrower); the job status is still NEEDS_REVIEW"
         },
         "reasons": {
           "type": "array",

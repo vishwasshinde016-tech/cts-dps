@@ -29,7 +29,9 @@ log = logging.getLogger(__name__)
 PAGE_MODEL = "PAGE_MODEL"
 
 # Codes that end the job at once (the file will not get better on retry) and ask the DMS to quarantine it.
-QUARANTINE = {"TYPE_SPOOFED", "UNSAFE_CONTENT", "MACRO_PRESENT", "ENCRYPTED"}
+# A password-protected file is not dangerous: it fails (ENCRYPTED, the user uploads it without the password) but is
+# not quarantined (CTS review, 23 Nov 2026: the bank app would have blocked a normal file).
+QUARANTINE = {"TYPE_SPOOFED", "UNSAFE_CONTENT", "MACRO_PRESENT"}
 
 
 class IngestFailed(Exception):

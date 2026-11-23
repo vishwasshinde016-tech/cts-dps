@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import date
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, Request, Response
@@ -25,7 +27,7 @@ from dps import feed, jobs, results
 from dps.api.auth import ADMIN, SERVICE, SUPPORT, require_roles
 from dps.api.deps import DB, User, job_view
 from dps.errors import ApiError, not_found
-from dps.models import DocumentCpLink, GoldenCandidate, Job, ReviewDecision, Run, utcnow
+from dps.models import Document, DocumentCpLink, GoldenCandidate, Job, ReviewDecision, Run, utcnow
 
 router = APIRouter()
 TYPE_TO_JOB = {"SANCTION_LETTER": "EXTRACT_SANCTION", "LOAN_AGREEMENT": "EXTRACT_AGREEMENT",
@@ -55,14 +57,67 @@ def _current(db, job: Job, request: Request) -> tuple[dict, int]:
     return results.build(db, job, s.pipeline_version, LocalStore(s.storage_dir, s.staging_dir, s.derived_dir)), 1
 
 
+def is_statement(job: Job, result: dict) -> bool:
+    """A statement's result: EXTRACT_STATEMENT, or AUTO when the document read as a statement (CTS integration)."""
+    if job.job_type == "EXTRACT_STATEMENT":
+        return True
+    return job.job_type == "AUTO" and (result.get("classification") or {}).get("type") == "FINANCIAL_STATEMENT"
+
+
+def _page_images(db, job: Job) -> bool:
+    """Page images are drawn from PDF pages only (CTS review, 23 Nov 2026: links for DOCX, XLSX, CSV and photos
+    answered 404)."""
+    doc = db.get(Document, job.document_id)
+    return bool(doc is not None and (doc.file_name or "").lower().endswith(".pdf"))
+
+
 def _readers(f: dict) -> dict | None:
+    """Each reader's reading when they differ: the rules' value, and the agent's as an object (its note), so both are
+    values as review.json says (CTS review, 23 Nov 2026: ai was a bare message string)."""
     out = {}
     for i in f.get("issues", []):
         if i.get("code") == "MODELS_DISAGREE" and i.get("message"):
-            out["ai"] = i["message"]
+            out["ai"] = {"note": i["message"]}
     if out:
         out["rules"] = f["value"]
     return out or None
+
+
+def acting_user(x_user: str | None, user) -> str:
+    """The person a SERVICE call acts for (X-User), trimmed; the caller's own name when absent. Longer than 255
+    characters is refused (it would not fit the audit columns)."""
+    name = (x_user or "").strip()
+    if len(name) > 255:
+        raise ApiError(400, "INVALID_INPUT", "X-User is longer than 255 characters.")
+    return name or user.user
+
+
+def _open_warnings(result: dict) -> list[dict]:
+    from dps.skills.runner import BLOCKING
+
+    return [{"fieldId": f"warning:{w['code']}", "code": w["code"], "message": w.get("message")}
+            for w in result.get("warnings", []) if w.get("code") in BLOCKING and not w.get("acknowledged")]
+
+
+def _save_revision(db, job: Job, result: dict, revision: int, trigger: str) -> None:
+    """Stores the result as the next revision (run). Two reviewers saving the same revision at once: the second gets
+    409 REVISION_CHANGED, never a server error (the run number is unique per job)."""
+    from sqlalchemy.exc import IntegrityError
+
+    new_run = Run(job_id=job.id, run_no=revision + 1, status=result["status"], trigger=trigger, result_json="{}")
+    result["runId"] = f"{job.id}:{revision + 1}"
+    results.flag_format(result)
+    new_run.result_json = json.dumps(result, default=str, separators=(",", ":"))
+    db.add(new_run)
+    try:
+        db.flush()
+    except IntegrityError as ex:
+        db.rollback()
+        raise ApiError(409, "REVISION_CHANGED", "Someone else saved this result at the same time; reload it.",
+                       {"revision": revision + 1}) from ex
+    prev = db.scalars(select(Run).where(Run.job_id == job.id, Run.run_no == revision)).first()
+    if prev is not None:
+        prev.superseded_by = result["runId"]
 
 
 @router.get("/dps/v1/jobs/{job_id}/review")
@@ -72,7 +127,7 @@ def get_review(job_id: str, request: Request, db: DB, user: User) -> dict:
     if job.status not in (jobs.DONE, jobs.NEEDS_REVIEW):
         raise ApiError(404, "RESULT_NOT_READY", f"The job is {job.status}.", {"status": job.status})
     result, revision = _current(db, job, request)
-    version = job.document_version_id
+    version = job.document_version_id if _page_images(db, job) else None
     fields = []
     for f in result.get("fields", []):
         if f.get("status") != "NEEDS_REVIEW":
@@ -87,8 +142,10 @@ def get_review(job_id: str, request: Request, db: DB, user: User) -> dict:
                          "cellRef": src.get("cellRef"),
                          "pageImage": (f"/dps/v1/versions/{version}/pages/{src['page']}/image"
                                        if version and src.get("page") else None)}})
+    warnings = _open_warnings(result)  # blocking warnings still open: ACKNOWLEDGE them (fieldId warning:<CODE>)
     return {"jobId": job.id, "runId": result.get("runId", job.id), "revision": revision, "fields": fields,
-            "counts": {"toReview": len(fields), "total": len(result.get("fields", []))}}
+            "warnings": warnings,
+            "counts": {"toReview": len(fields), "total": len(result.get("fields", [])), "openWarnings": len(warnings)}}
 
 
 class Decision(BaseModel):
@@ -108,6 +165,37 @@ class Decision(BaseModel):
 class Decisions(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decisions: list[Decision] = Field(min_length=1, max_length=500)
+
+
+_PLAIN_FORMULA = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*(>=|<=|==|>|<)\s*(-?\d+(?:\.\d+)?)\s*$")
+
+
+def _consistent_covenant(f: dict, change, reviewer: str) -> None:
+    """A corrected covenant stays consistent: a corrected formula sets the operator and threshold it states; a
+    corrected operator or threshold rebuilds the formula (on the measure the app uses). The person's formula is what
+    the app validated in its own editor, so it is mappable (CTS review, 23 Nov 2026)."""
+    from dps.skills import app_formula
+    from dps.skills.covenants.codes import COVENANT_GROUPS
+
+    value = f.get("value")
+    if f.get("group") not in COVENANT_GROUPS or not isinstance(value, dict) or not isinstance(change, dict):
+        return
+    mapping = value.get("mapping") if isinstance(value.get("mapping"), dict) else {}
+    expression = change.get("expression")
+    if isinstance(expression, str) and expression.strip():
+        m = _PLAIN_FORMULA.match(expression)
+        if m:
+            value["operator"] = "=" if m.group(2) == "==" else m.group(2)
+            value["threshold"] = float(m.group(3))
+        value["expression"] = expression.strip()
+        value["mapping"] = {"mappable": True, "reasons": [], "notes": [f"CORRECTED: formula set by {reviewer}"[:200]]
+                            + ([] if m else ["CUSTOM: not a single comparison; the app validated it"]),
+                            "measure": m.group(1) if m else mapping.get("measure"), "unit": None}
+        return
+    if any(k in change for k in ("operator", "threshold", "unit", "metric", "schedule")):
+        measure = mapping.get("measure")
+        app_formula.build(f, {"metricKeys": [measure]} if measure else None)
+        value["mapping"]["notes"].append(f"CORRECTED: by {reviewer}"[:200])
 
 
 def _apply(result: dict, d: Decision, reviewer: str) -> tuple[dict | None, dict | None]:
@@ -144,11 +232,14 @@ def _apply(result: dict, d: Decision, reviewer: str) -> tuple[dict | None, dict 
     elif d.action == "REJECT":
         f["status"] = "REJECTED"
     else:  # CORRECT
-        if d.value is None or not d.reasonCode:
-            raise ApiError(400, "VALIDATION_FAILED", "CORRECT needs value and reasonCode.")
+        if d.value is None:
+            raise ApiError(400, "VALIDATION_FAILED", "CORRECT needs value.")
+        if not d.reasonCode:
+            d.reasonCode = "WRONG_VALUE"  # the usual reason; the caller may send another (CTS review, 23 Nov 2026)
         f["value"] = {**f["value"], **d.value} if isinstance(f["value"], dict) and isinstance(d.value, dict) \
             else d.value
         f["method"], f["status"], f["confidence"] = "MANUAL", "CORRECTED", 1.0
+        _consistent_covenant(f, d.value, reviewer)
     f["signals"] = {**(f.get("signals") or {}), "reviewer": reviewer}
     return old, f
 
@@ -159,13 +250,16 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
                   x_user: Annotated[str | None, Header(alias="X-User")] = None) -> dict:
     require_roles(user, SERVICE, ADMIN, SUPPORT)
     job = _job(db, job_id)
-    if job.status not in (jobs.DONE, jobs.NEEDS_REVIEW):
+    if job.status == jobs.DONE:
+        # A finished review is not reopened: a second "completed" event would make Spring apply it twice (CTS review)
+        raise ApiError(409, "JOB_FINISHED", "The review of this job is finished.")
+    if job.status != jobs.NEEDS_REVIEW:
         raise ApiError(409, "JOB_NOT_RETRYABLE", f"The job is {job.status}; nothing to review.")
     result, revision = _current(db, job, request)
     if if_match is None or if_match.strip('"') != str(revision):
         raise ApiError(409, "REVISION_CHANGED", "The result changed since you loaded it; reload and review again.",
                        {"revision": revision})
-    reviewer = x_user or user.user
+    reviewer = acting_user(x_user, user)
     has_run = db.scalar(select(func.count()).select_from(Run).where(Run.job_id == job.id))
     if not has_run:  # a proven-flow result reviewed here for the first time: keep the original as revision 1
         db.add(Run(job_id=job.id, run_no=1, status=result["status"], trigger="SUBMIT",
@@ -197,18 +291,8 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
     reasons = ([f"{len(remaining)} field(s) need review"] if remaining else []) + [w["code"] for w in blocking]
     result["document"] = {**result.get("document", {}),
                           "route": "NEEDS_REVIEW" if remaining or blocking else "REVIEWED", "reasons": reasons}
-    new_run = Run(job_id=job.id, run_no=revision + 1, status=result["status"], trigger="REVIEW",
-                  result_json="{}")
-    result["runId"] = f"{job.id}:{revision + 1}"
-    from dps import results
-
-    results.flag_format(result)  # a corrected value is checked against result.json too
-    new_run.result_json = json.dumps(result, default=str, separators=(",", ":"))
-    db.add(new_run)
-    prev = db.scalars(select(Run).where(Run.job_id == job.id, Run.run_no == revision)).first()
-    if prev is not None:
-        prev.superseded_by = result["runId"]
-    if result["status"] == "DONE" and job.job_type == "EXTRACT_STATEMENT" and job.rollout != "SHADOW":
+    _save_revision(db, job, result, revision, "REVIEW")  # a corrected value is checked against result.json too
+    if result["status"] == "DONE" and is_statement(job, result) and job.rollout != "SHADOW":
         # The approved figures go to the values table (the bank app's /api/data/values) only now (G21).
         from dps.skills.statement_lines.reader import CurrencyNotSettled, publish
 
@@ -230,9 +314,68 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
     return {**job_view(job), "revision": revision + 1, "remaining": len(remaining)}
 
 
+class CloseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(min_length=1, max_length=500)
+
+
+@router.post("/dps/v1/jobs/{job_id}/close")
+def close_review(job_id: str, body: CloseRequest, request: Request, db: DB, user: User,
+                 if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+                 x_user: Annotated[str | None, Header(alias="X-User")] = None) -> dict:
+    """The caller (CTS) has finished with this result: fields it did not decide become NOT_USED (no learning, no
+    golden candidate: nobody judged them), blocking warnings still open are recorded as shown to the user in CTS, and
+    the job is DONE with route CLOSED (CTS integration, 23 Nov 2026: the app decides only the covenants it shows,
+    so without this a job never finished). Statement figures are never published by a close. Safe to repeat."""
+    require_roles(user, SERVICE, ADMIN, SUPPORT)
+    job = _job(db, job_id)
+    closer = acting_user(x_user, user)
+    if job.status == jobs.DONE:
+        return {**job_view(job), "revision": _current(db, job, request)[1], "remaining": 0, "closed": True}
+    if job.status != jobs.NEEDS_REVIEW:
+        raise ApiError(409, "JOB_NOT_RETRYABLE", f"The job is {job.status}; there is no review to close.")
+    result, revision = _current(db, job, request)
+    if if_match is not None and if_match.strip('"') != str(revision):
+        raise ApiError(409, "REVISION_CHANGED", "The result changed since you loaded it; reload and close again.",
+                       {"revision": revision})
+    has_run = db.scalar(select(func.count()).select_from(Run).where(Run.job_id == job.id))
+    if not has_run:
+        db.add(Run(job_id=job.id, run_no=1, status=result["status"], trigger="SUBMIT",
+                   result_json=json.dumps(result, default=str, separators=(",", ":"))))
+        db.flush()
+    not_used = 0
+    for f in result.get("fields", []):
+        if f.get("status") == "NEEDS_REVIEW":
+            f["status"], not_used = "NOT_USED", not_used + 1
+    shown = 0
+    for w in result.get("warnings", []):
+        from dps.skills.runner import BLOCKING
+
+        if w.get("code") in BLOCKING and not w.get("acknowledged"):
+            comment = f"shown to the user in CTS; review closed: {body.reason}"[:500]
+            w["acknowledged"] = {"by": closer, "comment": comment, "byClose": True}
+            shown += 1
+    result["status"] = "DONE"
+    result["document"] = {**result.get("document", {}), "route": "CLOSED",
+                          "reasons": [f"closed by {closer}: {body.reason}"[:300]]}
+    _save_revision(db, job, result, revision, "CLOSE")
+    job.status, job.updated_at, job.finished_at = jobs.DONE, utcnow(), utcnow()
+    job.error_code = None
+    from dps import services
+
+    services.audit(db, closer, "REVIEW_CLOSE", "job", job.id, notUsed=not_used, warningsShown=shown,
+                   reason=body.reason[:200])
+    event = "dps.extraction.shadow" if job.rollout == "SHADOW" else "dps.extraction.completed"
+    feed.emit_for_job(db, event, job, {"resultUrl": f"/dps/v1/jobs/{job.id}/result", "revision": revision + 1,
+                                       "reviewedBy": closer, "closed": True, "notUsed": not_used})
+    db.commit()
+    db.refresh(job)
+    return {**job_view(job), "revision": revision + 1, "remaining": 0, "closed": True, "notUsed": not_used}
+
+
 def _rederive(result: dict, job: Job) -> None:
     """Dependent checks after corrections: statement identities run again on the corrected figures."""
-    if job.job_type == "EXTRACT_STATEMENT":
+    if is_statement(job, result):
         from dps.skills import runner as skills
 
         kept = [w for w in result.get("warnings", []) if w["code"] != "TOTALS_DO_NOT_ADD"]
@@ -260,42 +403,92 @@ class ReclassifyRequest(BaseModel):
                   "SECURITY_DOCUMENT", "OTHER_EVIDENCE", "WAIVER_CONSENT", "GUARANTEE", "AMENDED_AND_RESTATED",
                   "TRUST_DEED"]
     reason: str = Field(min_length=1, max_length=500)
+    # A statement's period end: kept from the first request when not sent; sent when the statement names none
+    # (PERIOD_DATE_MISSING) or was read wrong (CTS integration, 23 Nov 2026).
+    asOfDate: date | None = None  # noqa: N815 - contract field name
 
 
 @router.post("/dps/v1/jobs/{job_id}/reclassify", status_code=202)
 def reclassify(job_id: str, body: ReclassifyRequest, request: Request, response: Response, db: DB, user: User,
-               x_user: Annotated[str | None, Header(alias="X-User")] = None) -> dict:
+               x_user: Annotated[str | None, Header(alias="X-User")] = None,
+               idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None) -> dict:
     require_roles(user, SERVICE, ADMIN, SUPPORT)
     from dps import services
     from dps.api.jobs import JOB_TYPES
 
     old = _job(db, job_id)
+    actor = acting_user(x_user, user)
     new_type = TYPE_TO_JOB.get(body.type)
     if new_type is None:
         raise ApiError(422, "UNSUPPORTED_JOB_TYPE", f"No extraction pack reads {body.type} documents.")
+    if idempotency_key is not None and not 8 <= len(idempotency_key) <= 128:
+        raise ApiError(400, "IDEMPOTENCY_KEY_REQUIRED", "An Idempotency-Key has 8 to 128 characters.")
+    if idempotency_key:  # a retried request returns the job it made (CTS review, 23 Nov 2026: it made two)
+        seen = db.scalars(select(Job).where(Job.tenant_id == old.tenant_id,
+                                            Job.idempotency_key == idempotency_key)).first()
+        if seen is not None:
+            response.status_code = 200
+            return {"jobId": seen.id, "status": seen.status, "duplicate": True,
+                    "links": {"self": f"/dps/v1/jobs/{seen.id}", "result": f"/dps/v1/jobs/{seen.id}/result"}}
     request_body = json.loads(old.request_json or "{}")
     request_body["jobType"] = new_type
-    ctx = request_body.setdefault("context", {})
+    ctx = request_body.setdefault("context", {})  # asOfDate and the rest of the caller's context are kept
     ctx["expectedType"], ctx["reprocessReason"] = body.type, body.reason[:500]
+    doc = db.get(Document, old.document_id)
+    if body.asOfDate is not None:
+        ctx["asOfDate"] = body.asOfDate.isoformat()
+        if doc is not None:
+            doc.as_of_date = body.asOfDate
+    elif doc is not None and doc.as_of_date is not None and not ctx.get("asOfDate"):
+        ctx["asOfDate"] = doc.as_of_date.isoformat()  # the period the first reading found stays with the document
     spec = JOB_TYPES[new_type]
     settings = request.app.state.settings
     new = Job(document_id=old.document_id, flow=spec["flow"], job_type=new_type, tenant_id=old.tenant_id,
               priority=jobs.PRIORITY.get("INTERACTIVE", 1), due_at=utcnow(),
               request_json=json.dumps(request_body), correlation_id=old.correlation_id,
               pipeline_version=settings.pipeline_version, document_version_id=old.document_version_id,
-              sha256=old.sha256, requested_by=x_user or user.user)
+              sha256=old.sha256, requested_by=actor, idempotency_key=idempotency_key,
+              rollout=old.rollout or "NORMAL")
     db.add(new)
     db.flush()
-    for run in db.scalars(select(Run).where(Run.job_id == old.id, Run.superseded_by.is_(None))):
-        run.superseded_by = new.id
+    _supersede(db, old, new, actor, request)
     feed.emit_for_job(db, "dps.job.accepted", new, {"jobType": new_type, "priority": "INTERACTIVE",
                                                    "reclassifiedFrom": old.id})
-    services.audit(db, x_user or user.user, "JOB_RECLASSIFY", "job", old.id, newJob=new.id, type=body.type,
+    services.audit(db, actor, "JOB_RECLASSIFY", "job", old.id, newJob=new.id, type=body.type,
                    reason=body.reason[:500])
     db.commit()
     response.headers["Location"] = f"/dps/v1/jobs/{new.id}"
     return {"jobId": new.id, "status": new.status, "duplicate": False,
             "links": {"self": f"/dps/v1/jobs/{new.id}", "result": f"/dps/v1/jobs/{new.id}/result"}}
+
+
+def _supersede(db, old: Job, new: Job, actor: str, request: Request) -> None:
+    """The job read again as another type ends (CTS review, 23 Nov 2026: it stayed open and could still complete):
+    waiting or running, it is cancelled; waiting for review, its open fields become NOT_USED and it is DONE with
+    route SUPERSEDED. Either way ``dps.job.superseded`` names the new job."""
+    if old.status in (jobs.QUEUED, jobs.RETRY_WAIT, jobs.RUNNING):
+        try:
+            jobs.request_cancel(db, old, actor)
+        except jobs.JobFinished:
+            pass
+    elif old.status == jobs.NEEDS_REVIEW:
+        result, revision = _current(db, old, request)
+        for f in result.get("fields", []):
+            if f.get("status") == "NEEDS_REVIEW":
+                f["status"] = "NOT_USED"
+        result["status"] = "DONE"
+        result["document"] = {**result.get("document", {}), "route": "SUPERSEDED",
+                              "reasons": [f"read again as another type: job {new.id}"]}
+        if not db.scalar(select(func.count()).select_from(Run).where(Run.job_id == old.id)):
+            db.add(Run(job_id=old.id, run_no=1, status="NEEDS_REVIEW", trigger="SUBMIT",
+                       result_json=json.dumps(result, default=str, separators=(",", ":"))))
+            db.flush()
+        _save_revision(db, old, result, revision, "SUPERSEDED")
+        old.status, old.updated_at, old.finished_at = jobs.DONE, utcnow(), utcnow()
+    db.flush()
+    for run in db.scalars(select(Run).where(Run.job_id == old.id)):  # every reading of the old job: the new job
+        run.superseded_by = new.id
+    feed.emit_for_job(db, "dps.job.superseded", old, {"supersededBy": new.id, "status": old.status})
 
 
 @router.get("/dps/v1/ops/quality")
@@ -377,9 +570,26 @@ class CovenantStatusRequest(BaseModel):
 
 
 def _norm(text: str | None) -> str:
-    import re
-
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+_LEADING_MEASURE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:>=|<=|==|!=|>|<)")
+
+
+def _covenant_keys(*names: str | None) -> set[str]:
+    """Every name a covenant goes by: its taxonomy code, its metric and its plain name, so "DSCR", "Minimum DSCR"
+    and "Debt Service Coverage Ratio" meet, and the bank app's measure codes (INTEREST_COVER, DEBT_EBITDA ...) meet
+    the certificate's wording (CTS review, 23 Nov 2026: only exact names matched)."""
+    from dps.extraction.agreement import _best_metric
+    from dps.skills.covenants.taxonomy import get as taxonomy
+
+    tax = taxonomy()
+    keys: set[str] = set()
+    for name in names:
+        if not name:
+            continue
+        keys |= {k for k in (tax.code_for(name), _best_metric(name), _norm(name)) if k}
+    return keys
 
 
 @router.post("/api/v1/ai/covenant-status")
@@ -387,33 +597,44 @@ def covenant_status(body: CovenantStatusRequest, db: DB, user: User) -> dict:
     """Recommendations from compliance certificates DPS already extracted for the CP (rationale cites the page).
 
     Only figures a person confirmed or corrected count (Phase 3 fix 2, 23 Nov 2026): a job still waiting for review,
-    a SHADOW job, and a field no reviewer confirmed never become a COMPLIED or BREACHED recommendation."""
-    require_roles(user, SERVICE, ADMIN)
-    from dps.extraction.agreement import _best_metric
+    a SHADOW job, and a field no reviewer confirmed never become a COMPLIED or BREACHED recommendation.
 
+    Which certificate (CTS integration, 23 Nov 2026): the ones named in certificateFileIds (DMS version ids), else
+    the newest certificate only, so a figure from an older period is never offered for this one. Certificates read
+    by AUTO count like EXTRACT_CERTIFICATE. A covenant is matched by its code, metric and name; two figures that
+    match one covenant and disagree give no recommendation."""
+    require_roles(user, SERVICE, ADMIN)
     doc_ids = [d for (d,) in db.execute(select(DocumentCpLink.document_id).where(DocumentCpLink.cp_id == body.cpId))]
     if not doc_ids:
         return {"recommendations": []}
-    cert_jobs = db.scalars(select(Job).where(Job.document_id.in_(doc_ids), Job.job_type == "EXTRACT_CERTIFICATE",
+    cert_jobs = db.scalars(select(Job).where(Job.document_id.in_(doc_ids),
+                                             Job.job_type.in_(("EXTRACT_CERTIFICATE", "AUTO")),
                                              Job.status == jobs.DONE, Job.rollout != "SHADOW")
-                           .order_by(Job.finished_at.desc())).all()
-    figures: dict[str, tuple[dict, str]] = {}
+                           .order_by(Job.finished_at.desc(), Job.created_at.desc())).all()
+    wanted = {i for i in body.certificateFileIds if i}
+    if wanted:
+        cert_jobs = [j for j in cert_jobs if j.document_version_id in wanted]
+    figures: list[tuple[set[str], dict, str]] = []
     for job in cert_jobs:
         run = db.scalars(select(Run).where(Run.job_id == job.id).order_by(Run.run_no.desc())).first()
         if run is None:
             continue
-        for f in json.loads(run.result_json).get("fields", []):
-            if f["group"] != "CERTIFIED_FIGURE" or f["status"] not in ("CONFIRMED", "CORRECTED"):
-                continue
-            key = _norm(f["value"].get("covenant"))
-            figures.setdefault(key, (f, job.document_version_id or job.id))
+        certified = [f for f in json.loads(run.result_json).get("fields", []) if f.get("group") == "CERTIFIED_FIGURE"]
+        if not certified:
+            continue  # an AUTO job that read another type of document
+        for f in certified:
+            if f.get("status") in ("CONFIRMED", "CORRECTED"):
+                figures.append((_covenant_keys(f["value"].get("covenant")), f, job.document_version_id or job.id))
+        if not wanted:
+            break  # the newest certificate only
     out = []
     for c in body.covenants:
-        metric = _best_metric(" ".join(filter(None, [c.covenantName, c.conditionExpression]))) or c.covenantName
-        hit = figures.get(_norm(metric)) or figures.get(_norm(c.covenantName))
-        if hit is None:
-            continue
-        f, version = hit
+        measure = _LEADING_MEASURE.match(c.conditionExpression or "")
+        keys = _covenant_keys(measure.group(1) if measure else None, c.covenantName)
+        hits = [(f, version) for fkeys, f, version in figures if fkeys & keys]
+        if not hits or len({f["value"].get("declaredCompliant") for f, _ in hits}) > 1:
+            continue  # nothing certified for it, or two certified figures that disagree
+        f, version = hits[0]
         declared = f["value"].get("declaredCompliant")
         if declared is None:
             continue
