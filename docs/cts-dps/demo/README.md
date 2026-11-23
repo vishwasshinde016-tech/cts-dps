@@ -11,6 +11,7 @@ Links are relative to the repository root. Commands are for the demo laptop, whe
 |---|---|
 | [DPS-demo-master-script.html](DPS-demo-master-script.html) | The master script: what to open, run, show and say, phase by phase. The links open the files below. |
 | [DPS-demo-master-script.pdf](DPS-demo-master-script.pdf) | The same script as a PDF (its links point to the files on the presenter's laptop). |
+| [DPS-document-flow-steps-1-14-with-tracing-2026-11-23.pdf](DPS-document-flow-steps-1-14-with-tracing-2026-11-23.pdf) | How one document flows through DPS, steps 1 to 14, with code, data and APIs; updated 23 Nov 2026 with the trace of each step (Extra O) and the one-command setup (C.2b). Also as [.html](DPS-document-flow-steps-1-14-with-tracing-2026-11-23.html). |
 
 ## 2. Files you upload (live runs)
 
