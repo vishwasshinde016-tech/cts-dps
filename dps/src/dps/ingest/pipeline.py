@@ -23,6 +23,7 @@ from dps.ingest.inspect import InspectionFailed, declared_format
 from dps.ingest.store import LocalStore, StoreError
 from dps.models import Artifact, Document, Job
 from dps.parse import sandbox
+from dps.parse.engine import HEAVY_POOR_SHARE, HEAVY_THRESHOLD
 
 log = logging.getLogger(__name__)
 PAGE_MODEL = "PAGE_MODEL"
@@ -41,6 +42,11 @@ Parse = Callable[[sandbox.ParseRequest, int | None], dict]
 _PAGE_OBJECT = re.compile(rb"/Type\s*/Page(?![s\w])")
 # The LIGHT pool's longest parse is 900 s at 60 s per 10 pages: more pages than this cannot finish there.
 LIGHT_MAX_PAGES = 150
+
+
+def _poor_share(model: dict) -> float:
+    pages = [p for p in model.get("pages") or [] if str(p.get("sourceMethod") or p.get("method")) != "BLANK"]
+    return sum(1 for p in pages if float(p.get("quality", 1.0)) < HEAVY_THRESHOLD) / len(pages) if pages else 0.0
 
 
 def page_hint(data: bytes, fmt: str) -> int | None:
@@ -89,6 +95,10 @@ class Ingestor:
             raise IngestFailed("LARGE_DOCUMENT", f"{hint} pages: read by the HEAVY pool", heavy=True)
         try:
             model = self._parse(req, hint)  # the time limit scales with the pages (it was always the minimum)
+            if not self.heavy and fmt == "PDF" and _poor_share(model) > HEAVY_POOR_SHARE:
+                # Many pages are pictures of text (bulk run, 22 Nov 2026: a 140-page agreement with 29 such pages
+                # stayed on the LIGHT pool, unread): Docling in the HEAVY pool reads them
+                raise IngestFailed("POOR_PAGES", "many pages read poorly: read by the HEAVY pool", heavy=True)
         except InspectionFailed as ex:
             raise IngestFailed(ex.code, str(ex)) from ex
         except sandbox.SandboxError as ex:

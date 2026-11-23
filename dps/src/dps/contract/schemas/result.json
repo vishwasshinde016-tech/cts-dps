@@ -1071,6 +1071,7 @@
             "WAIVER_CONSENT",
             "GUARANTEE",
             "AMENDED_AND_RESTATED",
+            "TRUST_DEED",
             "UNKNOWN"
           ]
         },

@@ -2,7 +2,7 @@
 
 No Spring, DMS or database is needed: the file is parsed into a page model and run through the same classifier,
 covenant skill, candidate ledger and checks as a real job. Rules only by default; ``--agent`` adds the Document
-Agent on the Azure deployment configured in ``.env`` (needs the VPN).
+Agent on the Azure deployment configured in ``.env`` (needs network access to that endpoint).
 
     python scripts/demo_onboard.py ../golden-set/documents/AGR-001.pdf
     python scripts/demo_onboard.py my-agreement.pdf --agent --json out.json
@@ -104,7 +104,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("file", type=Path)
     ap.add_argument("--type", default="LOAN_AGREEMENT", help="the type the user chose (checked against the classifier)")
-    ap.add_argument("--agent", action="store_true", help="also run the Document Agent (Azure, needs VPN and .env)")
+    ap.add_argument("--agent", action="store_true", help="also run the Document Agent (the Azure settings in .env)")
     ap.add_argument("--env", type=Path, default=Path(".env"))
     ap.add_argument("--json", type=Path, help="write the full dps.result JSON here")
     ap.add_argument("--trace", type=Path, help="write a run log: every DPS function entered, with its file, plus the "

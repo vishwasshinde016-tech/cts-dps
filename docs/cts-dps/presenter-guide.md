@@ -328,11 +328,11 @@ They are already in the clone, in [`architect-documents\`](../../architect-docum
 >
 > They also list many 'possible covenant' sentences. That is the ledger doing its job: every duty sentence the rules could not settle is put in front of a person instead of being dropped.
 >
-> With the VPN and the agent switched on, the agent's second read settles most of them. On our two 85-page test agreements on live Azure, 100% of duty sentences were explained."
+> With the agent switched on, the agent's second read settles most of them. On our two 85-page test agreements on live Azure, 100% of duty sentences were explained."
 
 **Be honest if asked:** rules alone on real bank documents give a short list plus many review items. Some quotes point at a table-of-contents line. The agent and the reviewer are part of the design, not optional extras. The measured figures are in the demo panel.
 
-**Step 4 (only with VPN and `.env` Azure settings):**
+**Step 4 (only with the `.env` Azure settings):**
 
 ```powershell
 .venv\Scripts\python scripts\demo_onboard.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf --agent
@@ -378,7 +378,7 @@ The options:
 - `--type` is the type the user chose. DPS checks it against what it finds and flags `TYPE_MISMATCH` if they differ.
 - `--trace` writes the run log.
 - `--json` saves the full result Spring would get.
-- `--agent` switches on the Document Agent (needs the VPN).
+- `--agent` switches on the Document Agent (needs the `.env` Azure settings).
 
 **Say:** "This runs the reading part of a job without the service around it. It is the same classifier, skill, ledger and checks."
 
@@ -483,7 +483,7 @@ The size limit is 100 MB per file (`DPS_MAX_FILE_MB`). Encrypted, corrupt, macro
 
 ### 0.15 Demo files: the architect's list, and what each one shows
 
-> **For you:** these are the public documents from the architect's list. They are in the repository, in [`architect-documents\`](../../architect-documents/README.md); `scripts\fetch_public_samples.py` can fetch them again. The results below were measured on 19 Nov 2026, rules only, no VPN. Use the ones marked **show**.
+> **For you:** these are the public documents from the architect's list. They are in the repository, in [`architect-documents\`](../../architect-documents/README.md); `scripts\fetch_public_samples.py` can fetch them again. The results below were measured on 19 Nov 2026, rules only, no AI. Use the ones marked **show**.
 
 | File in `architect-documents\` | Flow it shows | Measured result (rules only) |
 |---|---|---|
@@ -1053,7 +1053,7 @@ First install: [`docs/cts-dps/install-and-demo.md`](install-and-demo.md). Then, 
    .venv\Scripts\python scripts\demo_onboard.py ..\golden-set\documents\AGR-007.pdf --json AGR-007.json
    ```
 
-4. **With the Document Agent** (VPN and `.env` Azure settings needed). It adds:
+4. **With the Document Agent** (`.env` Azure settings needed). It adds:
    - the classification second opinion;
    - the 4 focused reads;
    - the second read;

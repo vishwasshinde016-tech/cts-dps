@@ -3,7 +3,8 @@ DPS found and where it is weak. For testing on real agreements, statements and c
 
 Each file goes through the real path: POST /dps/v1/jobs, the queue, the worker (a HEAVY-pool worker too, for what
 moves there), GET .../result. Everything runs on a throwaway database and storage in a temp folder; the real dps.db
-is never touched. Rules only by default; --ai uses the Azure model of .env (needs the VPN; costs tokens).
+is never touched. Rules only by default; --ai uses the Azure model of .env (needs network access to that
+endpoint; costs tokens).
 
     python scripts/bulk_check.py C:/docs/agreements --out C:/reports/run1
     python scripts/bulk_check.py C:/docs/mixed --manifest C:/docs/mixed/manifest.csv --ai --max-tokens 600000
@@ -69,6 +70,14 @@ def read_manifest(path: Path | None) -> dict[str, dict]:
         return {row["file"].strip(): row for row in csv.DictReader(f) if row.get("file")}
 
 
+def documents(folder: Path, manifest: Path | None) -> list[Path]:
+    """The files to read. The manifest is a CSV in the same folder: it describes the documents, it is not one of them
+    (bulk run of 22 Nov 2026: it was read as a statement and refused)."""
+    skip = {manifest.resolve()} if manifest else set()
+    return sorted(p for p in folder.iterdir() if p.suffix.lower() in MEDIA and p.is_file()
+                  and p.resolve() not in skip and p.name.lower() != "manifest.csv")
+
+
 def job_for(path: Path, row: dict, args) -> dict:
     """The job request for one file, as Spring would send it."""
     sheet = path.suffix.lower() in SHEETS
@@ -101,6 +110,8 @@ def report_row(path: Path, job: dict, status: dict, result: dict | None, seconds
         "aiFound": sum(1 for f in covenants if str(f.get("method") or "").startswith("AI")),
         "lookHere": len(pointers), "eventsOfDefault": groups.get("EVENT_OF_DEFAULT", 0),
         "scheduleTerms": groups.get("SCHEDULE_TERM", 0), "statementLines": groups.get("STATEMENT_LINE", 0),
+        # a certificate's figures and a sanction letter's terms are what those documents hold (not covenants)
+        "certifiedFigures": groups.get("CERTIFIED_FIGURE", 0), "agreementTerms": groups.get("AGREEMENT_TERM", 0),
         "genericCodes": generic, "coveragePct": cov.get("percent"), "unexplained": cov.get("unexplainedCount"),
         "lowConfidence": sum(1 for f in fields if (f.get("confidence") or 1) < 0.8),
         "warnings": " ".join(sorted({w.get("code", "") for w in (result or {}).get("warnings") or []})),
@@ -116,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--manifest", type=Path, default=None)
     ap.add_argument("--job-type", default="ONBOARD", help="for PDF / Word files without a manifest row")
     ap.add_argument("--as-of", default=None, help="period end for spreadsheets without a manifest row (YYYY-MM-DD)")
-    ap.add_argument("--ai", action="store_true", help="use the Azure model of .env (VPN; costs tokens)")
+    ap.add_argument("--ai", action="store_true", help="use the Azure model of .env (costs tokens)")
     ap.add_argument("--max-tokens", type=int, default=0, help="stop starting new files after this many tokens")
     ap.add_argument("--limit", type=int, default=0, help="read at most this many files")
     ap.add_argument("--timeout", type=float, default=1800.0, help="seconds per file before it is reported as stuck")
@@ -153,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
 
     workers = [worker(settings.worker_pool), worker("HEAVY")]
     manifest = read_manifest(args.manifest)
-    files = sorted(p for p in args.folder.iterdir() if p.suffix.lower() in MEDIA and p.is_file())
+    files = documents(args.folder, args.manifest)
     files = files[:args.limit] if args.limit else files
     out = args.out or (args.folder / "bulk-report")
     out.mkdir(parents=True, exist_ok=True)
@@ -213,7 +224,8 @@ def write_summary(out: Path, rows: list[dict]) -> None:
                  if "TYPE_NOT_ONBOARDING" in (r["warnings"] or "") else "")
               for r in weak] or ["- none"]
     cols = ["file", "status", "type", "covenants", "financial", "nonFinancial", "aiFound", "lookHere", "scheduleTerms",
-            "statementLines", "genericCodes", "coveragePct", "unexplained", "contractProblems", "tokens", "seconds"]
+            "statementLines", "certifiedFigures", "agreementTerms", "genericCodes", "coveragePct", "unexplained",
+            "contractProblems", "tokens", "seconds"]
     lines += ["", "## Every file", "", "| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     lines += ["| " + " | ".join(str(r[c]) if r[c] is not None else "" for c in cols) + " |" for r in rows]
     (out / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -45,7 +45,10 @@ _NOTES = re.compile(r"notes?\s+(forming\s+part|to\s+the\s+(standalone\s+|consoli
 _AUDIT = re.compile(r"independent\s+auditor|auditor'?s\s+report|key\s+audit\s+matters", re.I)
 _AUDIT_START = re.compile(r"independent\s+auditor'?s?\s+report|report\s+of\s+independent\s+registered", re.I)
 _GARBLE = re.compile(r"\(cid:\d+\)|[ĨǆƉǀďƋͿ]")
-_SUMMARY = re.compile(r"decade|ten[- ]year|five[- ]year|at\s+a\s+glance|financial\s+highlights|key\s+figures", re.I)
+# Phase 2 (ASX, 23 Nov 2026): a "Key financial ratios" page (five years of ratios) gave revenue 5.0 from a
+# footnote mark; such a page is no statement.
+_SUMMARY = re.compile(r"decade|ten[- ]year|five[- ]year|at\s+a\s+glance|financial\s+highlights|key\s+figures|"
+                      r"key\s+financial\s+ratios|financial\s+ratios", re.I)
 _SEGMENT = re.compile(r"segment(al)?\s+(information|analysis|report(ing)?|results)|operating\s+segments", re.I)
 _RUPEE_PAGE = re.compile(r"rupees|\brs\.?\s*['’]?\s*0{3}|\blkr\b|\binr\b|₹", re.I)
 _DOLLAR_PAGE = re.compile(r"(?:amounts?|figures?|expressed|stated)\s+in\s+"
@@ -94,6 +97,11 @@ _ENTITY_TITLE = re.compile(r"\b(?:standalone|company|consolidated|group)\s+(?:in
                            r"(?:group|company)\b", re.I)
 
 
+# Columns for both entities side by side: "Group Company", "Consolidated Standalone" (either order).
+_BOTH_ENTITIES = re.compile(r"\b(?:group|consolidated)\s+(?:company|standalone)\b|"
+                            r"\b(?:company|standalone)\s+(?:group|consolidated)\b", re.I)
+
+
 def _entity_weight(text: str, entity: str) -> float:
     """A page headed for the bank's entity first. Sri Lanka run: "STATEMENT OF FINANCIAL POSITION - GROUP" was not
     seen as consolidated, so the company income statement was read with the group balance sheet (ratios that mix
@@ -102,6 +110,11 @@ def _entity_weight(text: str, entity: str) -> float:
     title = _ENTITY_TITLE.search(text)
     if not re.search(r"\b(standalone|company|consolidated|group)\b", head) and title:
         head = title.group(0).lower()  # Asian Hotels: the text layer puts "COMPANY STATEMENT OF ..." after the table
+    if _BOTH_ENTITIES.search(head):
+        # Sierra Cables (bulk run, 23 Nov 2026): its statements head their columns "Group | Company" on one page, and
+        # each was weighed as the group's only, so a highlights page that names "the Company" was read instead.
+        # A page with both entities' columns holds the bank's one too.
+        return 0.0
     standalone = bool(re.search(r"\bstandalone\b", head)) or (
         bool(re.search(r"\bcompany\b", head)) and not re.search(r"\b(group|consolidated)\b", head))
     consolidated = not standalone and bool(re.search(r"\b(consolidated|group)\b", head))
@@ -165,12 +178,21 @@ def statement_pages(data: bytes, ocr=None, entity: str = "STANDALONE") -> tuple[
     quarter statement no longer comes before the period. None when no page looks like a statement (a scan:
     read the file whole).
     """
+    texts, short = document_texts(data, ocr)
+    return order_pages(texts, short, entity)
+
+
+def document_texts(data: bytes, ocr=None) -> tuple[list[str], bool]:
+    """The text of every page as :func:`statement_pages` reads it, and whether the file is short (a statement pack).
+
+    The reader keeps it for what only the whole report says: an annual report's statements head their columns
+    "Rs.'000" or "$m", and name the currency ("Sri Lankan Rupees", "Australian dollars") only on other pages."""
     from pypdf import PdfReader
 
     count = len(PdfReader(io.BytesIO(data)).pages)
     short = count <= LONG_REPORT_PAGES
     texts = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(data)).pages] if short else page_texts(data, ocr)
-    return order_pages(texts, short, entity)
+    return texts, short
 
 
 def order_pages(texts: list[str], short: bool, entity: str = "STANDALONE") -> tuple[list[int], int] | None:

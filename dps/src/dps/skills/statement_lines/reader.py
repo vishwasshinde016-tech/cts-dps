@@ -59,7 +59,7 @@ from dps.extraction.statement_pdf import PdfStatement
 from dps.language import detect as detect_language
 from dps.language import name as language_name
 from dps.models import Document, Job, StatementValue
-from dps.money import currency_of, detect_currency, money_unit, to_money_unit
+from dps.money import currency_of, detect_currency, money_unit, shared_symbol_currency, to_money_unit
 from dps.parse.engine import ParseError, needs_heavy
 from dps.profiles import LoanProfile
 
@@ -163,6 +163,7 @@ class StatementReader:
     def __init__(self, deps: StatementDeps) -> None:
         self._deps = deps
         self._raw_text = ""
+        self._doc_text = ""  # every page of a PDF report, for the currency it names (see _money)
         self.state = StatementState()
 
     def read(self, job_id: str, document_id: str, review_done: bool = False) -> StatementState:
@@ -201,12 +202,13 @@ class StatementReader:
 
     def _parse(self, data: bytes, ext: str) -> list[tuple]:
         entity = self.state.entity or self._deps.entity
-        self.state.parse_issues, self._raw_text = [], ""
+        self.state.parse_issues, self._raw_text, self._doc_text = [], "", ""
         try:
             if ext == ".pdf":
                 table = self._read_table(data, entity)
                 if table is not None and table.rows:
                     rows, self.state.header_text = table.rows, table.header_text
+                    self._doc_text = getattr(table, "document_text", "")
                     self.state.page_months = {str(p): m for p, m in table.periods.months.items()}
                     self.state.prior_rows = [list(r) for r in table.periods.prior]
                     self.state.annual_rows = [list(r) for r in table.periods.annual]
@@ -353,7 +355,10 @@ class StatementReader:
         issues = []
         loan = self.state.loan_currency or self._deps.default_currency
         words = self._deps.currency_words() if self._deps.currency_words else []
-        printed = detect_currency(self.state.header_text, words) or loan
+        printed = (detect_currency(self.state.header_text, words)
+                   or shared_symbol_currency(self.state.header_text,
+                                             "\n".join((self.state.page_text, self._raw_text, self._doc_text)))
+                   or loan)
         rate = 1.0
         if printed != loan:
             got = self._deps.fx_rate(printed, loan, as_of) if self._deps.fx_rate else None

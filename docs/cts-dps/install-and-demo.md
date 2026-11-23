@@ -15,7 +15,7 @@ About 20 minutes. Windows commands shown (PowerShell); Linux and macOS use `.ven
   pip config set global.proxy http://proxy:port
   ```
 
-- **Only for the AI part (optional):** the VPN to the bank's Azure OpenAI endpoint, and the Azure key from the vault. Everything else runs without them.
+- **Only for the AI part (optional):** network access to the bank's Azure OpenAI endpoint, and the Azure key from the vault. Everything else runs without them.
 
 ## 2. Install
 
@@ -113,7 +113,7 @@ Other documents to show:
 | Command | What it shows |
 |---|---|
 | `scripts\demo_onboard.py ..\golden-set\documents\AGR-007.pdf` | An 85-page agreement: many covenants, coverage across the whole document |
-| `scripts\demo_onboard.py ..\golden-set\documents\AGR-007.pdf --agent` | The same with the Document Agent, if the VPN and `.env` Azure settings are in place: classification second opinion, 4 focused reads, second read of what is unexplained |
+| `scripts\demo_onboard.py ..\golden-set\documents\AGR-007.pdf --agent` | The same with the Document Agent, if the `.env` Azure settings are in place: classification second opinion, 4 focused reads, second read of what is unexplained |
 | `scripts\demo_onboard.py <file> --json result.json` | Writes the full `dps.result/1.0` JSON, the exact output Spring receives |
 
 ### Real agreements from the architect's list
@@ -157,7 +157,7 @@ Use two terminals, both in `cts-dps\dps`.
 
 Calls in dev mode use the headers `X-User: rm-anil` and `X-Roles: SERVICE`. The job API Spring calls is in `contracts/dps-jobs-api.yaml`.
 
-**To switch on the Document Agent** (bank Azure, VPN), set these in `.env`:
+**To switch on the Document Agent** (bank Azure), set these in `.env`:
 - `DPS_LLM_ENABLED=true`;
 - `DPS_AI_MODEL=azure/<deployment>`, or a routes file;
 - `DPS_AI_ALLOWED_HOSTS=<the endpoint host>`;

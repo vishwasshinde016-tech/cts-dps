@@ -19,11 +19,13 @@ and the script says so.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urljoin
 
 import httpx
 
@@ -103,6 +105,30 @@ def html_to_pdf(browser: str, html: Path, pdf: Path) -> bool:
     return pdf.exists() and pdf.stat().st_size > 1000
 
 
+_IMG = re.compile(r"<img[^>]+src=\"([^\"/:]+)\"", re.I)
+
+
+def fetch_images(html: Path, url: str, ua: str) -> int:
+    """Downloads the images an exhibit shows (next to the .htm) before it is printed. Some SEC exhibits are page
+    images (a scan of the signed agreement: "slide1.jpg" ...); printed without them, every page was a broken-image
+    icon on an empty page (bulk run, 22 Nov 2026). Only plain file names in the exhibit's own SEC folder."""
+    got = 0
+    for name in sorted(set(_IMG.findall(html.read_text(encoding="utf-8", errors="replace")))):
+        dest = html.parent / name
+        if dest.exists():
+            got += 1
+            continue
+        src = urljoin(url, name)
+        if not src.startswith(("https://www.sec.gov/", "https://sec.gov/")):
+            continue
+        r = httpx.get(src, headers={"User-Agent": ua}, timeout=90, follow_redirects=True)
+        if r.status_code == 200 and r.headers.get("content-type", "").startswith("image/"):
+            dest.write_bytes(r.content)
+            got += 1
+        time.sleep(0.15)  # SEC: at most 10 requests a second
+    return got
+
+
 def main(out_dir: str | None = None) -> int:
     out = Path(out_dir) if out_dir else Path(__file__).resolve().parents[2] / "architect-documents"
     out.mkdir(parents=True, exist_ok=True)
@@ -127,6 +153,11 @@ def main(out_dir: str | None = None) -> int:
         line = f"ok   {name:<52} {dest.stat().st_size // 1024:>6} KB  {flow:<17} {what}"
         if dest.suffix == ".htm":
             pdf = dest.with_suffix(".pdf")
+            try:
+                images = fetch_images(dest, url, ua)
+                line += f"  {images} image(s)" if images else ""
+            except Exception as exc:  # noqa: BLE001 - the text of the exhibit still prints
+                print(f"WARN {name}: images not downloaded ({exc})", file=sys.stderr)
             if pdf.exists() or (browser and html_to_pdf(browser, dest, pdf)):
                 line += f"  -> {pdf.name}"
             else:

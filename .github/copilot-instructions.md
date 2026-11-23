@@ -52,7 +52,7 @@ Every step is described by hand in `docs/cts-dps/install-and-demo.md`.
 - **Never commit `.env`** and never write keys, passwords or tokens into any file. The Azure keys come from the
   bank's vault and go only into `dps/.env`, which Git ignores.
 - `architect-documents/` holds the architect's public demo documents (PDF), committed so the demo works offline. Add new third-party documents only when the owner asks.
-- The AI part (`DPS_LLM_ENABLED=true`) needs the VPN to the bank's Azure OpenAI endpoint. Everything else runs
+- The AI part (`DPS_LLM_ENABLED=true`) needs network access to the bank's Azure OpenAI endpoint. Everything else runs
   without it.
 - Keep line length 120 (ruff). Tests must keep coverage at 90% or more.
 - When a contract changes, keep `contracts/` and `dps/src/dps/contract/` identical.

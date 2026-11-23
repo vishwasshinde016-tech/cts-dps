@@ -254,9 +254,9 @@ Point at section 1 (the `dps_job` row with the type, status and context Spring s
 >
 > The agent can open more pages, search, look up definitions, and ask Spring's Java rules. Every call goes through our gateway, with a token budget, and only to the bank's own Azure endpoint.
 >
-> On this laptop the AI is off, so you see the rules-only result. With the VPN, I add `--agent` and the agent's answers join in."
+> On this laptop the AI is off, so you see the rules-only result. With the Azure settings, I add `--agent` and the agent's answers join in."
 
-> **For you:** to show the agent, the laptop needs the VPN and the Azure settings in `.env` (see `install-and-demo.md`, section 5). Then run `.venv\Scripts\python scripts\demo_onboard.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf --agent`.
+> **For you:** to show the agent, the laptop needs the Azure settings in `.env` (see `install-and-demo.md`, section 5). Then run `.venv\Scripts\python scripts\demo_onboard.py ..\architect-documents\us_ex10_1_credit_agreement_2020.pdf --agent`.
 
 ### 3.8 Every answer is checked, and nothing is missed
 

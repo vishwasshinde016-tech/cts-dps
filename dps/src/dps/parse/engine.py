@@ -11,6 +11,7 @@ import io
 import logging
 import re
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Protocol
 
 from pypdf import PdfReader
@@ -68,6 +69,28 @@ def text_quality(text: str) -> float:
     return round(ratio * (0.5 + 0.5 * length_factor), 3)
 
 
+# RapidOCR's own text model is for Chinese: on English pages it runs the words together ("TheTrusteeishereby
+# appointed", "SRILANKANRUPEES"), so no rule could match a scanned page (bulk run, 22 Nov 2026: one page gave 152
+# words, 39 run together; PP-OCRv6 gave 450 words, none run together, and was faster). The images carry PP-OCRv6.
+REC_MODEL_NAME = "PP-OCRv6_rec_small.onnx"
+REC_MODEL_PLACES = ("/opt/ocr-models",)
+
+
+def rec_model() -> Path | None:
+    """The PP-OCRv6 text model: DPS_OCR_REC_MODEL, the image's folder, or Docling's model folder; None if absent."""
+    import os
+
+    named = os.environ.get("DPS_OCR_REC_MODEL")
+    places = [Path(named)] if named else []
+    places += [Path(p) / REC_MODEL_NAME for p in REC_MODEL_PLACES]
+    docling = os.environ.get("DPS_DOCLING_ARTIFACTS") or Path.home() / ".cache" / "docling" / "models"
+    places.append(Path(docling) / "RapidOcr" / "onnx" / "PP-OCRv6" / "rec" / REC_MODEL_NAME)
+    found = next((p for p in places if p.is_file()), None)
+    if found is None:
+        log.warning("OCR text model %s not found: RapidOCR's own model runs English words together", REC_MODEL_NAME)
+    return found
+
+
 class RapidOcrBackend:
     """RapidOCR (ONNX runtime, CPU). Imported lazily so the API process does not load the model."""
 
@@ -102,7 +125,8 @@ class RapidOcrBackend:
         if self._engine is None:
             from rapidocr_onnxruntime import RapidOCR
 
-            self._engine = RapidOCR()
+            model = rec_model()
+            self._engine = RapidOCR(rec_model_path=str(model)) if model else RapidOCR()
         return self._engine
 
     def ocr_page(self, pdf_bytes: bytes, page_index: int) -> tuple[str, float]:  # pragma: no cover
@@ -125,7 +149,12 @@ class RapidOcrBackend:
 
 
 class ParserEngine:
-    """Fast path used by both flows. ``ocr`` may be None (no OCR available): such pages come back empty."""
+    """Fast path used by both flows. ``ocr`` may be None (no OCR available): such pages come back empty.
+
+    A page whose text layer reads poorly keeps it here: on 72 real documents such pages were tables of contents and
+    covers, and reading them by OCR as well changed one page and no finding, for minutes of OCR (bulk run, 22 Nov
+    2026). A document with many of them goes to the heavy pool (ingest POOR_PAGES); there OCR reads what Docling
+    cannot (``ocr_poor_pages``)."""
 
     def __init__(self, ocr: OcrBackend | None = None) -> None:
         self._ocr = ocr
@@ -149,6 +178,19 @@ class ParserEngine:
         if callable(close):
             close()
         return pages
+
+    def ocr_poor_pages(self, pdf_bytes: bytes, pages: list[Page], numbers: list[int]) -> list[Page]:
+        """These pages read by OCR as well; the OCR reading replaces a page only when it reads better."""
+        if self._ocr is None or not numbers:
+            return pages
+        out = list(pages)
+        for no in numbers:
+            current = out[no - 1]
+            read = self._ocr_or_empty(pdf_bytes, no - 1, current.text)
+            if read.method == "OCR" and read.quality > current.quality and \
+                    len(re.findall(r"\w", read.text)) > len(re.findall(r"\w", current.text)):
+                out[no - 1] = read
+        return out
 
     def _ocr_or_empty(self, pdf_bytes: bytes, index: int, native: str) -> Page:
         if self._ocr is None:
@@ -218,17 +260,22 @@ class HeavyEngine:
         pages = self._fast.parse(pdf_bytes)
         poor = [p.no for p in pages if p.method != "BLANK" and p.quality < HEAVY_THRESHOLD]
         runs = page_runs(poor, self._chunk)
+        failed: list[int] = []
         for i, (first, last) in enumerate(runs):
             log.info("Docling pages %d-%d (run %d of %d)", first, last, i + 1, len(runs))
             try:
                 texts = self._convert(pdf_bytes, first, last)
             except Exception as ex:
                 log.warning("Docling failed on pages %d-%d: %s", first, last, type(ex).__name__)
+                failed += [no for no in poor if first <= no <= last]
                 continue
             for no, text in texts.items():
                 if first <= no <= last:
                     pages[no - 1] = Page(no, text, "DOCLING", max(text_quality(text), HEAVY_THRESHOLD))
-        return pages
+        # Where Docling failed (not installed, models missing, a crash), OCR reads the page rather than leaving it
+        # unread (bulk run, 22 Nov 2026: 44 runs failed and their pages stayed unread)
+        fallback = getattr(self._fast, "ocr_poor_pages", None)
+        return fallback(pdf_bytes, pages, failed) if fallback and failed else pages
 
 
 def pdf_slice(pdf_bytes: bytes, first: int, last: int) -> bytes:
@@ -251,12 +298,30 @@ class DoclingConverter:  # pragma: no cover - heavy optional dependency, run onl
     def __init__(self) -> None:
         self._converter = None
 
+    @staticmethod
+    def _make():
+        """The converter on the models baked into the image (DPS_DOCLING_ARTIFACTS, default ~/.cache/docling/models):
+        the parse sandbox has no network, so Docling must never download at first use (bulk run, 22 Nov 2026: every
+        Docling run failed). Its OCR is RapidOCR, the engine of DPS's fast path."""
+        import os
+
+        from docling.datamodel.base_models import InputFormat
+        from docling.datamodel.pipeline_options import PdfPipelineOptions, RapidOcrOptions
+        from docling.document_converter import DocumentConverter, PdfFormatOption
+
+        folder = Path(os.environ.get("DPS_DOCLING_ARTIFACTS") or Path.home() / ".cache" / "docling" / "models")
+        options = PdfPipelineOptions(ocr_options=RapidOcrOptions())
+        if folder.is_dir():
+            options.artifacts_path = str(folder)
+        else:
+            log.warning("Docling models folder %s not found: Docling would try to download them", folder)
+        return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)})
+
     def __call__(self, pdf_bytes: bytes, first: int, last: int) -> dict[int, str]:
         from docling.datamodel.base_models import DocumentStream
-        from docling.document_converter import DocumentConverter
 
         if self._converter is None:
-            self._converter = DocumentConverter()
+            self._converter = self._make()
         try:  # only the run's pages: a 500-page agreement no longer loads in full for every 10-page run
             part = pdf_slice(pdf_bytes, first, last)
             result = self._converter.convert(DocumentStream(name="part.pdf", stream=io.BytesIO(part)))

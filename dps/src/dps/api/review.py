@@ -31,7 +31,8 @@ router = APIRouter()
 TYPE_TO_JOB = {"SANCTION_LETTER": "EXTRACT_SANCTION", "LOAN_AGREEMENT": "EXTRACT_AGREEMENT",
                "AMENDMENT": "EXTRACT_AMENDMENT", "FINANCIAL_STATEMENT": "EXTRACT_STATEMENT",
                "COMPLIANCE_CERTIFICATE": "EXTRACT_CERTIFICATE", "WAIVER_CONSENT": "EXTRACT_WAIVER",
-               "GUARANTEE": "EXTRACT_AGREEMENT", "AMENDED_AND_RESTATED": "EXTRACT_AGREEMENT"}
+               "GUARANTEE": "EXTRACT_AGREEMENT", "AMENDED_AND_RESTATED": "EXTRACT_AGREEMENT",
+               "TRUST_DEED": "EXTRACT_AGREEMENT"}
 
 
 def _job(db, job_id: str) -> Job:
@@ -256,7 +257,8 @@ def _learn(db, job: Job, d: Decision, old: dict | None, new: dict | None, review
 class ReclassifyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: Literal["SANCTION_LETTER", "LOAN_AGREEMENT", "AMENDMENT", "FINANCIAL_STATEMENT", "COMPLIANCE_CERTIFICATE",
-                  "SECURITY_DOCUMENT", "OTHER_EVIDENCE", "WAIVER_CONSENT", "GUARANTEE", "AMENDED_AND_RESTATED"]
+                  "SECURITY_DOCUMENT", "OTHER_EVIDENCE", "WAIVER_CONSENT", "GUARANTEE", "AMENDED_AND_RESTATED",
+                  "TRUST_DEED"]
     reason: str = Field(min_length=1, max_length=500)
 
 

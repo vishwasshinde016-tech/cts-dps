@@ -20,6 +20,15 @@ NAME_LINE = re.compile(r"^\s*(?:(?i:name)\s*[:\-]\s*|\(?\s*(?i:ca\.?|mr\.?|ms\.?
                        r"([A-Z][A-Za-z.\s]{2,60}?)\s*\)?\s*$", re.M)
 DATE = re.compile(r"\bdate[d]?\s*[:\-]?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b", re.I)
 UNITS = {"x": "TIMES", "times": "TIMES", "%": "PERCENT"}
+# A certificate written as a sentence lists several ratios on one line: "the Historic DSCR was 2.22; (ii) the
+# Projected DSCR was 1.98; and (iii) the Loan Life Cover Ratio as 9.05 : 1" (Herefordshire, bulk run of 22 Nov 2026:
+# the DSCR was read as 9.05). Each listed item keeps its own number; a table row has no such separators.
+_ITEMS = re.compile(r";|\(\s*(?:[ivx]{1,4}|[a-h])\s*\)")
+_TO_ONE = re.compile(r"(\d+(?:\.\d+)?)\s*:\s*1(?:\.0+)?(?![\d.])")  # "9.05 : 1" is 9.05
+
+
+def _segments(line: str) -> list[str]:
+    return [s for s in _ITEMS.split(line) if s.strip()]
 
 
 def _signed(pages: list[dict]) -> dict:
@@ -47,7 +56,8 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
     out = []
     seen = set()
     for p in pages:
-        for line in (p.get("text") or "").splitlines():
+        lines = [s for whole in (p.get("text") or "").splitlines() for s in _segments(_TO_ONE.sub(r"\1", whole))]
+        for line in lines:
             metric = _best_metric(line)
             if not metric or metric in seen:
                 continue
