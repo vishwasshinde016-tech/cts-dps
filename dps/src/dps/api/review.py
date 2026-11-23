@@ -384,7 +384,10 @@ def _norm(text: str | None) -> str:
 
 @router.post("/api/v1/ai/covenant-status")
 def covenant_status(body: CovenantStatusRequest, db: DB, user: User) -> dict:
-    """Recommendations from compliance certificates DPS already extracted for the CP (rationale cites the page)."""
+    """Recommendations from compliance certificates DPS already extracted for the CP (rationale cites the page).
+
+    Only figures a person confirmed or corrected count (Phase 3 fix 2, 23 Nov 2026): a job still waiting for review,
+    a SHADOW job, and a field no reviewer confirmed never become a COMPLIED or BREACHED recommendation."""
     require_roles(user, SERVICE, ADMIN)
     from dps.extraction.agreement import _best_metric
 
@@ -392,7 +395,7 @@ def covenant_status(body: CovenantStatusRequest, db: DB, user: User) -> dict:
     if not doc_ids:
         return {"recommendations": []}
     cert_jobs = db.scalars(select(Job).where(Job.document_id.in_(doc_ids), Job.job_type == "EXTRACT_CERTIFICATE",
-                                             Job.status.in_((jobs.DONE, jobs.NEEDS_REVIEW)))
+                                             Job.status == jobs.DONE, Job.rollout != "SHADOW")
                            .order_by(Job.finished_at.desc())).all()
     figures: dict[str, tuple[dict, str]] = {}
     for job in cert_jobs:
@@ -400,7 +403,7 @@ def covenant_status(body: CovenantStatusRequest, db: DB, user: User) -> dict:
         if run is None:
             continue
         for f in json.loads(run.result_json).get("fields", []):
-            if f["group"] != "CERTIFIED_FIGURE" or f["status"] == "REJECTED":
+            if f["group"] != "CERTIFIED_FIGURE" or f["status"] not in ("CONFIRMED", "CORRECTED"):
                 continue
             key = _norm(f["value"].get("covenant"))
             figures.setdefault(key, (f, job.document_version_id or job.id))

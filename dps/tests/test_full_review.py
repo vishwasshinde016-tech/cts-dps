@@ -330,17 +330,39 @@ def test_f7_two_reporting_duties_are_never_one():
     assert second["state"] != "FINDING"  # covered and listed on the field, or for review: never silently explained
 
 
-def test_f8_a_sample_of_dismissed_sentences_goes_to_a_person():
+def test_f8_every_dismissed_sentence_goes_to_a_person():
+    """Phase 3 fix 1 (23 Nov 2026): every sentence the Document Agent dismissed is on a review item, one per page;
+    before, one in ten was sampled and the other nine were settled by the model alone."""
     from dps.skills.covenants import ledger
 
     pages = [{"no": 1, "text": " ".join(f"The Borrower shall deliver report number {n} to the Lender within {n} days."
-                                        for n in range(1, 41))}]
+                                        for n in range(1, 41))},
+             {"no": 2, "text": "The Borrower shall deliver its audited accounts to the Lender within 120 days."}]
     entries = ledger.candidates(pages)
     for e in entries:
         e["state"], e["reason"] = ledger.NOT_A_COVENANT, "test"
-    sampled = [f for f in ledger.review_items(entries, pages, "covenants")
-               if any(i["code"] == "DISMISSED_SAMPLE" for i in f["issues"])]
-    assert 1 <= len(sampled) < len(entries)
+    items = [f for f in ledger.review_items(entries, pages, "covenants")
+             if any(i["code"] == "AI_DISMISSED" for i in f["issues"])]
+    assert len(items) == 2  # one per page
+    assert all(f["status"] == "NEEDS_REVIEW" for f in items)
+    listed = {c for f in items for c in f["value"]["candidates"]}
+    assert listed == {e["id"] for e in entries}  # none left out
+    assert all(e["fieldId"] in {f["id"] for f in items} for e in entries)
+
+
+def test_dismissals_are_not_taken_when_the_document_addresses_an_ai_model():
+    from dps.skills.covenants import ledger
+
+    pages = [{"no": 1, "text": "The Borrower shall deliver its audited accounts to the Lender within 120 days."}]
+    entries = ledger.candidates(pages)
+    decisions = {e["id"]: {"decision": "NOT_A_COVENANT", "reason": "boilerplate"} for e in entries}
+    ledger.settle(entries, [], decisions, trust_dismissals=False)
+    assert entries and all(e["state"] == ledger.UNRESOLVED for e in entries)
+    assert all("not taken" in e["reason"] and "boilerplate" in e["reason"] for e in entries)
+    items = ledger.review_items(entries, pages, "covenants")
+    assert any(i["code"] == "UNRESOLVED_CANDIDATE" for f in items for i in f["issues"])
+    ledger.settle(entries, [], decisions)  # trusted (the default): dismissed, and still a review item
+    assert all(e["state"] == ledger.NOT_A_COVENANT for e in entries)
 
 
 def test_f11_a_long_definition_is_read_to_its_end():

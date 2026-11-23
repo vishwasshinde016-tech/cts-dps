@@ -741,7 +741,11 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
                 residual = names.clean(residual, drop_mechanics=True, collapse=False) or []
                 fields += _agent_only(pack, pages, fields, residual, method="AI_RESIDUAL")
                 fields = merge_same_sentence(fields)
-                ledger.settle(entries, fields, decisions)
+                from dps.agent.guard import injection_signs
+
+                # A document that addresses an AI model may have talked it into dismissing duties: none is taken
+                injected = bool(injection_signs("\n".join(p.get("text") or "" for p in pages)))
+                ledger.settle(entries, fields, decisions, trust_dismissals=not injected)
             ledger.attach(entries, fields)
             fields += ledger.review_items(entries, pages, pack.name)
             obs.set_attrs(ledger_obj, **{"dps.unresolved": len(ledger.unresolved(entries))})

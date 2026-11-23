@@ -3,7 +3,8 @@
 # docs/cts-dps/runbook.md under the same name. Emitted by the leader worker every minute: dps_queue_oldest_seconds,
 # dps_queue_depth_per_worker, dps_jobs_dead, dps_review_error_rate, dps_audit_seal_last_day_timestamp,
 # dps_review_backlog, dps_review_mapping_backlog, dps_review_oldest_wait_seconds. Per model call (Document Agent):
-# dps_ai_calls_total{status}, dps_ai_unavailable_total, dps_ai_tokens_total. From other sources:
+# dps_ai_calls_total{status}, dps_ai_unavailable_total, dps_ai_tokens_total, dps_ai_budget_spent_total (the month's
+# budget is spent: calls refused before they leave), dps_ai_refused_total (content filter). From other sources:
 # dps_calibration_error (the weekly offline calibration job), dps_db_deadlocks_total (SQL Server exporter).
 groups:
   - name: cts-dps
@@ -61,6 +62,14 @@ groups:
         for: 10m
         labels: { severity: page }
         annotations: { summary: "The Document Agent's model is failing: documents are read by rules only and sent to review", runbook: "AiUnavailable" }
+      - alert: DpsAiMonthlyBudgetSpent
+        expr: sum(increase(dps_ai_budget_spent_total[10m])) > 0
+        labels: { severity: ticket }
+        annotations: { summary: "The month's AI token budget is spent: documents are read by the rules only and sent to review (not an Azure outage)", runbook: "AiBudget" }
+      - alert: DpsAiRefusals
+        expr: sum(increase(dps_ai_refused_total[1h])) > 5
+        labels: { severity: ticket }
+        annotations: { summary: "The model's content filter refused more than 5 requests in an hour (not an Azure outage)", runbook: "AiRefused" }
       - alert: DpsAiTokensHigh
         expr: sum(increase(dps_ai_tokens_total[1d])) > 15000000
         labels: { severity: ticket }

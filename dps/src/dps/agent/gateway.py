@@ -5,7 +5,9 @@ A route file maps names (small, strong, vision) to deployments. Every call gets:
 - retries on timeout, 429 and 5xx with back-off 2 s, 8 s, 30 s and jitter;
 - a circuit breaker per route (5 failures in 60 s, half-open after 30 s) -> ``AiUnavailable`` (AI_UNAVAILABLE);
 - a token bucket per route sized to the deployment's requests per minute;
-- a per-job token budget -> ``AiBudgetExceeded`` (AI_BUDGET_EXCEEDED);
+- a per-job token budget -> ``AiBudgetExceeded`` (AI_BUDGET_EXCEEDED); the month's budget spent ->
+  ``AiMonthlyBudgetSpent`` (AI_MONTHLY_BUDGET_SPENT) and a content-filter refusal -> ``AiRefused`` (AI_REFUSED),
+  neither of which counts against the circuit breaker (the model is up);
 - structured output: the answer must parse as JSON and match the given JSON schema; one repair call, then
   ``ModelOutputInvalid`` (MODEL_OUTPUT_INVALID).
 
@@ -49,6 +51,19 @@ class AiBudgetExceeded(GatewayError):
     code = "AI_BUDGET_EXCEEDED"
 
 
+class AiMonthlyBudgetSpent(AiBudgetExceeded):
+    """The month's token budget (``guard.check_budget``) is spent: not an outage, so the circuit stays closed
+    (Phase 3 fix 3, 23 Nov 2026). Before, it counted as a model failure and opened the breaker for the next jobs."""
+
+    code = "AI_MONTHLY_BUDGET_SPENT"
+
+
+class AiRefused(GatewayError):
+    """The deployment answered but refused (Azure content filter): the model is up, so the circuit stays closed."""
+
+    code = "AI_REFUSED"
+
+
 class ModelOutputInvalid(GatewayError):
     code = "MODEL_OUTPUT_INVALID"
 
@@ -59,6 +74,15 @@ class ModelOutputInvalid(GatewayError):
 
 class TransientModelError(RuntimeError):
     """Raised by providers (or mapped from their errors) for timeouts, 429 and 5xx."""
+
+
+class ModelRefused(RuntimeError):
+    """Raised by providers (or mapped from their errors) when the model refuses the request (content filter)."""
+
+
+# Provider error text that means a refusal, not an outage (LiteLLM's ContentPolicyViolationError, Azure's
+# content_filter / ResponsibleAIPolicyViolation).
+_REFUSAL = ("contentpolicyviolation", "content_filter", "content management policy", "responsibleaipolicyviolation")
 
 
 @dataclass(frozen=True)
@@ -244,9 +268,18 @@ class Gateway:
                     breaker.failure()
                     last, retry = ex, True
                     obs.mark_failed(model_span, ex)
-                except Exception as ex:  # noqa: BLE001 - provider bugs and auth errors count as an outage
-                    breaker.failure()
+                except ModelRefused as ex:  # the model is up and said no: not a breaker failure (Phase 3 fix 3)
                     obs.mark_failed(model_span, ex)
+                    obs.count("dps.ai.refused", 1, route=route_name)
+                    raise AiRefused(f"{route.deployment} refused the request: {str(ex)[:200]}") from ex
+                except Exception as ex:  # noqa: BLE001 - provider bugs and auth errors count as an outage
+                    from dps.agent.guard import AiBudgetExhausted
+
+                    obs.mark_failed(model_span, ex)
+                    if isinstance(ex, AiBudgetExhausted):  # a spent month is not an outage (Phase 3 fix 3)
+                        obs.count("dps.ai.budget_spent", 1, route=route_name)
+                        raise AiMonthlyBudgetSpent(str(ex)[:200]) from ex
+                    breaker.failure()
                     raise AiUnavailable(f"{type(ex).__name__}: {str(ex)[:200]}") from ex
                 else:
                     self._on_span(model_span, messages, answer)
@@ -334,12 +367,29 @@ class LlmDisabled(RuntimeError):
     """No model may be used: the switch is off, no model is configured, or the endpoint is not an allowed host."""
 
 
+# The only model provider DPS may call: LiteLLM sends an "azure/..." model to AZURE_API_BASE, which
+# ``endpoint_problem`` checks against DPS_AI_ALLOWED_HOSTS. Any other prefix ("openai/", "anthropic/", none at all)
+# goes to that provider's own public host, which the host check never sees (Phase 3 fix 4, 23 Nov 2026).
+ALLOWED_PROVIDERS = ("azure/",)
+
+
+def route_problem(routes: Routes) -> str | None:
+    """Why the routes may not be used (None when they may): a route whose model is not on an allowed provider."""
+    for name, route in sorted(routes.routes.items()):
+        model = (route.deployment or "").strip().lower()
+        if model and not model.startswith(ALLOWED_PROVIDERS):
+            return (f"route {name} uses model {route.deployment!r}; only {', '.join(ALLOWED_PROVIDERS)} models may "
+                    "be called (the bank's own deployment on an allowed host)")
+    return None
+
+
 def from_settings(settings, session_factory=None, env: dict | None = None) -> Gateway:
     from dps.settings import endpoint_problem, llm_allowed
 
     if not llm_allowed(settings):
         raise LlmDisabled("LLM use is off (DPS_LLM_ENABLED=false or no DPS_AI_MODEL / routes file)")
-    problem = endpoint_problem(settings, env)
+    problem = endpoint_problem(settings, env) or route_problem(
+        Routes.load(getattr(settings, "ai_routes_file", "") or None, settings.ai_model))
     if problem:
         raise LlmDisabled(f"LLM refused: {problem}")
     return _live_gateway(settings, session_factory)  # pragma: no cover - live model wiring
@@ -360,6 +410,8 @@ def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cove
                 return raw(messages)
             except Exception as ex:
                 text = f"{type(ex).__name__} {ex}".lower()
+                if any(s in text for s in _REFUSAL):  # checked first: a refusal's text can hold "400" or "500"
+                    raise ModelRefused(str(ex)[:300]) from ex
                 if any(s in text for s in ("timeout", "timed out", "429", "rate limit", "503", "502", "500",
                                            "overloaded", "connection")):
                     raise TransientModelError(str(ex)[:300]) from ex

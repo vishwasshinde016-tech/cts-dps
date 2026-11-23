@@ -1,5 +1,7 @@
 # Model routes for the Document Agent (DPS_AI_ROUTES_FILE). Copy to the config folder as routes.yaml and set the
 # bank's Azure OpenAI deployment names. "azure/<deployment>" uses AZURE_API_BASE, AZURE_API_KEY, AZURE_API_VERSION.
+# Only "azure/..." models are allowed: DPS refuses to start the model with any other prefix (gateway.route_problem),
+# because "openai/...", "anthropic/..." and the like call that provider's public host.
 # small: document type (second opinion); strong: the Document Agent's reads; vision: scanned pages read from
 # their images.
 defaults: { max_tokens: 3000, timeout_s: 60, temperature: null, retries: 3 }

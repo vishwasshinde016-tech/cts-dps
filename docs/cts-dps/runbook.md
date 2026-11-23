@@ -35,7 +35,8 @@ ops endpoints need the SUPPORT or ADMIN role.
 | COVERAGE_GAP on many agreements | The listed duty sentences are not explained by any extracted covenant. Open a few: real undertakings the rules do not know (escrow, subordination, insurance ...) are wording to teach the rules or the skill; noise (board resolutions, arbitration) is a duty-word to exclude in `skills/covenants/pages.py`. |
 | SECOND_READER_EMPTY on statements | The AI checker answered nothing twice. Check the Azure deployment and the statement's page text; the figures were not double-checked, so the statement waits for a person. |
 | No traces arriving | Check the `OTEL_EXPORTER_OTLP_*` settings of the API and worker (they are read at start), and the collector or Langfuse health (`/api/public/health`). Jobs are not affected: spans are exported in the background and dropped when nothing answers. |
-| AiBudget | Check `/ops/usage` for the job type using the most tokens; lower `page_selection.max_pages` or the pack's token budget (pull request), or raise the monthly budget with approval. |
+| AiBudget | Check `/ops/usage` for the job type using the most tokens; lower `page_selection.max_pages` or the pack's token budget (pull request), or raise the monthly budget with approval. When the month's budget is spent (`DpsAiMonthlyBudgetSpent`, warning `AI_MONTHLY_BUDGET_SPENT`), documents are read by the rules only and sent to review; this is not an Azure outage and does not open the gateway's breaker. |
+| AiRefused | The Azure content filter refused requests (warning `AI_REFUSED`). Those documents are read by the rules only and sent to review; the model itself is up, so the breaker stays closed. Open the job traces (`chat` spans marked failed) to see which document, and ask the Azure owner whether the filter setting fits bank documents. |
 
 ## Sizing
 
