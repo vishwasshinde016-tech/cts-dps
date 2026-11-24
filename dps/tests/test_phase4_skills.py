@@ -340,6 +340,19 @@ def test_amendment_job_reads_base_result(client, app, settings, tmp_path):
         assert amendment_run.attempt_no == 1
 
 
+def test_reporting_deadlines_handle_each_of_its_financial_half_years():
+    from dps.skills.schedule_terms.rules import link_terms
+
+    page = ("Deliver within 180 days after the end of each of its financial years, the audited consolidated "
+            "financial statements.\nDeliver within 30 days after the end of each of its financial half years, "
+            "the unaudited consolidated financial\nstatements.")
+    fields = load("schedule_terms").rules([{"no": 1, "text": page}], {})
+    link_terms(fields)
+    assert [(f["value"]["frequency"], f["value"]["daysAfterPeriodEnd"], f["value"]["deliverable"])
+            for f in fields] == [("YEARLY", 180, "AUDITED_FINANCIAL_STATEMENTS"),
+                                ("HALF_YEARLY", 30, "INTERIM_FINANCIAL_STATEMENTS")]
+
+
 def test_an_agreement_job_result_gets_schedule_terms(client, app, settings, tmp_path):
     from dps.ingest.pipeline import Ingestor as Ing
 

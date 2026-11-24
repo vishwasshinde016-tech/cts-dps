@@ -228,9 +228,8 @@ def _generic(f: dict) -> bool:
 
 
 def _second_covenant(f: dict, keep: dict) -> bool:
-    """A reading of the same sentence that is another covenant: a specific code different from the kept one, with a
-    threshold of its own (CTS integration review, 23 Nov 2026: such a reading was merged away with its threshold)."""
-    if _generic(f) or _generic(keep) or _code_of(f) == _code_of(keep):
+    """Preserve a second specific threshold even when both readings share the same quote and metric."""
+    if _generic(f) or _generic(keep):
         return False
     mine, theirs = (f.get("value") or {}).get("threshold"), (keep.get("value") or {}).get("threshold")
     return isinstance(mine, (int, float)) and not isinstance(mine, bool) and mine != theirs
@@ -246,7 +245,7 @@ def merge_same_sentence(fields: list[dict]) -> list[dict]:
     for f in fields:
         source = f.get("source") or {}
         if f.get("group") in _MERGE_GROUPS and source.get("quote"):
-            by_sentence.setdefault((source.get("page"), squash(source["quote"])[:200]), []).append(f)
+            by_sentence.setdefault((source.get("page"), squash(source["quote"])), []).append(f)
     dropped: set[int] = set()
     for same in by_sentence.values():
         if len(same) < 2 or not any(str(f.get("method", "")).startswith("AI") for f in same):
