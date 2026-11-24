@@ -2,7 +2,7 @@
 
 Run inside the parser container (``network_mode: none``, non-root, read-only root, all capabilities dropped):
 ``python -m dps.parse.server /run/dps-parser/parser.sock``. Only the file and a small request header go in;
-only the page model JSON or an error code comes out. Each request is parsed in a fresh sandboxed child.
+only the page model JSON or an error code comes out. Requests are parsed in a supervised, reusable sandboxed child.
 
 Frame: 4-byte big-endian header length, JSON header, 8-byte big-endian body length, body bytes.
 """
@@ -51,12 +51,13 @@ def recv_frame(sock: socket.socket) -> tuple[dict, bytes]:
     return header, _recv_exact(sock, blen)
 
 
-def handle(header: dict, body: bytes, pool: str) -> dict:
+def handle(header: dict, body: bytes, pool: str, parser=None) -> dict:
     req = sandbox.ParseRequest(body, header["format"], header["sha256"], header.get("versionId"),
-                               bool(header.get("ocr", True)), pool == "HEAVY")
+                               bool(header.get("ocr", True)), pool == "HEAVY", header.get("statement"))
     try:
-        model = sandbox.run(req, sandbox.Limits.for_pool(pool), header.get("pagesHint"),
-                            target=header.get("target", "parse") if os.environ.get("DPS_PARSER_TEST") else "parse")
+        target = header.get("target", "parse") if os.environ.get("DPS_PARSER_TEST") else "parse"
+        model = (parser.parse(req, header.get("pagesHint"), target=target) if parser else
+                 sandbox.run(req, sandbox.Limits.for_pool(pool), header.get("pagesHint"), target=target))
     except InspectionFailed as ex:
         return {"error": ex.code, "message": str(ex)}
     except sandbox.SandboxError as ex:
@@ -70,7 +71,7 @@ class _Handler(socketserver.StreamRequestHandler):
             header, body = recv_frame(self.request)
         except (ValueError, ConnectionError, json.JSONDecodeError):
             return
-        reply = handle(header, body, self.server.pool)  # type: ignore[attr-defined]
+        reply = handle(header, body, self.server.pool, getattr(self.server, "parser", None))  # type: ignore[attr-defined]
         payload = json.dumps(reply).encode("utf-8")
         send_frame(self.request, {"len": len(payload)}, payload)
 
@@ -83,11 +84,13 @@ class SocketParser:
 
     def parse(self, req: sandbox.ParseRequest, pages_hint: int | None = None, target: str = "parse") -> dict:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)  # type: ignore[attr-defined]
-        sock.settimeout(self.timeout)
+        sock.settimeout(max(self.timeout, sandbox.Limits.for_pool("HEAVY").max_seconds + 60)
+                        if req.heavy else self.timeout)
         try:
             sock.connect(self.path)
             send_frame(sock, {"format": req.fmt, "sha256": req.sha256, "versionId": req.version_id,
-                              "ocr": req.ocr, "pagesHint": pages_hint, "target": target}, req.data)
+                              "ocr": req.ocr, "pagesHint": pages_hint, "target": target,
+                              "statement": req.statement}, req.data)
             _, payload = recv_frame(sock)
         except (OSError, ConnectionError) as ex:
             raise sandbox.ParserCrash(f"Parser service unreachable: {type(ex).__name__}") from ex
@@ -111,7 +114,12 @@ def serve(path: str, pool: str = "STANDARD") -> None:  # pragma: no cover - long
     server.pool = pool  # type: ignore[attr-defined]
     os.chmod(path, 0o600)  # parser and worker run as the same uid 10001
     log.info("dps parser listening on %s (%s pool)", path, pool)
-    server.serve_forever()
+    server.parser = sandbox.WarmParser(sandbox.Limits.for_pool(pool))  # type: ignore[attr-defined]
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+        server.parser.close()  # type: ignore[attr-defined]
 
 
 if __name__ == "__main__":  # pragma: no cover

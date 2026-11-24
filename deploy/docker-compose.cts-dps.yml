@@ -47,6 +47,8 @@ x-dps-env: &dps-env
   DPS_LLM_ENABLED: ${DPS_LLM_ENABLED:-true}
   # Every worker shares the deployments' requests per minute (3 STANDARD + 1 HEAVY workers below).
   DPS_AI_RPM_SHARE: ${DPS_AI_RPM_SHARE:-4}
+  DPS_AI_PARALLEL_READS: ${DPS_AI_PARALLEL_READS:-4}
+  DPS_AI_SKIP_CONFIDENT: ${DPS_AI_SKIP_CONFIDENT:-true}
   DPS_AI_ALLOWED_HOSTS: ${DPS_AI_ALLOWED_HOSTS:?the Azure OpenAI host, e.g. bank-ai.openai.azure.com}
   AZURE_API_BASE: ${AZURE_API_BASE:?Azure OpenAI endpoint}
   AZURE_API_KEY: ${AZURE_API_KEY:?from the vault}

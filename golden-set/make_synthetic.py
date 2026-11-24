@@ -74,6 +74,7 @@ class Clause:
     threshold: float | None = None
     unit: str | None = None
     frequency: str | None = None
+    first_test_date: str | None = None
 
 
 @dataclass
@@ -103,13 +104,15 @@ def layout(a: Agreement) -> tuple[list[list[str]], list[dict]]:
                 covenants.append({"metric": c.metric, "category": c.category, "operator": c.operator,
                                   "threshold": c.threshold, "unit": c.unit, "frequency": c.frequency,
                                   "page": len(pages), "quote": c.text})
+                if c.first_test_date:
+                    covenants[-1]["firstTestDate"] = c.first_test_date
     return pages, covenants
 
 
 # A label states a test frequency only where the clause (or its article) says it (improvement plan V2, 24 Nov 2026:
 # every row defaulted to QUARTERLY, so the labels claimed frequencies the documents never state).
-def F(text, metric, op, value, unit=None, freq=None):  # noqa: N802 - reads like a table row
-    return Clause(text, metric, "FINANCIAL", op, value, unit, freq)
+def F(text, metric, op, value, unit=None, freq=None, first_test_date=None):  # noqa: N802 - reads like a table row
+    return Clause(text, metric, "FINANCIAL", op, value, unit, freq, first_test_date)
 
 
 def N(text, metric):  # noqa: N802
@@ -170,8 +173,8 @@ AGREEMENTS = [
     Agreement("AGR-012", "Deccan Agro Foods Private Limited", [
         *boilerplate("Deccan Agro Foods Private Limited", "INR 120 crore"),
         ("Article 6 Financial Covenants", [
-            F("6.1 The DSCR of the Borrower shall not fall below 1.20 times for any Financial Year.", "DSCR",
-              ">=", 1.2, freq="YEARLY"),
+            F("6.1 Commencing on 31 March 2027, DSCR shall not fall below 1.20 times for any Financial Year.",
+              "DSCR", ">=", 1.2, freq="YEARLY", first_test_date="2027-03-31"),
             F("6.2 The Current Ratio shall not be less than 1.10 times.", "CURRENT_RATIO", ">=", 1.1),
             F("6.3 Total Debt to Net Worth shall not exceed 2.00 times.", "DEBT_TO_NET_WORTH", "<=", 2.0),
         ]),

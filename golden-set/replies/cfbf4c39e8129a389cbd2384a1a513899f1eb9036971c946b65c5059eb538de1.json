@@ -1,0 +1,10 @@
+{
+ "route": "strong",
+ "deployment": "azure/gpt-6.1-sol",
+ "answer": "Thought: I now know the final answer\nFinal Answer: {\"items\": []}",
+ "tokens": {
+  "prompt": 2806,
+  "completion": 66,
+  "cached": 0
+ }
+}

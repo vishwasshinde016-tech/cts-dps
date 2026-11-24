@@ -582,6 +582,7 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
     request = json.loads(job.request_json or "{}")
     ctx = dict(request.get("context") or {})
     budget = gateway.begin_job(token_budget(pack, model)) if gateway is not None else None
+    flags = [f for f in (model or {}).get("flags", []) if f in FILE_FLAGS]
     extra: dict = {}
     with obs.span(f"dps.pack {pack.name}", **{"dps.pack": pack.name, "dps.ai": gateway is not None}) as span_obj:
         try:
@@ -590,7 +591,7 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
             elif pack.name == "reconcile_set":
                 fields, warnings, extra = _reconcile(job, raw or b"", db, pipeline_version, ctx)
             elif pack.name == "statement_lines":
-                fields, warnings, extra = _statement(job, db, statement_deps)
+                fields, warnings, extra = _statement(job, db, statement_deps, flagged=bool(flags))
             else:
                 fields, warnings, extra = _extract(pack, job, model or {"pages": []}, ctx, gateway, tools, db,
                                                    pipeline_version)
@@ -603,7 +604,6 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
     high = budget_warning(budget)
     if high:
         warnings.append(high)
-    flags = [f for f in (model or {}).get("flags", []) if f in FILE_FLAGS]
     if flags:  # G15: tracked changes, hidden sheets, a repaired PDF ... the reviewer must know
         warnings.append(issue("FILE_FLAGS", "the file has: " + ", ".join(f"{f} ({FILE_FLAGS[f]})" for f in flags)))
     if pack.name == "certificate" and model:  # spec Flow 3: the certificate against what the cycle expects
@@ -864,7 +864,7 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     return fields, warnings, extra
 
 
-def _statement(job: Job, db: Session | None, deps):
+def _statement(job: Job, db: Session | None, deps, *, flagged: bool = False):
     """EXTRACT_STATEMENT (full review WP7: one pipeline): the statement reader of the statement_lines skill, then the
     accounting identities and the restatement diff. Every figure is a proposal; the values table is written only
     when the review completes (statement_lines.reader.publish)."""
@@ -874,6 +874,10 @@ def _statement(job: Job, db: Session | None, deps):
 
     if deps is None:
         raise RuntimeError("EXTRACT_STATEMENT needs the statement reader's dependencies")
+    if flagged and deps.skip_confident_ai:
+        from dataclasses import replace
+
+        deps = replace(deps, skip_confident_ai=False)
     state = StatementReader(deps).read(job.id, job.document_id)
     if state.outcome == "HEAVY":
         raise NeedsHeavyPool("too many pages the standard reader could not read")

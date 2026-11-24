@@ -327,21 +327,22 @@ def model_classify(model: dict, gateway) -> dict | None:
     """The small route's grounded answer, or None when the gateway is unavailable or the answer is invalid.
     Image-only first pages go to the vision route instead (``vision_classify``)."""
     from dps.agent.gateway import GatewayError
-    from dps.agent.guard import DATA_NOT_INSTRUCTIONS
+    from dps.agent.guard import DATA_NOT_INSTRUCTIONS, model_safe_text
 
-    head = _pages(model)
+    head = [(no, model_safe_text(text)) for no, text in _pages(model)]
     if not any(t.strip() for _, t in head):
         return vision_classify(model, gateway)
     pages = "\n".join(f"--- page {no} ---\n{t}" for no, t in head)[:MAX_PROMPT_CHARS]
-    headings = [b["text"] for p in model.get("pages", [])[:2] for b in p.get("blocks", [])
+    headings = [model_safe_text(b["text"]) for p in model.get("pages", [])[:2] for b in p.get("blocks", [])
                 if b.get("kind") == "HEADING"][:20]
     facts = {"format": model.get("format"), "pages": model.get("pageCount"),
              "sheets": [s.get("name") for s in model.get("sheets", [])][:10],
              "numberDensity": round(number_density("\n".join(t for _, t in head)), 2)}
     messages = [{"role": "user", "content": PROMPT.format(guard=DATA_NOT_INSTRUCTIONS, facts=facts,
                                                           headings=headings, pages=pages)}]
+    safe_model = {"pages": [{"no": no, "text": text} for no, text in head]}
     try:
-        return gateway.call_json("small", messages, ANSWER_SCHEMA, lambda a: grounded(a, model))
+        return gateway.call_json("small", messages, ANSWER_SCHEMA, lambda a: grounded(a, safe_model))
     except GatewayError as ex:
         log.info("model classification unavailable: %s", ex.code)
         return None
@@ -380,11 +381,12 @@ def vision_classify(model: dict, gateway) -> dict | None:
 
 
 def classify(model: dict, expected: str | None = None, gateway=None) -> Classification:
-    """Rules first. With a model, the Document Agent gives a second opinion even when the rules decided (Miro AI
-    function 1): the same answer raises confidence, a different answer sends the document to a person."""
+    """Rules first, with a model opinion for uncertain or conflicting classifications."""
     scores, rule_evidence = rule_scores(model)
     decided = decide_rules(scores)
-    answer = model_classify(model, gateway) if gateway is not None else None
+    confident = decided and decided[1] >= 0.95 and expected in (None, decided[0])
+    skip = confident and getattr(gateway, "skip_confident", False)
+    answer = model_classify(model, gateway) if gateway is not None and not skip else None
     if decided:
         cls, conf = decided
         result = Classification(cls, conf, "RULES", scores, evidence=rule_evidence)

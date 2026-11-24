@@ -1,0 +1,10 @@
+{
+ "route": "strong",
+ "deployment": "azure/gpt-6.1-sol",
+ "answer": "{\"items\":[{\"candidate\":\"p1s4\",\"decision\":\"NOT_A_COVENANT\",\"reason\":\"Loan mechanics: drawdown notice and minimum drawdown amount.\",\"name\":null,\"page\":1,\"quote\":\"ARTICLE 2 THE FACILITY The Borrower may request a drawdown by giving the Lender not less than 5 (five) Business Days notice, and each drawdown shall not be less than INR 25 crore.\",\"value\":null}]}",
+ "tokens": {
+  "prompt": 5428,
+  "completion": 97,
+  "cached": 0
+ }
+}

@@ -16,13 +16,15 @@ import hashlib
 import json
 import logging
 import re
+import unicodedata
 from collections.abc import Callable
 from datetime import datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from dps.models import AiCache, AiUsage, AuditEvent, utcnow
+from dps.models import AiCache, AiUsage, AuditEvent, Job, utcnow
 from dps.ops import observability as obs
 from dps.settings import Settings, llm_allowed
 
@@ -72,10 +74,47 @@ def mask_pii(text: str) -> str:
                            else "[card or ID number]", text)
 
 
+_PAGE_MARKERS = re.compile(r"<<<\s*(?:end\s+)?page\s+\d+\s*>>>|===\s*page\s+\d+\s*===", re.I)
+_INSTRUCTIONS = re.compile(
+    TO_THE_MODEL.pattern + r"|\b(?:forget|override|bypass)\s+(?:(?:all|the|your)\s+)?(?:(?:prior|previous)\s+)?"
+    r"(?:instructions|rules|prompts)\b"
+    r"|ignora (?:las |todas las )?instrucciones anteriores|ignorez (?:les |toutes les )?instructions précédentes"
+    r"|पिछले निर्देशों को अनदेखा|تجاهل التعليمات السابقة", re.I)
+
+
+def _screen_text(text: str) -> str:
+    if text.isascii():
+        return " ".join(text.split())
+    return " ".join("".join(c for c in unicodedata.normalize("NFKC", text)
+                            if unicodedata.category(c) != "Cf").split())
+
+
+def escape_page_markers(text: str) -> str:
+    marker = "[document page marker removed]"
+    safe = _PAGE_MARKERS.sub(marker, text)
+    if not safe.isascii() and _PAGE_MARKERS.search(_screen_text(safe)):
+        return "\n".join(marker if _PAGE_MARKERS.search(_screen_text(line)) else line
+                         for line in safe.split("\n"))
+    return safe
+
+
+def model_safe_text(text: str) -> str:
+    """Screen only document content, before adding the application's page boundaries."""
+    parts = re.split(r"((?<=[.!?])[^\S\r\n]+|\r?\n)", text)
+    for i in range(0, len(parts), 2):
+        part = parts[i]
+        if _INSTRUCTIONS.search(_screen_text(part)):
+            parts[i] = "[removed: text addressed to an AI model]"
+        else:
+            parts[i] = escape_page_markers(part)
+    return "".join(parts)
+
+
 def injection_signs(text: str, limit: int = 3) -> list[str]:
     """Up to ``limit`` places where a document's text addresses an AI model, each with a little context."""
     out = []
-    for m in TO_THE_MODEL.finditer(text or ""):
+    text = _screen_text(text or "")
+    for m in re.finditer(_INSTRUCTIONS.pattern + "|" + _PAGE_MARKERS.pattern, text, re.I):
         out.append(" ".join(text[max(0, m.start() - 40):m.end() + 40].split()))
         if len(out) >= limit:
             break
@@ -92,9 +131,11 @@ def tokens_this_month(db: Session, now: datetime) -> int:
     return int(used or 0)
 
 
-def tokens_today(db: Session, now: datetime) -> int:
+def tokens_today(db: Session, now: datetime, tenant: str = "default", unscoped: str = "default") -> int:
     used = db.scalar(select(func.coalesce(func.sum(AiUsage.prompt_tokens + AiUsage.completion_tokens), 0))
-                     .where(AiUsage.at >= now.replace(hour=0, minute=0, second=0, microsecond=0)))
+                     .outerjoin(Job, Job.id == AiUsage.job_id)
+                     .where(AiUsage.at >= now.replace(hour=0, minute=0, second=0, microsecond=0),
+                            func.coalesce(Job.tenant_id, unscoped) == tenant))
     return int(used or 0)
 
 
@@ -124,12 +165,19 @@ def check_budget(db: Session, settings: Settings, now: datetime | None = None, d
     month once each. ``daily``: the routes file's per-day tokens when DPS_AI_DAILY_TOKEN_BUDGET is not set (the routes
     value was read but never enforced before; improvement plan S11, 24 Nov 2026), so one bulk upload cannot spend
     the month in a day."""
+    from dps.agent.usage import budget_context
+
+    tenant, pending = budget_context()
+    tenant = tenant or settings.tenant_id
     day_budget = settings.ai_daily_token_budget or daily
     if day_budget:
         now_day = now or utcnow()
-        used_today = tokens_today(db, now_day)
+        used_today = tokens_today(db, now_day, tenant, unscoped=settings.tenant_id) + pending
         if used_today >= day_budget:
-            _alert_once(db, "AI_DAILY_BUDGET_EXHAUSTED", now_day.strftime("%Y-%m-%d"),
+            scope = now_day.strftime("%Y-%m-%d")
+            if tenant != "default":
+                scope += f":{tenant}"
+            _alert_once(db, "AI_DAILY_BUDGET_EXHAUSTED", scope,
                         f"AI daily budget spent ({used_today} of {day_budget} tokens): the rules answer until tomorrow",
                         used=used_today, budget=day_budget)
             raise AiDailyBudgetExhausted(f"{used_today} of {day_budget} tokens used today")
@@ -137,11 +185,12 @@ def check_budget(db: Session, settings: Settings, now: datetime | None = None, d
     if not budget:
         return
     status = budget_status(db, settings, now)
-    if status["exhausted"]:
+    used_month = status["usedTokens"] + pending
+    if used_month >= budget:
         _alert_once(db, "AI_BUDGET_EXHAUSTED", status["month"],
-                    f"AI budget spent ({status['usedTokens']} of {budget} tokens): the rules answer until next month",
-                    used=status["usedTokens"], budget=budget)
-        raise AiBudgetExhausted(f"{status['usedTokens']} of {budget} tokens used in {status['month']}")
+                    f"AI budget spent ({used_month} of {budget} tokens): the rules answer until next month",
+                    used=used_month, budget=budget)
+        raise AiBudgetExhausted(f"{used_month} of {budget} tokens used in {status['month']}")
     if status["usedTokens"] >= 0.8 * budget:
         _alert_once(db, "AI_BUDGET_80", status["month"],
                     f"AI budget at {status['percent']}% ({status['usedTokens']} of {budget} tokens)",
@@ -206,7 +255,12 @@ def guarded(completion: Completion, model: str, session_factory: sessionmaker[Se
             with session_factory() as db:
                 if db.get(AiCache, key) is None:
                     db.add(AiCache(key=key, model=model, answer=answer, created_at=clock(), last_used_at=clock()))
-                    db.commit()
+                    try:
+                        db.commit()
+                    except IntegrityError:
+                        db.rollback()
+                        if db.get(AiCache, key) is None:
+                            raise
         return answer
 
     return call

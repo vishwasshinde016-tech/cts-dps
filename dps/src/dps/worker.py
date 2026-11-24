@@ -308,11 +308,13 @@ class Worker:
         jobs.record_step(db, job, "START", attempt=job.attempts, worker=self.settings.worker_id)
         started = time.monotonic()
         from dps.agent import vision
+        from dps.ingest.inspect import InspectionFailed
+        from dps.parse.sandbox import SandboxError
 
         ingestor = self.ingestor
         images = vision.page_images.set(  # scanned pages: rendered only if the vision model is asked to read them
             vision.renderer(lambda: ingestor.read(doc, staged=not doc.object_key)) if doc is not None else None)
-        usage.begin()  # every Document Agent call of this job: tokens and cost per job (dps_ai_usage)
+        usage.begin(job.tenant_id)  # every Document Agent call of this job: tokens and cost per job (dps_ai_usage)
         try:
             with obs.span("dps.skill" if pack_job else "dps.analyze"):
                 if pack_job:
@@ -337,6 +339,21 @@ class Worker:
             db.rollback()
             db.refresh(job)
             jobs.finish(db, job, jobs.FAILED, str(ex)[:2000] or "No line items found", "CONTENT_FAILED")
+            self._sync_document(db, job)
+            return
+        except (SandboxError, InspectionFailed) as ex:
+            db.rollback()
+            db.refresh(job)
+            if self.settings.worker_pool != "HEAVY" and ex.code in ("PARSE_TIMEOUT", "OUT_OF_MEMORY"):
+                obs.event("MOVED_HEAVY", f"{ex.code}: moved to the HEAVY pool", code=ex.code)
+                jobs.move_to_pool(db, job, "HEAVY")
+                return
+            if ex.code == "PARSER_CRASH":
+                jobs.release_for_retry(db, job, str(ex)[:2000], min(2, self.settings.worker_max_attempts), ex.code,
+                                       self.settings.worker_retry_base_seconds, self.settings.worker_retry_max_seconds)
+            else:
+                jobs.finish(db, job, jobs.FAILED, str(ex)[:2000], ex.code,
+                            payload={"quarantine": ex.code in QUARANTINE})
             self._sync_document(db, job)
             return
         except (SpringUnavailable, httpx.HTTPError, OSError) as ex:
@@ -478,17 +495,21 @@ def build_analyzer(settings: Settings, database: Database) -> Callable[[Session,
 
 def statement_deps(settings: Settings, database: Database, core: SpringClient,
                    page_models: dict[str, dict] | None = None, gateway=None):
-    """The statement reader's dependencies: the DMS store, the parser (the ingest step's page model first), the
-    table reader with OCR, the AI second reader, and Core's loan currency, FX rate and borrower profile."""
-    from dps.extraction.statement_pdf import read_pdf_statement
-    from dps.parse.engine import DoclingConverter, HeavyEngine, ParserEngine, RapidOcrBackend
+    """Wire sandboxed statement parsing, optional AI, and borrower settings from Core."""
+    from dps.ingest.inspect import declared_format
+    from dps.ingest.pipeline import page_hint, sandbox_parser
+    from dps.parse.sandbox import ParseRequest
     from dps.skills.statement_lines.reader import StatementDeps
 
     heavy = settings.worker_pool == "HEAVY"
-    ocr = RapidOcrBackend() if settings.ocr_enabled else None
-    parser = HeavyEngine(ParserEngine(ocr), DoclingConverter()) if heavy else ParserEngine(ocr)
-    if page_models is not None:
-        parser = PageModelFirst(parser, page_models)
+    parse = sandbox_parser(settings.worker_pool, settings.parser_socket)
+
+    def sandbox_read(data: bytes, ext: str, entity: str, style: str) -> dict:
+        fmt = declared_format("statement" + ext)
+        req = ParseRequest(data, fmt, hashlib.sha256(data).hexdigest(), ocr=settings.ocr_enabled, heavy=heavy,
+                           statement=(ext, entity, style))
+        return parse(req, page_hint(data, fmt))
+
     store = FileStore(settings.storage_dir)
 
     def read_file(doc: Document) -> bytes:
@@ -504,13 +525,13 @@ def statement_deps(settings: Settings, database: Database, core: SpringClient,
         def second_reader(text, values, scale=1.0, entity=None):
             return check(text, values, completion, entity or settings.statement_entity, scale)
 
-    return StatementDeps(database.session_factory, read_file, parser, heavy,
-                         lambda data, entity=None: read_pdf_statement(
-                             data, ocr, entity=entity or settings.statement_entity),
-                         second_reader, settings.statement_entity, settings.fiscal_year_end_month,
-                         core.cp_currency, core.fx_rate, settings.default_currency,
-                         core.cp_profile, lambda: currency_words(core.country_profiles()),
-                         settings.report_derived_values)
+    return StatementDeps(database.session_factory, read_file, None, heavy, second_reader=second_reader,
+                         entity=settings.statement_entity, fiscal_year_end_month=settings.fiscal_year_end_month,
+                         loan_currency=core.cp_currency, fx_rate=core.fx_rate,
+                         default_currency=settings.default_currency,
+                         loan_profile=core.cp_profile, currency_words=lambda: currency_words(core.country_profiles()),
+                         report_derived_values=settings.report_derived_values, sandbox_read=sandbox_read,
+                         skip_confident_ai=settings.ai_skip_confident)
 
 
 def build_pack_runner(settings: Settings, database: Database, core: SpringClient | None = None,

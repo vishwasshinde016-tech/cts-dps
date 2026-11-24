@@ -1,0 +1,10 @@
+{
+ "route": "strong",
+ "deployment": "azure/gpt-6.1-sol",
+ "answer": "Thought: I now know the final answer\nFinal Answer: {\n  \"items\": [\n    {\n      \"name\": \"Any amount unpaid\",\n      \"value\": {\n        \"metric\": \"EOD_NON_PAYMENT\",\n        \"basis\": null,\n        \"operator\": null,\n        \"threshold\": null,\n        \"unit\": null,\n        \"frequency\": null,\n        \"schedule\": [],\n        \"cureDays\": 7,\n        \"obligor\": null,\n        \"facilityRefs\": [],\n        \"conditions\": [],\n        \"firstTestDate\": null,\n        \"equityCure\": null,\n        \"baskets\": []\n      },\n      \"page\": 1,\n      \"quote\": \"Any amount unpaid for more than 7 (seven) days after its due date is an Event of Default.\"\n    },\n    {\n      \"name\": \"breach of the financial covenants\",\n      \"value\": {\n        \"metric\": \"EOD_FIN_COVENANT_BREACH\",\n        \"basis\": null,\n        \"operator\": null,\n        \"threshold\": null,\n        \"unit\": null,\n        \"frequency\": null,\n        \"schedule\": [],\n        \"cureDays\": 30,\n        \"obligor\": null,\n        \"facilityRefs\": [],\n        \"conditions\": [\n          {\n            \"text\": \"that is\\ncapable of remedy\",\n            \"kind\": \"CONDITIONAL\"\n          }\n        ],\n        \"firstTestDate\": null,\n        \"equityCure\": null,\n        \"baskets\": []\n      },\n      \"page\": 1,\n      \"quote\": \"A cure period of 30 (thirty) days applies to any breach of the financial covenants that is\\ncapable of remedy.\"\n    }\n  ]\n}",
+ "tokens": {
+  "prompt": 2797,
+  "completion": 545,
+  "cached": 0
+ }
+}

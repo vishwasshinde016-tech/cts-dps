@@ -27,7 +27,12 @@ def test_record_then_replay_gives_the_same_result_without_a_model(tmp_path):
     replayed = replay_gateway(tmp_path)  # no live model at all
     second = predict_agreement_pipeline("AGR-011", _doc("AGR-011"), replayed)
     assert replayed.replies.hits == len(asked) and replayed.replies.misses == 0
-    assert [c["metric"] for c in second["covenants"]] == [c["metric"] for c in first["covenants"]]
+    assert second == first
+
+    parallel = replay_gateway(tmp_path, parallel=4)
+    third = predict_agreement_pipeline("AGR-011", _doc("AGR-011"), parallel)
+    assert parallel.replies.hits == len(asked) and parallel.replies.misses == 0
+    assert third == first
 
 
 def test_a_document_or_prompt_never_recorded_is_a_miss(tmp_path):

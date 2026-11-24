@@ -39,6 +39,7 @@ GATE_RECALL = 0.85
 GATE_VALUE_ACCURACY = 0.95
 GATE_PRECISION = 0.90
 GATE_FREQUENCY_ACCURACY = 0.95
+GATE_DATE_ACCURACY = 0.95
 
 
 @dataclass
@@ -54,13 +55,16 @@ class Score:
     frequency_correct: int = 0
     with_unit: int = 0
     unit_correct: int = 0
+    with_date: int = 0
+    date_correct: int = 0
     misses: list[str] = field(default_factory=list)
     extras: list[str] = field(default_factory=list)
     wrong_thresholds: list[str] = field(default_factory=list)
 
     def add(self, other: Score) -> None:
         for name in ("labelled", "predicted", "matched", "financial_matched", "threshold_correct",
-                     "with_page", "page_correct", "with_frequency", "frequency_correct", "with_unit", "unit_correct"):
+                     "with_page", "page_correct", "with_frequency", "frequency_correct", "with_unit", "unit_correct",
+                     "with_date", "date_correct"):
             setattr(self, name, getattr(self, name) + getattr(other, name))
 
     @staticmethod
@@ -75,6 +79,7 @@ class Score:
             "page_accuracy": self._ratio(self.page_correct, self.with_page),
             "frequency_accuracy": self._ratio(self.frequency_correct, self.with_frequency),
             "unit_accuracy": self._ratio(self.unit_correct, self.with_unit),
+            "date_accuracy": self._ratio(self.date_correct, self.with_date),
         }
 
 
@@ -92,28 +97,27 @@ def _same_threshold(a: dict, b: dict) -> bool:
 
 
 def _norm_unit(u) -> str:
-    return str(u or "").strip().upper().rstrip(".").replace("X", "TIMES") if u else ""
+    unit = str(u or "").strip().upper().rstrip(".")
+    return "TIMES" if unit == "X" else unit
 
 
 def _pairs(gold: list[dict], pred: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict], list[dict]]:
     """One-to-one pairs per (metric, category): every exact threshold match first, then the rest in order."""
-    pairs, left, waiting = [], list(pred), []
-    for g in gold:  # pass 1: same metric and same threshold
-        exact = next((p for p in left if _key(p) == _key(g) and _same_threshold(g, p)), None)
-        if exact is None:
-            waiting.append(g)
-            continue
-        left.remove(exact)
-        pairs.append((g, exact))
-    misses = []
-    for g in waiting:  # pass 2: same metric, another threshold (a wrong threshold, still found)
-        same = next((p for p in left if _key(p) == _key(g)), None)
-        if same is None:
-            misses.append(g)
-            continue
-        left.remove(same)
-        pairs.append((g, same))
-    return pairs, misses, left
+    pairs, left, waiting = [], list(pred), list(gold)
+    for level in ("date", "threshold", "metric"):
+        pending = []
+        for g in waiting:
+            same = next((p for p in left if _key(p) == _key(g)
+                         and (level == "metric" or _same_threshold(g, p))
+                         and (level != "date" or (g.get("firstTestDate") and
+                                                  g["firstTestDate"] == p.get("firstTestDate")))), None)
+            if same is None:
+                pending.append(g)
+            else:
+                left.remove(same)
+                pairs.append((g, same))
+        waiting = pending
+    return pairs, waiting, left
 
 
 def score_document(label: dict, prediction: dict) -> Score:
@@ -146,6 +150,10 @@ def score_document(label: dict, prediction: dict) -> Score:
             s.with_unit += 1
             if _norm_unit(g["unit"]) == _norm_unit(p.get("unit")):
                 s.unit_correct += 1
+        if g.get("firstTestDate"):
+            s.with_date += 1
+            if g["firstTestDate"] == p.get("firstTestDate"):
+                s.date_correct += 1
     return s
 
 
@@ -162,14 +170,14 @@ def score_statement(label: dict, prediction: dict) -> tuple[int, int, list[str]]
 
 
 def evaluate(labels_dir: Path, predictions_dir: Path, include_drafts: bool = False,
-             statuses: tuple[str, ...] = ("VERIFIED",)) -> dict:
+             statuses: tuple[str, ...] = ("VERIFIED",), documents: list[str] | None = None) -> dict:
     total = Score()
     per_doc = {}
     values_labelled = values_correct = 0
     counted = set(statuses) | ({"DRAFT_UNVERIFIED"} if include_drafts else set())
     for label_path in sorted(labels_dir.glob("*.json")):
         label = json.loads(label_path.read_text(encoding="utf-8"))
-        if label.get("status") not in counted:
+        if label.get("status") not in counted or (documents and label["documentId"] not in documents):
             continue
         pred_path = predictions_dir / label_path.name
         prediction = json.loads(pred_path.read_text(encoding="utf-8")) if pred_path.exists() else {"covenants": []}
@@ -188,6 +196,7 @@ def evaluate(labels_dir: Path, predictions_dir: Path, include_drafts: bool = Fal
               and overall["threshold_accuracy"] >= GATE_THRESHOLD_ACCURACY and overall["recall"] >= GATE_RECALL
               and (overall["precision"] is None or overall["precision"] >= GATE_PRECISION)
               and (overall["frequency_accuracy"] is None or overall["frequency_accuracy"] >= GATE_FREQUENCY_ACCURACY)
+              and (overall["date_accuracy"] is None or overall["date_accuracy"] >= GATE_DATE_ACCURACY)
               and (overall["value_accuracy"] is None or overall["value_accuracy"] >= GATE_VALUE_ACCURACY))
     return {"documents": len(per_doc), "overall": overall, "gate_passed": passed, "per_document": per_doc}
 
@@ -198,9 +207,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--predictions", type=Path, required=True)
     ap.add_argument("--include-drafts", action="store_true")
     ap.add_argument("--statuses", default="VERIFIED", help="comma-separated label statuses to count")
+    ap.add_argument("--document", action="append", help="evaluate only this document ID (repeatable)")
     args = ap.parse_args(argv)
     report = evaluate(args.labels, args.predictions, args.include_drafts,
-                      tuple(s.strip() for s in args.statuses.split(",") if s.strip()))
+                      tuple(s.strip() for s in args.statuses.split(",") if s.strip()), args.document)
     print(json.dumps(report, indent=2))
     return 0 if report["gate_passed"] else 1
 

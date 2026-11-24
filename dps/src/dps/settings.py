@@ -125,7 +125,7 @@ class Settings(BaseSettings):
     ocr_enabled: bool = True
 
     # Advisory AI (C3 suggestions, statement narrative). Empty: rules only. Example: azure/gpt-4o
-    # with AZURE_API_KEY, AZURE_API_BASE and AZURE_API_VERSION set for LiteLLM.
+    # with AZURE_API_KEY, AZURE_API_BASE and AZURE_API_VERSION set for the Azure client.
     ai_model: str = ""
     # Empty: the model's default (required by newer Azure OpenAI models). Set e.g. 0 where the model allows it.
     ai_temperature: float | None = None
@@ -156,6 +156,10 @@ class Settings(BaseSettings):
     # Tokens allowed per calendar day (UTC); empty: the routes file's budgets.per_tenant_day_tokens when a routes file
     # is used, else no daily cap. Production sets both (deploy/docker-compose.cts-dps.yml).
     ai_daily_token_budget: int | None = Field(default=None, ge=1)
+    # Model calls one job may run at once (improvement plan S1, 24 Nov 2026): a document's AI reads (covenant parts,
+    # page batches, schedule batches) run in parallel, within each route's requests per minute. 1 = one at a time.
+    ai_parallel_reads: int = Field(default=1, ge=1, le=16)
+    ai_skip_confident: bool = True
     # The same messages to the same model are answered from the cache (dps_ai_cache) instead of a new call. Off by
     # default (full review G17): cached answers hold document quotes outside the DMS's custody. When on, an answer
     # is used only for the same pipeline version and for ai_cache_days, and older answers are purged daily.
@@ -174,7 +178,8 @@ class Settings(BaseSettings):
         return self
 
 
-OUTPUT_SETTINGS = ("review_confidence", "ocr_enabled", "ai_temperature", "statement_ai_check", "statement_entity",
+OUTPUT_SETTINGS = ("review_confidence", "ocr_enabled", "ai_temperature", "statement_ai_check", "ai_skip_confident",
+                   "ai_parallel_reads", "statement_entity",
                    "fiscal_year_end_month", "report_derived_values", "loan_account_pattern", "facility_id_pattern",
                    "llm_enabled")
 
@@ -184,7 +189,7 @@ def llm_allowed(settings: Settings) -> bool:
     return bool(settings.llm_enabled and (settings.ai_model or settings.ai_routes_file))
 
 
-MODEL_URL_VARS = ("AZURE_API_BASE", "AZURE_OPENAI_ENDPOINT", "OPENAI_API_BASE", "OPENAI_BASE_URL")
+MODEL_URL_VARS = ("AZURE_API_BASE", "AZURE_ENDPOINT", "AZURE_OPENAI_ENDPOINT", "OPENAI_API_BASE", "OPENAI_BASE_URL")
 
 
 def endpoint_problem(settings: Settings, env: dict | None = None) -> str | None:
@@ -209,7 +214,7 @@ MODEL_ENV_PREFIXES = ("AZURE_", "OPENAI_")
 
 
 def export_model_env(path: str | Path = ".env") -> list[str]:
-    """The model library (LiteLLM, through CrewAI) reads AZURE_* / OPENAI_* from the process environment, but
+    """The model client reads AZURE_* / OPENAI_* from the process environment, but
     pydantic reads .env only into Settings. Copies those lines of .env into os.environ, never overriding a value
     already set (a vault or the shell wins). Returns the names copied (never the values)."""
     import os

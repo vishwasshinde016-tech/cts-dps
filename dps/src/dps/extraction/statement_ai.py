@@ -27,7 +27,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from dps.agent.guard import DATA_NOT_INSTRUCTIONS
+from dps.agent.guard import DATA_NOT_INSTRUCTIONS, escape_page_markers, model_safe_text
 from dps.extraction.statement import _EXPENSES, LINE_ALIASES, TO_CRORE, LineValue
 from dps.extraction.verify import number_on_line
 
@@ -114,7 +114,7 @@ def split_pages(text: str) -> dict[int, str]:
 
 
 def mark_pages(pages: list[tuple[int, str]]) -> str:
-    return "\n\n".join(f"=== Page {no} ===\n{text}" for no, text in pages)[:MAX_CHARS]
+    return "\n\n".join(f"=== Page {no} ===\n{escape_page_markers(text)}" for no, text in pages)[:MAX_CHARS]
 
 
 def prompt(text: str, entity: str = "STANDALONE") -> str:
@@ -124,10 +124,13 @@ def prompt(text: str, entity: str = "STANDALONE") -> str:
 
 def ai_read(text: str, completion: Completion, entity: str = "STANDALONE") -> list[Reading]:
     """The model's reading of the checked keys, each grounded against the page it cites."""
-    answer = completion([{"role": "user", "content": prompt(text, entity)}])
+    original = split_pages(text)
+    pages = {no: model_safe_text(body) for no, body in original.items()}
+    safe = text if original == pages else (
+        pages[0] if 0 in pages else mark_pages([(no, body.strip("\n")) for no, body in pages.items()]))
+    answer = completion([{"role": "user", "content": prompt(safe, entity)}])
     data = json.loads(answer[answer.find("{"): answer.rfind("}") + 1])
     factor = TO_CRORE.get(str(data.get("unit", "crore")).lower(), 1.0)
-    pages = split_pages(text)
     out = []
     for key, item in (data.get("values") or {}).items():
         if key not in CHECKED:
