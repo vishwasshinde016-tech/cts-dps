@@ -30,8 +30,8 @@ dependencies = [
 [project.optional-dependencies]
 # Background workers (dps-worker): CrewAI Flows A/B and the fast OCR path. The API image does not need these.
 worker = [
-  # azure-ai-inference: Azure OpenAI for advisory AI (DPS_AI_MODEL=azure/<deployment>).
   "crewai[azure-ai-inference]==1.15.34",
+  "openai>=2.54,<3",  # Azure chat completions for the model gateway.
   "rapidocr-onnxruntime==1.4.*",
   # .xls statements (FR-01); openpyxl reads only .xlsx.
   "xlrd==2.0.*",

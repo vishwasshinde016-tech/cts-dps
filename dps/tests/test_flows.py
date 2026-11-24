@@ -143,6 +143,19 @@ GOOD_ROWS = [("Amounts in INR lakhs", None), ("EBITDA", 500), ("Short-term borro
              ("Long-term borrowings", 700), ("Total equity", 2000), ("Cash and cash equivalents", 100)]
 
 
+def test_clean_spreadsheet_skips_enabled_second_reader(database):
+    doc_id = add_document(database, "FINANCIAL_STATEMENT", "fs.xlsx", date(2026, 3, 31))
+
+    def second_reader(*args, **kwargs):
+        pytest.fail("clean spreadsheets should skip the AI reader")
+
+    deps = StatementDeps(database.session_factory, lambda d: xlsx_bytes(GOOD_ROWS), FakeParser([]), True,
+                         second_reader=second_reader, skip_confident_ai=True)
+    flow = StatementProcessingFlow(deps)
+    flow.kickoff(inputs={"job_id": "j1", "document_id": doc_id})
+    assert reviewed_if_clean(flow).state.outcome == "REPORTED"
+
+
 def test_a_statement_stores_the_approved_printed_figures_only(database):
     """G21: nothing is stored before a person approves. G22: the figures as printed; Spring works out the rest.
     G9: no event goes to Core from here (the job's dps.extraction.completed tells Spring)."""
@@ -373,7 +386,7 @@ def test_the_pack_runner_wires_the_statement_reader(database, tmp_path):
 
     core = SpringClient("http://core", 1.0, "")
     deps = statement_deps(settings(tmp_path, ocr_enabled=False), database, core)
-    assert deps.pdf_reader is not None and deps.heavy_pool is False and deps.report_derived_values is False
+    assert deps.sandbox_read is not None and deps.heavy_pool is False and deps.report_derived_values is False
     assert deps.loan_currency == core.cp_currency and deps.fx_rate == core.fx_rate
     assert callable(build_pack_runner(settings(tmp_path, ocr_enabled=False), database, core))
 

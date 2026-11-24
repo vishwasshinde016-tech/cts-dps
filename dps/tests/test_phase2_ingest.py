@@ -430,6 +430,7 @@ def test_socket_parser_round_trip(tmp_path):
     path = str(tmp_path / "p.sock")
     srv = server.socketserver.ThreadingUnixStreamServer(path, server._Handler)
     srv.pool = "STANDARD"
+    srv.parser = sandbox.WarmParser(sandbox.Limits.for_pool(srv.pool))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         data = text_pdf([AGREEMENT])
@@ -437,8 +438,14 @@ def test_socket_parser_round_trip(tmp_path):
         assert client.parse(sandbox.ParseRequest(data, "PDF", sha(data), ocr=False))["pageCount"] == 1
         with pytest.raises(InspectionFailed):
             client.parse(sandbox.ParseRequest(js_pdf(), "PDF", "0" * 64, ocr=False))
+        table = b"Account,2025,2024\nRevenue,1000,900\n"
+        model = client.parse(sandbox.ParseRequest(table, "CSV", sha(table), ocr=False,
+                             statement=(".csv", "STANDALONE", "WESTERN")))
+        assert model["rows"][0][0] == "Revenue"
     finally:
         srv.shutdown()
+        srv.server_close()
+        srv.parser.close()
 
 
 # ---------- fuzzing (small in CI; the full 10,000 run is scripts/fuzz_parser.py) ----------

@@ -19,6 +19,11 @@ construction; --include-drafts adds DRAFT_UNVERIFIED labels.
 
 Gate (initial, to be agreed): threshold accuracy >= 0.95 and covenant recall >= 0.85, and value accuracy
 >= 0.95 when statement labels count.
+
+Improvement plan V2 (24 Nov 2026): several covenants of one metric are matched one to one (a step-down kept only the
+last before); frequency and unit are scored where the label gives them (frequency accuracy, unit accuracy); and
+precision and frequency accuracy are gated too (>= 0.90 and >= 0.95), so a flood of false covenants or wrong test
+frequencies fails CI.
 """
 
 from __future__ import annotations
@@ -32,6 +37,9 @@ from pathlib import Path
 GATE_THRESHOLD_ACCURACY = 0.95
 GATE_RECALL = 0.85
 GATE_VALUE_ACCURACY = 0.95
+GATE_PRECISION = 0.90
+GATE_FREQUENCY_ACCURACY = 0.95
+GATE_DATE_ACCURACY = 0.95
 
 
 @dataclass
@@ -43,13 +51,20 @@ class Score:
     threshold_correct: int = 0
     with_page: int = 0
     page_correct: int = 0
+    with_frequency: int = 0
+    frequency_correct: int = 0
+    with_unit: int = 0
+    unit_correct: int = 0
+    with_date: int = 0
+    date_correct: int = 0
     misses: list[str] = field(default_factory=list)
     extras: list[str] = field(default_factory=list)
     wrong_thresholds: list[str] = field(default_factory=list)
 
     def add(self, other: Score) -> None:
         for name in ("labelled", "predicted", "matched", "financial_matched", "threshold_correct",
-                     "with_page", "page_correct"):
+                     "with_page", "page_correct", "with_frequency", "frequency_correct", "with_unit", "unit_correct",
+                     "with_date", "date_correct"):
             setattr(self, name, getattr(self, name) + getattr(other, name))
 
     @staticmethod
@@ -62,6 +77,9 @@ class Score:
             "precision": self._ratio(self.matched, self.predicted),
             "threshold_accuracy": self._ratio(self.threshold_correct, self.financial_matched),
             "page_accuracy": self._ratio(self.page_correct, self.with_page),
+            "frequency_accuracy": self._ratio(self.frequency_correct, self.with_frequency),
+            "unit_accuracy": self._ratio(self.unit_correct, self.with_unit),
+            "date_accuracy": self._ratio(self.date_correct, self.with_date),
         }
 
 
@@ -78,16 +96,40 @@ def _same_threshold(a: dict, b: dict) -> bool:
     return abs(float(x) - float(y)) <= 1e-9
 
 
+def _norm_unit(u) -> str:
+    unit = str(u or "").strip().upper().rstrip(".")
+    return "TIMES" if unit == "X" else unit
+
+
+def _pairs(gold: list[dict], pred: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict], list[dict]]:
+    """One-to-one pairs per (metric, category): every exact threshold match first, then the rest in order."""
+    pairs, left, waiting = [], list(pred), list(gold)
+    for level in ("date", "threshold", "metric"):
+        pending = []
+        for g in waiting:
+            same = next((p for p in left if _key(p) == _key(g)
+                         and (level == "metric" or _same_threshold(g, p))
+                         and (level != "date" or (g.get("firstTestDate") and
+                                                  g["firstTestDate"] == p.get("firstTestDate")))), None)
+            if same is None:
+                pending.append(g)
+            else:
+                left.remove(same)
+                pairs.append((g, same))
+        waiting = pending
+    return pairs, waiting, left
+
+
 def score_document(label: dict, prediction: dict) -> Score:
     s = Score()
-    gold = {_key(c): c for c in label.get("covenants", [])}
-    pred = {_key(c): c for c in prediction.get("covenants", [])}
+    gold = list(label.get("covenants", []))
+    pred = list(prediction.get("covenants", []))
     s.labelled, s.predicted = len(gold), len(pred)
-    for k, g in gold.items():
-        p = pred.get(k)
-        if p is None:
-            s.misses.append(k[0])
-            continue
+    pairs, missed, extra = _pairs(gold, pred)
+    s.misses = [_key(g)[0] for g in missed]
+    s.extras = [_key(p)[0] for p in extra]
+    for g, p in pairs:
+        k = _key(g)
         s.matched += 1
         if k[1] == "FINANCIAL":
             s.financial_matched += 1
@@ -100,7 +142,18 @@ def score_document(label: dict, prediction: dict) -> Score:
             s.with_page += 1
             if g.get("page") == p.get("page"):
                 s.page_correct += 1
-    s.extras = [k[0] for k in pred if k not in gold]
+        if g.get("frequency"):
+            s.with_frequency += 1
+            if str(g["frequency"]).upper() == str(p.get("frequency") or "").upper():
+                s.frequency_correct += 1
+        if g.get("unit"):
+            s.with_unit += 1
+            if _norm_unit(g["unit"]) == _norm_unit(p.get("unit")):
+                s.unit_correct += 1
+        if g.get("firstTestDate"):
+            s.with_date += 1
+            if g["firstTestDate"] == p.get("firstTestDate"):
+                s.date_correct += 1
     return s
 
 
@@ -117,14 +170,14 @@ def score_statement(label: dict, prediction: dict) -> tuple[int, int, list[str]]
 
 
 def evaluate(labels_dir: Path, predictions_dir: Path, include_drafts: bool = False,
-             statuses: tuple[str, ...] = ("VERIFIED",)) -> dict:
+             statuses: tuple[str, ...] = ("VERIFIED",), documents: list[str] | None = None) -> dict:
     total = Score()
     per_doc = {}
     values_labelled = values_correct = 0
     counted = set(statuses) | ({"DRAFT_UNVERIFIED"} if include_drafts else set())
     for label_path in sorted(labels_dir.glob("*.json")):
         label = json.loads(label_path.read_text(encoding="utf-8"))
-        if label.get("status") not in counted:
+        if label.get("status") not in counted or (documents and label["documentId"] not in documents):
             continue
         pred_path = predictions_dir / label_path.name
         prediction = json.loads(pred_path.read_text(encoding="utf-8")) if pred_path.exists() else {"covenants": []}
@@ -141,6 +194,9 @@ def evaluate(labels_dir: Path, predictions_dir: Path, include_drafts: bool = Fal
     overall = {**total.metrics(), "value_accuracy": Score._ratio(values_correct, values_labelled)}
     passed = (overall["threshold_accuracy"] is not None and overall["recall"] is not None
               and overall["threshold_accuracy"] >= GATE_THRESHOLD_ACCURACY and overall["recall"] >= GATE_RECALL
+              and (overall["precision"] is None or overall["precision"] >= GATE_PRECISION)
+              and (overall["frequency_accuracy"] is None or overall["frequency_accuracy"] >= GATE_FREQUENCY_ACCURACY)
+              and (overall["date_accuracy"] is None or overall["date_accuracy"] >= GATE_DATE_ACCURACY)
               and (overall["value_accuracy"] is None or overall["value_accuracy"] >= GATE_VALUE_ACCURACY))
     return {"documents": len(per_doc), "overall": overall, "gate_passed": passed, "per_document": per_doc}
 
@@ -151,9 +207,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--predictions", type=Path, required=True)
     ap.add_argument("--include-drafts", action="store_true")
     ap.add_argument("--statuses", default="VERIFIED", help="comma-separated label statuses to count")
+    ap.add_argument("--document", action="append", help="evaluate only this document ID (repeatable)")
     args = ap.parse_args(argv)
     report = evaluate(args.labels, args.predictions, args.include_drafts,
-                      tuple(s.strip() for s in args.statuses.split(",") if s.strip()))
+                      tuple(s.strip() for s in args.statuses.split(",") if s.strip()), args.document)
     print(json.dumps(report, indent=2))
     return 0 if report["gate_passed"] else 1
 

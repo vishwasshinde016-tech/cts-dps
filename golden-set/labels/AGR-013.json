@@ -14,7 +14,7 @@
    "operator": ">=",
    "threshold": 1.3,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "10.1 The Borrower shall ensure that its Debt Service Coverage Ratio is at least 1.30 times."
   },
@@ -24,7 +24,7 @@
    "operator": "<=",
    "threshold": 4.75,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "10.2 The Net Debt to EBITDA ratio shall at no time exceed 4.75 times."
   },
@@ -34,7 +34,7 @@
    "operator": ">=",
    "threshold": 1.15,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "10.3 The Fixed Charge Coverage Ratio shall not be lower than 1.15 times."
   },

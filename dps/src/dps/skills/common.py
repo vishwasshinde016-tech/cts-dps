@@ -112,9 +112,11 @@ def select_pages(pages: list[dict], candidates: list[dict], keywords: re.Pattern
 def fit_pages(pages: list[dict], limit: int = MAX_PROMPT_CHARS) -> tuple[str, list[int]]:
     """The page blocks that fit in ``limit`` characters, whole pages only, and the pages left out. A page is never
     cut in the middle: the agent would read half a clause and nobody would know (19 Nov 2026 review)."""
+    from dps.agent.guard import model_safe_text
+
     blocks, left_out, used = [], [], 0
     for p in pages:
-        block = f"<<<page {p['no']}>>>\n{p.get('text') or ''}\n<<<end page {p['no']}>>>"
+        block = f"<<<page {p['no']}>>>\n{model_safe_text(p.get('text') or '')}\n<<<end page {p['no']}>>>"
         if used + len(block) + 1 > limit:
             left_out.append(p["no"])
             continue
@@ -158,8 +160,10 @@ def agent_proposals(pack, gateway, pages: list[dict], extra: str = "", route: st
     if gateway is None:
         return None
     from dps.agent.gateway import GatewayError, ModelOutputInvalid
+    from dps.agent.guard import model_safe_text
+    from dps.jobs import JobCancelled
 
-    every = all_pages or pages
+    every = [{**p, "text": model_safe_text(p.get("text") or "")} for p in (all_pages or pages)]
 
     def bad(item) -> bool:
         return bool(item.get("page") is not None and item.get("quote") and not grounded(every, item["page"],
@@ -181,7 +185,7 @@ def agent_proposals(pack, gateway, pages: list[dict], extra: str = "", route: st
                 answer, ctx = document_agent.read(pack, gateway, pages, messages[0]["content"], route, spring,
                                                   correlation_id, lookup_context, check, all_pages=every)
                 log.info("%s agent read with %d tool call(s): %s", pack.name, ctx.used, ",".join(ctx.calls))
-            except GatewayError:
+            except (GatewayError, JobCancelled):
                 raise
             except Exception as ex:  # noqa: BLE001 - an agent runtime problem falls back to one plain model call
                 log.warning("%s agent run failed (%s); one plain model call instead", pack.name, type(ex).__name__)
@@ -219,42 +223,64 @@ def page_batches(pages: list[dict], limit: int = MAX_PROMPT_CHARS) -> list[list[
     return batches
 
 
+SPENT = ("AI_BUDGET_EXCEEDED", "AI_MONTHLY_BUDGET_SPENT", "AI_DAILY_BUDGET_SPENT")
+
+
+def _read_batch(pack, gateway, batch: list[dict], i: int, total: int, kw: dict) -> tuple[list[dict] | None, list]:
+    """One agent read of one batch: (proposals or None, the notes it raised)."""
+    from dps.jobs import stop_if_cancelled
+    from dps.ops import observability as obs
+
+    stop_if_cancelled()  # a cancelled or replaced job stops before its next AI call (S10)
+    what = "the agreement's covenant pages: list the covenants" if pack.name == "covenants" else \
+        "the pages for this task: list what is"
+    extra = f"These are part {i + 1} of {total} of {what} on these pages." if total > 1 else ""
+    notes: list = []
+    numbers = [p.get("no") for p in batch if p.get("no") is not None]
+    # One trace span per agent read (observability, 23 Nov 2026): its model calls nest under it, and each
+    # proposal keeps the span id, so a finding opens the read (and the calls) that produced it.
+    with obs.span(f"dps.ai.read {pack.name}", **{
+            "dps.pack": pack.name, "dps.part": i + 1, "dps.parts": total, "dps.pages": len(batch),
+            "dps.first_page": min(numbers) if numbers else None,
+            "dps.last_page": max(numbers) if numbers else None}) as read_span:
+        got = agent_proposals(pack, gateway, batch, extra=extra, notes=notes, **kw)
+        codes = [n["code"] for n in notes]
+        obs.set_attrs(read_span, **{"dps.proposals": len(got) if got is not None else 0,
+                                    "dps.notes": ",".join(codes) or None})
+        if got is None and codes:  # no usable answer (AI_UNAVAILABLE, AI_BUDGET_EXCEEDED ...): a failed read
+            obs.mark_failed(read_span, codes[0])
+        span_id = obs.current_ids()[1]
+        for p in got or []:
+            if span_id and isinstance(p, dict):
+                p["_span"] = span_id
+    return got, notes
+
+
 def batched_proposals(pack, gateway, batches: list[list[dict]], notes: list | None = None, **kw) -> list[dict] | None:
-    """One agent read per batch of pages (long agreements), merged; None only when no batch gave an answer. A spent
-    token budget stops the remaining batches, and says which were not read."""
+    """One agent read per batch of pages (long agreements), merged; None only when no batch gave an answer. The
+    batches are read in parallel when the gateway allows it (improvement plan S1) and merged in batch order. Batches
+    that a spent token budget left unread are listed in one note."""
+    from dps.agent.parallel import run_all, slots
+
+    total = len(batches)
+    parallel = slots(gateway) > 1 and total > 1
+    tasks = [lambda b=b, i=i: _read_batch(pack, gateway, b, i, total, kw) for i, b in enumerate(batches)]
+    reads = run_all(gateway, tasks) if parallel else (task() for task in tasks)
     out: list[dict] | None = None
     seen: set[tuple] = set()
-    for i, batch in enumerate(batches):
-        what = "the agreement's covenant pages: list the covenants" if pack.name == "covenants" else \
-            "the pages for this task: list what is"
-        extra = f"These are part {i + 1} of {len(batches)} of {what} on these pages." if len(batches) > 1 else ""
-        before = len(notes) if notes is not None else 0
-        from dps.ops import observability as obs
-
-        numbers = [p.get("no") for p in batch if p.get("no") is not None]
-        # One trace span per agent read (observability, 23 Nov 2026): its model calls nest under it, and each
-        # proposal keeps the span id, so a finding opens the read (and the calls) that produced it.
-        with obs.span(f"dps.ai.read {pack.name}", **{
-                "dps.pack": pack.name, "dps.part": i + 1, "dps.parts": len(batches), "dps.pages": len(batch),
-                "dps.first_page": min(numbers) if numbers else None,
-                "dps.last_page": max(numbers) if numbers else None}) as read_span:
-            got = agent_proposals(pack, gateway, batch, extra=extra, notes=notes, **kw)
-            new_notes = [n["code"] for n in (notes or [])[before:]]
-            obs.set_attrs(read_span, **{"dps.proposals": len(got) if got is not None else 0,
-                                        "dps.notes": ",".join(new_notes) or None})
-            if got is None and new_notes:  # no usable answer (AI_UNAVAILABLE, AI_BUDGET_EXCEEDED ...): a failed read
-                obs.mark_failed(read_span, new_notes[0])
-            span_id = obs.current_ids()[1]
-            for p in got or []:
-                if span_id and isinstance(p, dict):
-                    p["_span"] = span_id
+    unread = []
+    for i, (got, raised) in enumerate(reads):
+        if notes is not None:
+            notes.extend(raised)
         if got is None:
-            spent = next((n["code"] for n in (notes or [])[before:]
-                          if n["code"] in ("AI_BUDGET_EXCEEDED", "AI_MONTHLY_BUDGET_SPENT")), None)
-            if spent and i + 1 < len(batches):
-                notes.append(issue(spent, f"{pack.name}: batches {i + 2} to {len(batches)} of "
-                                          f"{len(batches)} not read by the agent"))
+            spent = next((n["code"] for n in raised if n["code"] in SPENT), None)
+            if spent and not parallel:
+                if notes is not None and i + 1 < total:
+                    notes.append(issue(spent, f"{pack.name}: batches {i + 2} to {total} of {total} "
+                                       "not read by the agent"))
                 break
+            if spent and total > 1:
+                unread.append((i + 1, spent))
             continue
         out = out or []
         for p in got:
@@ -263,6 +289,9 @@ def batched_proposals(pack, gateway, batches: list[list[dict]], notes: list | No
             if key not in seen:
                 seen.add(key)
                 out.append(p)
+    if unread and notes is not None:
+        numbers = ", ".join(str(n) for n, _ in unread)
+        notes.append(issue(unread[0][1], f"{pack.name}: batch(es) {numbers} of {total} not read by the agent"))
     return out
 
 

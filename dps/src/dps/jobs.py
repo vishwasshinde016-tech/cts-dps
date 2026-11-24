@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import random
+from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -312,6 +313,22 @@ def request_cancel(db: Session, job: Job, user: str) -> Job:
 def cancelled(db: Session, job_id: str) -> bool:
     """For a running flow to check between stages."""
     return bool(db.scalar(select(Job.cancel_requested).where(Job.id == job_id)))
+
+
+class JobCancelled(Exception):
+    """The job was cancelled (or replaced by a reclassify) while it was being read: stop before the next AI call."""
+
+
+# Set by the worker for each job: answers "was this job cancelled?" from the database. The AI readers call
+# ``stop_if_cancelled`` before each batch (improvement plan S10, 24 Nov 2026: a cancelled or reclassified job used
+# to keep spending tokens and worker time until its last batch).
+CANCEL_CHECK: ContextVar[Callable[[], bool] | None] = ContextVar("dps_cancel_check", default=None)
+
+
+def stop_if_cancelled() -> None:
+    check = CANCEL_CHECK.get()
+    if check is not None and check():
+        raise JobCancelled()
 
 
 def age(db: Session, minutes: int) -> int:

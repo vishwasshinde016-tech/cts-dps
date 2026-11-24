@@ -143,6 +143,8 @@ paths:
       description: >-
         For a job in NEEDS_REVIEW. Open fields become NOT_USED, open blocking warnings are acknowledged by the
         close, the result route becomes CLOSED and dps.extraction.completed is sent once with closed true.
+        A statement's lines a person CONFIRMED or CORRECTED are stored for /api/data/values (published: count),
+        unless a blocking warning was still open at the close (notPublishedReason says why).
         Calling it again on a DONE job returns the job and sends nothing. If-Match is optional; when sent it must
         be the current revision.
       parameters:

@@ -46,8 +46,17 @@ jobs:
       # Extraction regression gate: DPS's own parser and extractors over the synthetic golden set.
       - name: Golden-set extraction gate (synthetic)
         run: |
-          python ../golden-set/predict.py --out ../golden-predictions
+          python ../golden-set/predict.py --out ../golden-predictions --statuses SYNTHETIC
           python ../golden-set/evaluate.py --predictions ../golden-predictions --statuses SYNTHETIC
+      # The same documents through the production pipeline (skill pack, ledger, merge, scoring), AI off.
+      - name: Golden-set gate on the production pipeline
+        run: |
+          python ../golden-set/predict.py --out ../golden-predictions-pipeline --pipeline --statuses SYNTHETIC
+          python ../golden-set/evaluate.py --predictions ../golden-predictions-pipeline --statuses SYNTHETIC
+      - name: Golden-set gate with recorded Azure replies
+        run: |
+          python ../golden-set/predict.py --out ../golden-predictions-ai --pipeline --parser warm --parallel 4 --document AGR-011 --replies ../golden-set/replies
+          python ../golden-set/evaluate.py --predictions ../golden-predictions-ai --statuses SYNTHETIC --document AGR-011
 
   # Production DPS runs on SQL Server; SQLite hides dialect bugs.
   dps-sqlserver:

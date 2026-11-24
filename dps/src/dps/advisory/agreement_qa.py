@@ -15,7 +15,7 @@ import logging
 import re
 
 from dps.advisory.advisor import ADVISORY, Completion
-from dps.agent.guard import TO_THE_MODEL  # shared with the document readers (Phase 3a)
+from dps.agent.guard import TO_THE_MODEL, model_safe_text  # shared with the document readers (Phase 3a)
 from dps.extraction.agreement import FINANCIAL_ALIASES
 from dps.parse.engine import Page
 
@@ -146,7 +146,7 @@ def answer(question: str, pages: list[Page], completion: Completion | None) -> d
         return {"answer": "I could not find anything about that in this agreement.", "citations": [],
                 "method": "RULES", "advisory": ADVISORY}
     if completion is not None:
-        extracts = "\n\n".join(f"[p. {p.no}]\n{model_safe(p.text)[:MAX_CONTEXT]}"
+        extracts = "\n\n".join(f"[p. {p.no}]\n{model_safe_text(model_safe(p.text))[:MAX_CONTEXT]}"
                                  for p in sorted(picked, key=lambda p: p.no))
         try:
             text = completion([

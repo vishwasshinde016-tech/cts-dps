@@ -15,7 +15,7 @@
         "additionalProperties": false,
         "required": ["fieldId", "action"],
         "properties": {
-          "fieldId": { "type": "string", "description": "Required for CONFIRM, CORRECT and REJECT; for ADD, a client-chosen id" },
+          "fieldId": { "type": "string", "description": "Required for CONFIRM, CORRECT and REJECT; for ADD, a client-chosen id. document:asOfDate with CORRECT and value {\"asOfDate\": \"YYYY-MM-DD\"} sets a statement's period end" },
           "action": { "type": "string", "enum": ["CONFIRM", "CORRECT", "REJECT", "ADD", "ACKNOWLEDGE"], "description": "ACKNOWLEDGE: fieldId is warning:<CODE> of a blocking warning; comment required" },
           "group": { "type": "string", "description": "Required for ADD" },
           "name": { "type": "string", "description": "Required for ADD" },
@@ -25,7 +25,8 @@
           "comment": { "type": ["string", "null"], "maxLength": 2000 }
         },
         "allOf": [
-          { "if": { "properties": { "action": { "enum": ["CORRECT", "ADD"] } } }, "then": { "required": ["value", "reasonCode"] } },
+          { "if": { "properties": { "action": { "const": "CORRECT" } } }, "then": { "required": ["value"] } },
+          { "if": { "properties": { "action": { "const": "ADD" } } }, "then": { "required": ["value", "reasonCode"] } },
           { "if": { "properties": { "action": { "const": "ADD" } } }, "then": { "required": ["group", "name", "page"] } },
           { "if": { "properties": { "action": { "const": "ACKNOWLEDGE" } } }, "then": { "required": ["comment"] } }
         ]

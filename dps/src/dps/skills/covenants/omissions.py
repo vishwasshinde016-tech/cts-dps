@@ -86,20 +86,24 @@ def read(gateway, entries: list[dict], pages: list[dict], notes: list | None = N
     """(covenant proposals in the covenants pack's shape, {candidate id: decision}) for the unresolved entries."""
     if gateway is None or not entries:
         return [], {}
-    from dps.agent.gateway import AiBudgetExceeded, GatewayError, ModelOutputInvalid
-    from dps.agent.guard import DATA_NOT_INSTRUCTIONS
+    from dps.agent.gateway import AiBudgetExceeded, AiMonthlyBudgetSpent, GatewayError
+    from dps.agent.guard import DATA_NOT_INSTRUCTIONS, model_safe_text
 
+    pages = [{**p, "text": model_safe_text(p.get("text") or "")} for p in pages]
     pages_by_no = {int(p["no"]): p for p in pages}
     proposals: list[dict] = []
     decisions: dict[str, dict] = {}
     types = _types_text()
     batches = [entries[i:i + MAX_ITEMS] for i in range(0, len(entries), MAX_ITEMS)]
-    for n, batch in enumerate(batches):
-        if n >= MAX_CALLS:
-            if notes is not None:
-                notes.append(issue("RESIDUAL_BUDGET", f"{sum(len(b) for b in batches[n:])} unexplained duty "
-                                                      "sentence(s) were not read again; they are listed for review"))
-            break
+    from dps.agent.parallel import run_all, slots
+    from dps.jobs import stop_if_cancelled
+
+    if len(batches) > MAX_CALLS and notes is not None:
+        notes.append(issue("RESIDUAL_BUDGET", f"{sum(map(len, batches[MAX_CALLS:]))} unexplained duty "
+                           "sentence(s) were not read again; they are listed for review"))
+
+    def read_batch(batch):
+        stop_if_cancelled()
         ids = {e["id"] for e in batch}
 
         def check(answer, ids=ids) -> str | None:
@@ -113,20 +117,30 @@ def read(gateway, entries: list[dict], pages: list[dict], notes: list | None = N
         content = "\n\n".join([HEADER.format(guard=DATA_NOT_INSTRUCTIONS), INSTRUCTIONS,
                                "Covenant types (use the code as value.metric when one fits, else OTHER):\n" + types,
                                "Schema:\n" + json.dumps(SCHEMA),
-                               "Candidates:\n\n" + "\n\n".join(_block(e, pages_by_no) for e in batch)])
+                               "Candidates:\n\n" + "\n\n".join(model_safe_text(_block(e, pages_by_no)) for e in batch)])
         try:
-            answer = gateway.call_json(route, [{"role": "user", "content": content}], SCHEMA, check)
-        except AiBudgetExceeded:
-            if notes is not None:
+            return gateway.call_json(route, [{"role": "user", "content": content}], SCHEMA, check)
+        except GatewayError as ex:
+            return ex
+
+    parallel = slots(gateway) > 1
+    tasks = [lambda b=b: read_batch(b) for b in batches[:MAX_CALLS]]
+    answers = run_all(gateway, tasks) if parallel else (task() for task in tasks)
+    for n, answer in enumerate(answers):
+        if isinstance(answer, (AiBudgetExceeded, AiMonthlyBudgetSpent)):
+            if notes is not None and not any(note["code"] == "RESIDUAL_BUDGET" for note in notes):
                 notes.append(issue("RESIDUAL_BUDGET", "the token budget ran out before the residual read finished; "
-                                                      "the unexplained sentences are listed for review"))
-            break
-        except (ModelOutputInvalid, GatewayError) as ex:
-            log.info("residual read batch %d failed: %s", n + 1, type(ex).__name__)
-            if notes is not None:
-                notes.append(issue("RESIDUAL_INCOMPLETE", f"one residual read failed ({type(ex).__name__}); its "
-                                                          "sentences are listed for review"))
+                                   "the unexplained sentences are listed for review"))
+            if not parallel:
+                break
             continue
+        if isinstance(answer, GatewayError):
+            log.info("residual read batch %d failed: %s", n + 1, type(answer).__name__)
+            if notes is not None:
+                notes.append(issue("RESIDUAL_INCOMPLETE", f"one residual read failed ({type(answer).__name__}); its "
+                                   "sentences are listed for review"))
+            continue
+        ids = {e["id"] for e in batches[n]}
         for item in (answer or {}).get("items", []):
             cid = item.get("candidate")
             if cid not in ids or cid in decisions:

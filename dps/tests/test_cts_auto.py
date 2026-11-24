@@ -280,18 +280,19 @@ def test_a_statement_can_be_submitted_without_a_date(client, app):
 
 # ---------- 38 certificates for the bank app's status recommender
 
-def _certificate(app, version, finished, figures, job_type="AUTO"):
+def _certificate(app, version, finished, figures, job_type="AUTO", *, cp="CP-7", tenant_id="default",
+                 status=jobs.DONE, field_status="CONFIRMED"):
     with app.state.db.session_factory() as s:
         doc = Document(type="COMPLIANCE_CERTIFICATE", file_name="c.pdf", storage_path="x", sha256=version,
                        size_bytes=1, uploaded_by="u")
         s.add(doc)
         s.flush()
-        s.add(DocumentCpLink(document_id=doc.id, cp_id="CP-7", linked_by="u"))
-        job = Job(document_id=doc.id, flow="SKILL_PACK", job_type=job_type, status=jobs.DONE,
+        s.add(DocumentCpLink(document_id=doc.id, cp_id=cp, linked_by="u"))
+        job = Job(document_id=doc.id, flow="SKILL_PACK", job_type=job_type, status=status, tenant_id=tenant_id,
                   document_version_id=version, finished_at=finished)
         s.add(job)
         s.flush()
-        fields = [{"id": f"f{i}", "group": "CERTIFIED_FIGURE", "name": name, "status": "CONFIRMED",
+        fields = [{"id": f"f{i}", "group": "CERTIFIED_FIGURE", "name": name, "status": field_status,
                    "value": {"covenant": name, "figure": fig, "declaredCompliant": ok}, "source": {"page": 2},
                    "confidence": 0.9} for i, (name, fig, ok) in enumerate(figures)]
         s.add(Run(job_id=job.id, run_no=2, status="DONE", trigger="REVIEW",
@@ -318,6 +319,45 @@ def test_status_comes_from_the_newest_certificate_and_matches_the_apps_measure_c
     assert _ask(client, asked) == {"AC-1": "COMPLIED"}  # DSCR only in the old certificate: nothing offered
     assert _ask(client, asked, ["cert-old"]) == {"AC-1": "BREACHED", "AC-2": "COMPLIED"}
     assert _ask(client, asked, ["no-such-certificate"]) == {}
+    assert _ask(client, asked, ["", " "]) == {}
+
+
+def test_certificate_diagnostics_are_opt_in_and_scoped_to_cp_and_tenant(client, app):
+    from datetime import datetime
+
+    from test_jobapi import check_def
+
+    finished = datetime(2026, 6, 1)
+    figures = [("DSCR", 1.4, True)]
+    _certificate(app, "reviewed", finished, figures)
+    _certificate(app, "pending", finished, figures, status=jobs.NEEDS_REVIEW)
+    _certificate(app, "unapproved", finished, figures, field_status="REJECTED")
+    _certificate(app, "another-cp", finished, figures, cp="CP-8")
+    _certificate(app, "another-tenant", finished, figures, tenant_id="other")
+    requested = ["pending", "reviewed", "missing", "unapproved", "another-cp", "another-tenant", "pending"]
+    body = {"cpId": "CP-7", "certificateFileIds": requested,
+            "covenants": [{"appliedCovenantId": "AC-1", "covenantName": "DSCR"}]}
+    endpoint = "/api/v1/ai/covenant-status"
+    default_response = client.post(endpoint, headers=SERVICE, json=body)
+    assert default_response.status_code == 200
+    assert set(default_response.json()) == {"recommendations"}
+
+    request = {**body, "includeCertificateDiagnostics": True}
+    check_def("compat-covenant-status", "request", request)
+    response = client.post(endpoint, headers=SERVICE, json=request)
+    assert response.status_code == 200
+    result = response.json()
+    check_def("compat-covenant-status", "response", result)
+    assert result["recommendations"] == default_response.json()["recommendations"]
+    assert len(result["recommendations"]) == 1
+    assert "version reviewed," in result["recommendations"][0]["rationale"]
+    assert [item["versionId"] for item in result["certificateDiagnostics"]] == list(dict.fromkeys(requested))
+    assert {item["versionId"]: item["status"] for item in result["certificateDiagnostics"]} == {
+        "pending": "AWAITING_REVIEW", "reviewed": "REVIEWED_FIGURES_AVAILABLE", "missing": "UNAVAILABLE",
+        "unapproved": "NO_REVIEWED_FIGURES", "another-cp": "UNAVAILABLE", "another-tenant": "UNAVAILABLE",
+    }
+    no_selection = client.post(endpoint, headers=SERVICE, json={**request, "certificateFileIds": []})
+    assert no_selection.json()["certificateDiagnostics"] == []
 
 
 def test_two_figures_that_disagree_give_no_recommendation(client, app):

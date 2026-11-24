@@ -126,7 +126,10 @@ class RapidOcrBackend:
             from rapidocr_onnxruntime import RapidOCR
 
             model = rec_model()
-            self._engine = RapidOCR(rec_model_path=str(model)) if model else RapidOCR()
+            options = {"rec_model_path": str(model)} if model else {}
+            # RapidOCR opens several ONNX sessions. Host-sized thread pools can exhaust the sandbox's
+            # address-space limit before it reads even one page.
+            self._engine = RapidOCR(intra_op_num_threads=2, inter_op_num_threads=1, **options)
         return self._engine
 
     def ocr_page(self, pdf_bytes: bytes, page_index: int) -> tuple[str, float]:  # pragma: no cover

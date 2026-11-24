@@ -35,6 +35,8 @@ from dps.skills.statement_lines.reader import ContentFailed, NeedsHeavyPool
 log = logging.getLogger(__name__)
 
 SKILL_FLOWS = ("SKILL_PACK",)  # every job type that reads a document (one pipeline, full review WP7)
+# Spring refuses the content of an event push: the bad events are recorded and skipped (E1), never retried for ever.
+REJECTED_EVENTS = frozenset({400, 409, 413, 415, 422})
 ACTOR = "dps-worker"
 
 
@@ -98,16 +100,49 @@ class Worker:
                 return 0
             try:
                 resp = self.core._request("POST", path, json={"events": events})
-                resp.raise_for_status()
             except (SpringUnavailable, httpx.HTTPError) as ex:
                 log.warning("event push to Spring failed (%d events, retried later): %s", len(events),
                             type(ex).__name__)
                 self._push_after = time.monotonic() + 30
                 return 0
+            if resp.status_code in REJECTED_EVENTS:
+                # Spring refuses the content (improvement plan E1, 24 Nov 2026): before, the same batch was retried
+                # every 30 s for ever and no later event was ever pushed. Each event is sent alone; the ones Spring
+                # still refuses are recorded (audit EVENT_PUSH_REJECTED, metric) and skipped. They stay in the
+                # feed, so GET /dps/v1/events still serves them.
+                pushed = self._push_one_by_one(db, path, events)
+            elif resp.status_code >= 400:  # 401/403/404/408/429: configuration or load, never skip: retry, alert
+                log.error("event push refused by Spring: HTTP %s (%d events wait; check the token and the path)",
+                          resp.status_code, len(events))
+                obs.count("dps.events.push_refused", 1, status=str(resp.status_code))
+                self._push_after = time.monotonic() + 30
+                return 0
+            else:
+                pushed = len(events)
             cursor.seq, cursor.updated_at = last, utcnow()
             db.commit()
-            pushed = len(events)
         return pushed
+
+    def _push_one_by_one(self, db: Session, path: str, events: list[dict]) -> int:
+        from dps import services
+
+        delivered = 0
+        for event in events:
+            try:
+                resp = self.core._request("POST", path, json={"events": [event]})
+            except (SpringUnavailable, httpx.HTTPError) as ex:
+                raise SpringUnavailable(f"event push interrupted: {type(ex).__name__}") from ex
+            if resp.status_code < 400:
+                delivered += 1
+            elif resp.status_code in REJECTED_EVENTS:
+                services.audit(db, "dps-worker", "EVENT_PUSH_REJECTED", "event", str(event.get("eventId")),
+                               seq=event.get("seq"), type=event.get("type"), status=resp.status_code)
+                obs.count("dps.events.push_rejected", 1, type=str(event.get("type")))
+                log.error("event %s (%s) refused by Spring with HTTP %s: recorded and skipped",
+                          event.get("eventId"), event.get("type"), resp.status_code)
+            else:
+                raise SpringUnavailable(f"event push: HTTP {resp.status_code}")
+        return delivered
 
     def _seal(self) -> None:
         """Once an hour: seal every finished day not sealed yet (the audit hash chain)."""
@@ -205,6 +240,7 @@ class Worker:
         from dps.integrations.spring import CORRELATION
 
         correlation = CORRELATION.set(job.correlation_id)  # every Spring call of this job carries it
+        cancel_check = jobs.CANCEL_CHECK.set(self._cancel_check(job.id))  # AI readers stop when it is cancelled
         stop = self._start_heartbeat(job.id, job.attempts)
         # The job's trace (observability, 23 Nov 2026). In Langfuse: the trace name is the job type, the session is
         # the document (every job on one document side by side), the user is who uploaded it. Ids only: no file name.
@@ -228,7 +264,16 @@ class Worker:
                 stop.set()
                 jobs.worker_attempt.reset(token)
                 CORRELATION.reset(correlation)
+                jobs.CANCEL_CHECK.reset(cancel_check)
                 self.page_models.clear()  # sequential worker: never keep a page model past its job
+
+    def _cancel_check(self, job_id: str):
+        """Reads the job's cancel flag in its own short session (the job's session holds uncommitted work)."""
+        def check() -> bool:
+            with self.session_factory() as s:
+                return jobs.cancelled(s, job_id)
+
+        return check
 
     def _run(self, db: Session, job: Job, doc: Document | None) -> None:
         if job.flow == "ANALYZE":
@@ -263,11 +308,13 @@ class Worker:
         jobs.record_step(db, job, "START", attempt=job.attempts, worker=self.settings.worker_id)
         started = time.monotonic()
         from dps.agent import vision
+        from dps.ingest.inspect import InspectionFailed
+        from dps.parse.sandbox import SandboxError
 
         ingestor = self.ingestor
         images = vision.page_images.set(  # scanned pages: rendered only if the vision model is asked to read them
             vision.renderer(lambda: ingestor.read(doc, staged=not doc.object_key)) if doc is not None else None)
-        usage.begin()  # every Document Agent call of this job: tokens and cost per job (dps_ai_usage)
+        usage.begin(job.tenant_id)  # every Document Agent call of this job: tokens and cost per job (dps_ai_usage)
         try:
             with obs.span("dps.skill" if pack_job else "dps.analyze"):
                 if pack_job:
@@ -276,6 +323,12 @@ class Worker:
                     target(db, job, self.page_models[doc.sha256])
         except jobs.LeaseLost:
             raise
+        except jobs.JobCancelled:  # cancelled or replaced while reading: no result is saved, no more AI calls (S10)
+            db.rollback()
+            db.refresh(job)
+            jobs.finish(db, job, jobs.CANCELLED, "Cancelled while it was being read", "JOB_CANCELLED")
+            self._sync_document(db, job)
+            return
         except NeedsHeavyPool as ex:  # a statement the standard reader cannot read: the HEAVY pool reads it
             db.rollback()
             db.refresh(job)
@@ -286,6 +339,21 @@ class Worker:
             db.rollback()
             db.refresh(job)
             jobs.finish(db, job, jobs.FAILED, str(ex)[:2000] or "No line items found", "CONTENT_FAILED")
+            self._sync_document(db, job)
+            return
+        except (SandboxError, InspectionFailed) as ex:
+            db.rollback()
+            db.refresh(job)
+            if self.settings.worker_pool != "HEAVY" and ex.code in ("PARSE_TIMEOUT", "OUT_OF_MEMORY"):
+                obs.event("MOVED_HEAVY", f"{ex.code}: moved to the HEAVY pool", code=ex.code)
+                jobs.move_to_pool(db, job, "HEAVY")
+                return
+            if ex.code == "PARSER_CRASH":
+                jobs.release_for_retry(db, job, str(ex)[:2000], min(2, self.settings.worker_max_attempts), ex.code,
+                                       self.settings.worker_retry_base_seconds, self.settings.worker_retry_max_seconds)
+            else:
+                jobs.finish(db, job, jobs.FAILED, str(ex)[:2000], ex.code,
+                            payload={"quarantine": ex.code in QUARANTINE})
             self._sync_document(db, job)
             return
         except (SpringUnavailable, httpx.HTTPError, OSError) as ex:
@@ -427,17 +495,21 @@ def build_analyzer(settings: Settings, database: Database) -> Callable[[Session,
 
 def statement_deps(settings: Settings, database: Database, core: SpringClient,
                    page_models: dict[str, dict] | None = None, gateway=None):
-    """The statement reader's dependencies: the DMS store, the parser (the ingest step's page model first), the
-    table reader with OCR, the AI second reader, and Core's loan currency, FX rate and borrower profile."""
-    from dps.extraction.statement_pdf import read_pdf_statement
-    from dps.parse.engine import DoclingConverter, HeavyEngine, ParserEngine, RapidOcrBackend
+    """Wire sandboxed statement parsing, optional AI, and borrower settings from Core."""
+    from dps.ingest.inspect import declared_format
+    from dps.ingest.pipeline import page_hint, sandbox_parser
+    from dps.parse.sandbox import ParseRequest
     from dps.skills.statement_lines.reader import StatementDeps
 
     heavy = settings.worker_pool == "HEAVY"
-    ocr = RapidOcrBackend() if settings.ocr_enabled else None
-    parser = HeavyEngine(ParserEngine(ocr), DoclingConverter()) if heavy else ParserEngine(ocr)
-    if page_models is not None:
-        parser = PageModelFirst(parser, page_models)
+    parse = sandbox_parser(settings.worker_pool, settings.parser_socket)
+
+    def sandbox_read(data: bytes, ext: str, entity: str, style: str) -> dict:
+        fmt = declared_format("statement" + ext)
+        req = ParseRequest(data, fmt, hashlib.sha256(data).hexdigest(), ocr=settings.ocr_enabled, heavy=heavy,
+                           statement=(ext, entity, style))
+        return parse(req, page_hint(data, fmt))
+
     store = FileStore(settings.storage_dir)
 
     def read_file(doc: Document) -> bytes:
@@ -453,13 +525,13 @@ def statement_deps(settings: Settings, database: Database, core: SpringClient,
         def second_reader(text, values, scale=1.0, entity=None):
             return check(text, values, completion, entity or settings.statement_entity, scale)
 
-    return StatementDeps(database.session_factory, read_file, parser, heavy,
-                         lambda data, entity=None: read_pdf_statement(
-                             data, ocr, entity=entity or settings.statement_entity),
-                         second_reader, settings.statement_entity, settings.fiscal_year_end_month,
-                         core.cp_currency, core.fx_rate, settings.default_currency,
-                         core.cp_profile, lambda: currency_words(core.country_profiles()),
-                         settings.report_derived_values)
+    return StatementDeps(database.session_factory, read_file, None, heavy, second_reader=second_reader,
+                         entity=settings.statement_entity, fiscal_year_end_month=settings.fiscal_year_end_month,
+                         loan_currency=core.cp_currency, fx_rate=core.fx_rate,
+                         default_currency=settings.default_currency,
+                         loan_profile=core.cp_profile, currency_words=lambda: currency_words(core.country_profiles()),
+                         report_derived_values=settings.report_derived_values, sandbox_read=sandbox_read,
+                         skip_confident_ai=settings.ai_skip_confident)
 
 
 def build_pack_runner(settings: Settings, database: Database, core: SpringClient | None = None,

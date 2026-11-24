@@ -2,7 +2,7 @@
  "documentId": "AGR-012",
  "type": "LOAN_AGREEMENT",
  "sourceFile": "AGR-012.pdf",
- "sha256": "5db1aef7544dd2bd81cd15cfb250b7581f47f17cc47e94c1e6cb41a6b6d7b909",
+ "sha256": "5cbeaaecc2553e1fbee9e69a574ec75b316b04a48ad741cb24d6b203bdddc86f",
  "pages": 1,
  "status": "SYNTHETIC",
  "labelledBy": "generator: make_synthetic.py (truth by construction)",
@@ -16,7 +16,8 @@
    "unit": null,
    "frequency": "YEARLY",
    "page": 1,
-   "quote": "6.1 The DSCR of the Borrower shall not fall below 1.20 times for any Financial Year."
+   "quote": "6.1 Commencing on 31 March 2027, DSCR shall not fall below 1.20 times for any Financial Year.",
+   "firstTestDate": "2027-03-31"
   },
   {
    "metric": "CURRENT_RATIO",
@@ -24,7 +25,7 @@
    "operator": ">=",
    "threshold": 1.1,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "6.2 The Current Ratio shall not be less than 1.10 times."
   },
@@ -34,7 +35,7 @@
    "operator": "<=",
    "threshold": 2.0,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "6.3 Total Debt to Net Worth shall not exceed 2.00 times."
   },

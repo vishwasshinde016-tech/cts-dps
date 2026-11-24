@@ -206,12 +206,13 @@ def test_the_ocr_reads_english_with_the_pp_ocrv6_text_model(monkeypatch, tmp_pat
     model.write_bytes(b"onnx")
     monkeypatch.setenv("DPS_OCR_REC_MODEL", str(model))
     eng.RapidOcrBackend()._ensure()
-    assert made[-1] == {"rec_model_path": str(model)}
+    threads = {"intra_op_num_threads": 2, "inter_op_num_threads": 1}
+    assert made[-1] == {**threads, "rec_model_path": str(model)}
     monkeypatch.setenv("DPS_OCR_REC_MODEL", str(tmp_path / "missing.onnx"))
     monkeypatch.setenv("DPS_DOCLING_ARTIFACTS", str(tmp_path / "none"))
     monkeypatch.setattr(eng, "REC_MODEL_PLACES", (str(tmp_path / "none"),))
     eng.RapidOcrBackend()._ensure()
-    assert made[-1] == {}  # RapidOCR's own model, with a warning in the log
+    assert made[-1] == threads  # RapidOCR's own model, with a warning in the log
 
 
 def test_one_european_looking_number_does_not_make_a_report_european():

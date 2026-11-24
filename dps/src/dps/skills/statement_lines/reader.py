@@ -110,6 +110,8 @@ class StatementDeps:
     # Full review G22: report the figures DPS works out (total debt, EBITDA from its parts, twelve months).
     # Off: Spring's formula engine works them out from the printed figures.
     report_derived_values: bool = False
+    sandbox_read: Callable[[bytes, str, str, str], dict] | None = None
+    skip_confident_ai: bool = False
 
 
 class StatementState(BaseModel):
@@ -189,9 +191,9 @@ class StatementReader:
         self.state.profile_issues = self._profile()
         style = self.state.number_style
         with number_style(style):
-            rows = self._parse(data, ext)
+            rows = self._read_rows(data, ext)
         seen = detect_number_style("\n".join((self.state.header_text, self.state.page_text, self._raw_text)))
-        signs = injection_signs("\n".join((self.state.header_text, self.state.page_text, self._raw_text)))
+        signs = injection_signs("\n".join((self.state.header_text, self._doc_text, self._raw_text)))
         if signs:
             self.state.profile_issues.append(f"PROMPT_INJECTION_SUSPECTED: the statement addresses an AI model: "
                                              f"'{signs[0][:120]}'")
@@ -202,7 +204,7 @@ class StatementReader:
             # The document's own numbers say how they are written: read it again that way.
             self.state.number_style = seen
             with number_style(seen):
-                rows = self._parse(data, ext)
+                rows = self._read_rows(data, ext)
         self.state.rows = [list(r) for r in rows]
 
     def _find_period(self) -> None:
@@ -224,6 +226,15 @@ class StatementReader:
             return doc.as_of_date
         return date.fromisoformat(self.state.period_end) if self.state.period_end else None
 
+    def _read_rows(self, data: bytes, ext: str) -> list[tuple]:
+        if self._deps.sandbox_read is None:
+            return self._parse(data, ext)
+        parsed = self._deps.sandbox_read(data, ext, self.state.entity or self._deps.entity, self.state.number_style)
+        for name, value in parsed["state"].items():
+            setattr(self.state, name, value)
+        self._raw_text, self._doc_text = parsed["raw"], parsed["document"]
+        return [tuple(row) for row in parsed["rows"]]
+
     def _parse(self, data: bytes, ext: str) -> list[tuple]:
         entity = self.state.entity or self._deps.entity
         self.state.parse_issues, self._raw_text, self._doc_text = [], "", ""
@@ -237,6 +248,7 @@ class StatementReader:
                 if table is not None and table.rows:
                     rows, self.state.header_text = table.rows, table.header_text
                     self._doc_text = getattr(table, "document_text", "")
+                    self._raw_text = "\n".join(table.texts)
                     self.state.page_months = {str(p): m for p, m in table.periods.months.items()}
                     self.state.prior_rows = [list(r) for r in table.periods.prior]
                     self.state.annual_rows = [list(r) for r in table.periods.annual]
@@ -268,6 +280,8 @@ class StatementReader:
                 self._raw_text = data.decode("utf-8-sig", errors="replace")[:200_000]
             else:
                 raise ParseError(f"{ext} statements are not supported; upload PDF, XLSX, XLS, CSV, PNG or JPEG")
+        except MemoryError:
+            raise
         except ParseError as ex:
             self.state.error, rows = str(ex), []
         except Exception as ex:  # noqa: BLE001 - a corrupt workbook or CSV is a content failure, not a crash
@@ -281,6 +295,8 @@ class StatementReader:
             if entity != self._deps.entity:
                 return self._deps.pdf_reader(data, entity=entity)  # the borrower's figures: group or company
             return self._deps.pdf_reader(data)
+        except MemoryError:
+            raise
         except Exception as ex:  # noqa: BLE001 - an odd PDF: the plain-text reader below still gets a go
             log.warning("Table reader failed, using text lines: %s", type(ex).__name__)
             return None
@@ -324,7 +340,10 @@ class StatementReader:
             lines = [self.state.header_text] if self.state.header_text else []
             lines += [" ".join(str(c) for c in r if c not in (None, "")) for r in self.state.rows]
             self.state.page_text = mark_pages([(1, "\n".join(line for line in lines if line.strip()))])
-        if self._deps.second_reader is not None and self.state.page_text and (result.values or foreign):
+        clean_sheet = (self.state.file_kind in ("xls", "xlsx", "csv") and bool(result.values)
+                       and not foreign and not self.state.issues and not self.state.likely)
+        if (self._deps.second_reader is not None and self.state.page_text and (result.values or foreign)
+                and not (clean_sheet and self._deps.skip_confident_ai)):
             scale = to_money_unit(1e7, "unit", ccy, rate)  # the model answers in crore of the printed currency
             extra = {} if self.state.entity in ("", self._deps.entity) else {"entity": self.state.entity}
             reading = (self._deps.second_reader(self.state.page_text, result.values, **extra) if scale == 1.0
@@ -516,6 +535,21 @@ class StatementReader:
 
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
+
+
+def parse_statement(data: bytes, ext: str, entity: str, style: str, *, engine, ocr, heavy: bool) -> dict:
+    """Parse in the isolated process using the same table and spreadsheet readers."""
+    from dps.extraction.statement_pdf import read_pdf_statement
+
+    reader = StatementReader(StatementDeps(None, None, engine, heavy,
+                                          pdf_reader=lambda blob: read_pdf_statement(blob, ocr, entity=entity),
+                                          entity=entity))
+    with number_style(style):
+        rows = reader._parse(data, ext)
+    parsed = {"header_text", "page_text", "parse_issues", "page_months", "prior_rows", "annual_rows", "annual_end",
+              "route", "error"}
+    return {"rows": rows, "state": reader.state.model_dump(include=parsed),
+            "raw": reader._raw_text, "document": reader._doc_text}
 
 
 def _suffix(name: str) -> str:

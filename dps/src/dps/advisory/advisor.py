@@ -3,7 +3,7 @@
 Without a model configured (``DPS_AI_MODEL`` empty) the advisor gives deterministic suggestions that just
 mirror the assessed result, so the feature degrades to "no AI" rather than failing. With a model (e.g.
 ``azure/<deployment>``; credentials from AZURE_API_KEY / AZURE_API_BASE / AZURE_API_VERSION) it asks the
-LLM through CrewAI's ``LLM`` wrapper and falls back to the deterministic answer on any error.
+LLM through the DPS gateway and falls back to the deterministic answer on any error.
 """
 
 from __future__ import annotations
@@ -67,32 +67,60 @@ def _parse(text: str, allowed_ids: set[str]) -> list[dict]:
     return out
 
 
-def crewai_completion(model: str, temperature: float | None = None,  # pragma: no cover - live model
-                      timeout: float | None = None) -> Completion:
-    from crewai import LLM
+def azure_completion(model: str, temperature: float | None = None, timeout: float | None = None,
+                     max_tokens: int | None = None) -> Completion:
+    import os
+    from urllib.parse import urlsplit
+
+    from openai import AzureOpenAI, BadRequestError
 
     from dps.agent import usage
     from dps.ops import observability
 
+    base = os.getenv("AZURE_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("AZURE_API_BASE", "")
+    endpoint = urlsplit(base)
+    deployment = model.split("/", 1)[1]
+    limit_parameter = "max_completion_tokens"
+    api_key = os.getenv("AZURE_API_KEY")
+    token_provider = None
+    if not api_key:
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+
+        scope = os.getenv("AZURE_CREDENTIAL_SCOPES", "https://cognitiveservices.azure.com/.default")
+        token_provider = get_bearer_token_provider(DefaultAzureCredential(), *scope.split(","))
+
     def call(messages: list[dict]) -> str:
-        # One LLM per call: its token counters then belong to this call alone, even under concurrency.
-        # None keeps the model's default: newer Azure OpenAI models refuse any other temperature.
-        llm = (LLM(model=model, timeout=timeout) if temperature is None
-               else LLM(model=model, temperature=temperature, timeout=timeout))
+        nonlocal limit_parameter
+        options = {} if temperature is None else {"temperature": temperature}
+        if max_tokens:
+            options[limit_parameter] = max_tokens
         timer = observability.Timer()
-        # No span of its own: the gateway's "chat <model>" span is the trace of this call (observability, 23 Nov
-        # 2026); a second span here showed every model call twice in Langfuse.
         try:
-            text = llm.call(messages)
+            # The Azure client sets the deployment URL from the vetted resource and route's deployment.
+            with AzureOpenAI(azure_endpoint=f"{endpoint.scheme}://{endpoint.netloc}",
+                             api_version=os.getenv("AZURE_API_VERSION") or "2024-06-01",
+                             api_key=api_key, azure_ad_token_provider=token_provider, timeout=timeout,
+                             max_retries=0) as client:
+                try:
+                    response = client.chat.completions.create(model=deployment, messages=messages, **options)
+                except BadRequestError as ex:
+                    if ("max_completion_tokens" not in options or ex.code != "unsupported_parameter"
+                            or "max_completion_tokens" not in str(ex)):
+                        raise
+                    # Older Azure deployments can still require the legacy field.
+                    options["max_tokens"] = options.pop("max_completion_tokens")
+                    response = client.chat.completions.create(model=deployment, messages=messages, **options)
+                    limit_parameter = "max_tokens"
         except Exception as ex:
-            # A failed call is traced too: the caller falls back to the rules, and the trace says why.
-            spent = llm.get_token_usage_summary()
-            usage.note(model, spent.prompt_tokens, spent.completion_tokens, seconds=timer.seconds,
-                       messages=messages, error=f"{type(ex).__name__}: {str(ex)[:300]}")
+            usage.note(model, 0, 0, seconds=timer.seconds, messages=messages,
+                       error=f"{type(ex).__name__}: {str(ex)[:300]}")
             raise
-        spent = llm.get_token_usage_summary()
-        usage.note(model, spent.prompt_tokens, spent.completion_tokens, seconds=timer.seconds, messages=messages,
-                   answer=text)
+        text = (response.choices[0].message.content or "") if response.choices else ""
+        spent = response.usage
+        details = spent.prompt_tokens_details if spent else None
+        usage.note(model, spent.prompt_tokens if spent else 0, spent.completion_tokens if spent else 0,
+                   seconds=timer.seconds, messages=messages, answer=text,
+                   cached_tokens=(details.cached_tokens or 0) if details else 0)
         return text
 
     return call

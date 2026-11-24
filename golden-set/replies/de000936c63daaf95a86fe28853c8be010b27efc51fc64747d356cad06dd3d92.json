@@ -1,0 +1,10 @@
+{
+ "route": "strong",
+ "deployment": "azure/gpt-6.1-sol",
+ "answer": "Thought: I now know the final answer\nFinal Answer: {\n  \"items\": [\n    {\n      \"name\": \"shall not create any lien, charge or encumbrance over its assets without the prior written consent of the Lender\",\n      \"value\": {\n        \"metric\": \"NEG_LIENS\",\n        \"basis\": null,\n        \"operator\": null,\n        \"threshold\": null,\n        \"unit\": null,\n        \"frequency\": null,\n        \"schedule\": [],\n        \"cureDays\": null,\n        \"obligor\": \"Borrower\",\n        \"facilityRefs\": [],\n        \"conditions\": [],\n        \"firstTestDate\": null,\n        \"equityCure\": null,\n        \"baskets\": []\n      },\n      \"page\": 1,\n      \"quote\": \"8.1 The Borrower shall not create any lien, charge or encumbrance over its assets without\\nthe prior written consent of the Lender.\"\n    },\n    {\n      \"name\": \"shall keep its plant and stocks insured against all risks and shall maintain the insurance policies in force throughout the tenor\",\n      \"value\": {\n        \"metric\": \"AFF_INSURANCE\",\n        \"basis\": null,\n        \"operator\": null,\n        \"threshold\": null,\n        \"unit\": null,\n        \"frequency\": \"throughout the tenor\",\n        \"schedule\": [],\n        \"cureDays\": null,\n        \"obligor\": \"Borrower\",\n        \"facilityRefs\": [],\n        \"conditions\": [],\n        \"firstTestDate\": null,\n        \"equityCure\": null,\n        \"baskets\": []\n      },\n      \"page\": 1,\n      \"quote\": \"8.2 The Borrower shall keep its plant and stocks insured against all risks and shall\\nmaintain the insurance policies in force throughout the tenor.\"\n    }\n  ]\n}",
+ "tokens": {
+  "prompt": 3980,
+  "completion": 510,
+  "cached": 0
+ }
+}

@@ -1083,6 +1083,16 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "modelPins": {
+          "type": ["object", "null"],
+          "description": "Per route used: what the model calls were pinned to (deployment, Azure apiVersion, maxTokens, timeoutSeconds, temperature; null temperature = the model's default)",
+          "additionalProperties": {"type": "object"}
+        },
+        "packs": {
+          "type": ["object", "null"],
+          "description": "Each skill pack and prompt that could reach the model for this result: version and promptSha (pack prompts, covenant parts, residual read, document-type check)",
+          "additionalProperties": {"type": "object"}
         }
       }
     },

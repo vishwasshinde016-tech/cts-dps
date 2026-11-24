@@ -74,6 +74,7 @@ class Clause:
     threshold: float | None = None
     unit: str | None = None
     frequency: str | None = None
+    first_test_date: str | None = None
 
 
 @dataclass
@@ -103,11 +104,15 @@ def layout(a: Agreement) -> tuple[list[list[str]], list[dict]]:
                 covenants.append({"metric": c.metric, "category": c.category, "operator": c.operator,
                                   "threshold": c.threshold, "unit": c.unit, "frequency": c.frequency,
                                   "page": len(pages), "quote": c.text})
+                if c.first_test_date:
+                    covenants[-1]["firstTestDate"] = c.first_test_date
     return pages, covenants
 
 
-def F(text, metric, op, value, unit=None, freq="QUARTERLY"):  # noqa: N802 - reads like a table row
-    return Clause(text, metric, "FINANCIAL", op, value, unit, freq)
+# A label states a test frequency only where the clause (or its article) says it (improvement plan V2, 24 Nov 2026:
+# every row defaulted to QUARTERLY, so the labels claimed frequencies the documents never state).
+def F(text, metric, op, value, unit=None, freq=None, first_test_date=None):  # noqa: N802 - reads like a table row
+    return Clause(text, metric, "FINANCIAL", op, value, unit, freq, first_test_date)
 
 
 def N(text, metric):  # noqa: N802
@@ -150,9 +155,9 @@ AGREEMENTS = [
         *boilerplate("Konkan Cements Limited", "INR 850 crore"),
         ("Article 7 Financial Covenants", [
             F("7.1 The Borrower shall ensure that the Debt Service Coverage Ratio shall not be less than 1.35 "
-              "times, tested quarterly on a trailing twelve month basis.", "DSCR", ">=", 1.35),
+              "times, tested quarterly on a trailing twelve month basis.", "DSCR", ">=", 1.35, freq="QUARTERLY"),
             F("7.2 Total Debt to EBITDA shall not be more than 3.50 times on each test date.",
-              "DEBT_TO_EBITDA", "<=", 3.5),
+              "DEBT_TO_EBITDA", "<=", 3.5, freq="QUARTERLY"),
             F("7.3 The Interest Coverage Ratio shall at no time be lower than 2.25 times.", "ICR", ">=", 2.25),
             F("7.4 The Borrower shall maintain a Tangible Net Worth of not less than INR 600 Crores at all times.",
               "MIN_TANGIBLE_NET_WORTH", ">=", 600, "crores"),
@@ -168,8 +173,8 @@ AGREEMENTS = [
     Agreement("AGR-012", "Deccan Agro Foods Private Limited", [
         *boilerplate("Deccan Agro Foods Private Limited", "INR 120 crore"),
         ("Article 6 Financial Covenants", [
-            F("6.1 The DSCR of the Borrower shall not fall below 1.20 times for any Financial Year.", "DSCR",
-              ">=", 1.2, freq="YEARLY"),
+            F("6.1 Commencing on 31 March 2027, DSCR shall not fall below 1.20 times for any Financial Year.",
+              "DSCR", ">=", 1.2, freq="YEARLY", first_test_date="2027-03-31"),
             F("6.2 The Current Ratio shall not be less than 1.10 times.", "CURRENT_RATIO", ">=", 1.1),
             F("6.3 Total Debt to Net Worth shall not exceed 2.00 times.", "DEBT_TO_NET_WORTH", "<=", 2.0),
         ]),
@@ -213,7 +218,7 @@ AGREEMENTS = [
         *boilerplate("Coromandel Logistics Limited", "INR 310 crore"),
         ("Article 7 Financial Covenants", [
             F("7.1 Total Debt to EBITDA shall not be greater than 3.00:1 on each Quarter Date.",
-              "DEBT_TO_EBITDA", "<=", 3.0),
+              "DEBT_TO_EBITDA", "<=", 3.0, freq="QUARTERLY"),
             F("7.2 The Debt Service Coverage Ratio must be no less than 1.25 times.", "DSCR", ">=", 1.25),
             F("7.3 The Quick Ratio shall not be less than 0.90 times.", "QUICK_RATIO", ">=", 0.9),
         ]),
@@ -250,7 +255,8 @@ AGREEMENTS = [
     Agreement("AGR-018", "Godavari Healthcare Limited", [
         *boilerplate("Godavari Healthcare Limited", "INR 260 crore"),
         ("Article 6 Financial Covenants", [
-            F("6.1 EBITDA to EMI shall not be less than 1.50 times in any quarter.", "EBITDA_TO_EMI", ">=", 1.5),
+            F("6.1 EBITDA to EMI shall not be less than 1.50 times in any quarter.", "EBITDA_TO_EMI", ">=", 1.5,
+              freq="QUARTERLY"),
             F("6.2 The Current Ratio of the Borrower shall be at least 1.33 times.", "CURRENT_RATIO", ">=", 1.33),
             F("6.3 Total Debt to EBITDA shall not be more than 2.75 times.", "DEBT_TO_EBITDA", "<=", 2.75),
         ]),

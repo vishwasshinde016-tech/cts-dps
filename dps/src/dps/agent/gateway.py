@@ -23,7 +23,8 @@ import re
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from contextlib import contextmanager
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import jsonschema
@@ -56,6 +57,12 @@ class AiMonthlyBudgetSpent(AiBudgetExceeded):
     (Phase 3 fix 3, 23 Nov 2026). Before, it counted as a model failure and opened the breaker for the next jobs."""
 
     code = "AI_MONTHLY_BUDGET_SPENT"
+
+
+class AiDailyBudgetSpent(AiMonthlyBudgetSpent):
+    """The day's token budget is spent (improvement plan S11): not an outage either."""
+
+    code = "AI_DAILY_BUDGET_SPENT"
 
 
 class AiRefused(GatewayError):
@@ -164,6 +171,8 @@ class JobBudget:
     used: int = 0
     calls: int = 0
     models: dict[str, str] = field(default_factory=dict)
+    pins: dict[str, dict] = field(default_factory=dict)
+    reserved: int = 0
 
 
 _JSON_BLOCK = re.compile(r"\{.*\}|\[.*\]", re.S)
@@ -186,8 +195,16 @@ def parse_json(text: str):
 class Gateway:
     def __init__(self, routes: Routes, provider: Callable[[Route], Completion],
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-                 guard: Callable[[Completion, str], Completion] | None = None, trace_text: bool = False) -> None:
+                 guard: Callable[[Completion, str], Completion] | None = None, trace_text: bool = False,
+                 parallel: int = 1, skip_confident: bool = False) -> None:
         self.routes = routes
+        # How many model calls may run at once (improvement plan S1: a document's reads run in parallel); each
+        # route's requests-per-minute bucket still applies. 1 = one call at a time, as before.
+        self.parallel = max(1, int(parallel or 1))
+        self.skip_confident = skip_confident
+        self._slots = threading.BoundedSemaphore(self.parallel)
+        self._budget_ready = threading.Condition()
+        self._completion_lock = threading.Lock()
         self._provider = provider
         # The text sent and the answer on the model call's trace span (masked), only when ``ai_trace_text`` is on.
         self.trace_text = trace_text
@@ -212,6 +229,16 @@ class Gateway:
     def _budget(self) -> JobBudget | None:
         return getattr(self._local, "budget", None)
 
+    @contextmanager
+    def bound(self, budget: JobBudget | None):
+        """This thread uses the job's budget (a parallel read on a pool thread; improvement plan S1)."""
+        previous = getattr(self._local, "budget", None)
+        self._local.budget = budget
+        try:
+            yield
+        finally:
+            self._local.budget = previous
+
     def current_budget(self) -> JobBudget | None:
         """The job budget of the calling thread (handed to agents that call the model from other threads)."""
         return self._budget()
@@ -229,28 +256,63 @@ class Gateway:
     # -- calls --------------------------------------------------------------------------------------------------
 
     def _completion(self, route: Route) -> Completion:
-        if route.name not in self._completions:
-            raw = self._provider(route)
-            self._completions[route.name] = self._guard(raw, route.deployment) if self._guard else raw
-        return self._completions[route.name]
+        with self._completion_lock:
+            if route.name not in self._completions:
+                raw = self._provider(route)
+                self._completions[route.name] = self._guard(raw, route.deployment) if self._guard else raw
+            return self._completions[route.name]
+
+    @contextmanager
+    def _reserve(self, budget: JobBudget | None, route: Route, messages: list[dict]):
+        if budget is None:
+            yield
+            return
+        from dps.jobs import stop_if_cancelled
+
+        # Reserve against an intentionally conservative text estimate. Near the cap, keep serial semantics:
+        # admit one call, then use provider-reported tokens to decide whether another call can start.
+        estimate = route.max_tokens + len(json.dumps(messages, ensure_ascii=False).encode("utf-8"))
+        with self._budget_ready:
+            while budget.reserved and budget.used + budget.reserved + estimate > budget.limit:
+                self._budget_ready.wait(timeout=0.5)
+                stop_if_cancelled()
+            if budget.used >= budget.limit:
+                raise AiBudgetExceeded(f"Job token budget of {budget.limit} used")
+            budget.reserved += estimate
+        try:
+            yield
+        finally:
+            with self._budget_ready:
+                budget.used += usage.last_call_tokens()
+                budget.reserved -= estimate
+                self._budget_ready.notify_all()
+
+    def pin(self, route: Route) -> dict:
+        """What the model call was pinned to, for the result (improvement plan A2): deployment, Azure API version,
+        token limit, timeout and temperature (null: the model's default)."""
+        import os
+
+        return {"deployment": route.deployment, "apiVersion": os.environ.get("AZURE_API_VERSION") or None,
+                "maxTokens": route.max_tokens, "timeoutSeconds": route.timeout_s, "temperature": route.temperature}
 
     def available(self, route_name: str) -> bool:
         route = self.routes.routes.get(route_name)
         return bool(route and route.deployment) and self._breakers[route_name].allow()
 
     def call(self, route_name: str, messages: list[dict]) -> str:
+        from dps.jobs import JobCancelled, stop_if_cancelled
+
         route = self.routes.routes.get(route_name)
         if route is None or not route.deployment:
             raise AiUnavailable(f"No model configured for route {route_name}")
         budget = self._budget()
-        if budget is not None and budget.used >= budget.limit:
-            raise AiBudgetExceeded(f"Job token budget of {budget.limit} used")
         breaker = self._breakers[route_name]
         if not breaker.allow():
             obs.count("dps.ai.unavailable", 1, route=route_name)
         completion = self._completion(route)
         last: Exception | None = None
         for attempt in range(route.retries + 1):
+            stop_if_cancelled()
             if not breaker.allow():
                 raise AiUnavailable(f"Route {route_name} circuit open")
             self._buckets[route_name].take()
@@ -263,7 +325,11 @@ class Gateway:
                     "dps.route": route_name, "dps.attempt": attempt + 1,
                     "dps.prompt_version": usage.prompt_version(messages)}) as model_span:
                 try:
-                    answer = completion(messages)
+                    with self._slots, self._reserve(budget, route, messages):
+                        stop_if_cancelled()
+                        answer = completion(messages)
+                except (JobCancelled, AiBudgetExceeded):
+                    raise
                 except TransientModelError as ex:
                     breaker.failure()
                     last, retry = ex, True
@@ -273,12 +339,13 @@ class Gateway:
                     obs.count("dps.ai.refused", 1, route=route_name)
                     raise AiRefused(f"{route.deployment} refused the request: {str(ex)[:200]}") from ex
                 except Exception as ex:  # noqa: BLE001 - provider bugs and auth errors count as an outage
-                    from dps.agent.guard import AiBudgetExhausted
+                    from dps.agent.guard import AiBudgetExhausted, AiDailyBudgetExhausted
 
                     obs.mark_failed(model_span, ex)
                     if isinstance(ex, AiBudgetExhausted):  # a spent month is not an outage (Phase 3 fix 3)
                         obs.count("dps.ai.budget_spent", 1, route=route_name)
-                        raise AiMonthlyBudgetSpent(str(ex)[:200]) from ex
+                        spent = AiDailyBudgetSpent if isinstance(ex, AiDailyBudgetExhausted) else AiMonthlyBudgetSpent
+                        raise spent(str(ex)[:200]) from ex
                     breaker.failure()
                     raise AiUnavailable(f"{type(ex).__name__}: {str(ex)[:200]}") from ex
                 else:
@@ -290,9 +357,10 @@ class Gateway:
                 continue
             breaker.success()
             if budget is not None:
-                budget.used += usage.last_call_tokens()
-                budget.calls += 1
-                budget.models[route_name] = route.deployment
+                with self._budget_ready:
+                    budget.calls += 1
+                    budget.models[route_name] = route.deployment
+                    budget.pins[route_name] = self.pin(route)
             return answer
         raise AiUnavailable(f"Route {route_name} failed after {route.retries + 1} attempts: {last}")
 
@@ -306,6 +374,7 @@ class Gateway:
             # The current names and the older ones (still read by Langfuse): the GenAI conventions are in Development.
             obs.set_attrs(model_span, **{
                 "gen_ai.usage.input_tokens": call.prompt_tokens, "gen_ai.usage.output_tokens": call.completion_tokens,
+                "gen_ai.usage.cache_read.input_tokens": call.cached_tokens,
                 "gen_ai.usage.prompt_tokens": call.prompt_tokens,
                 "gen_ai.usage.completion_tokens": call.completion_tokens,
                 "gen_ai.response.model": call.model})
@@ -396,14 +465,16 @@ def from_settings(settings, session_factory=None, env: dict | None = None) -> Ga
 
 
 def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cover - live wiring
-    from dps.advisory.advisor import crewai_completion
+    from dps.advisory.advisor import azure_completion
     from dps.agent.guard import guarded
 
     routes = Routes.load(getattr(settings, "ai_routes_file", "") or None, settings.ai_model,
                          int(getattr(settings, "ai_rpm_share", 1) or 1))
+    routes = replace(routes, routes={name: replace(route, temperature=temperature_for(route, settings))
+                                     for name, route in routes.routes.items()})
 
     def provider(route: Route) -> Completion:
-        raw = crewai_completion(route.deployment, temperature_for(route, settings), route.timeout_s)
+        raw = azure_completion(route.deployment, route.temperature, route.timeout_s, route.max_tokens)
 
         def call(messages: list[dict]) -> str:
             try:
@@ -419,5 +490,8 @@ def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cove
 
         return call
 
-    guard = (lambda c, model: guarded(c, model, session_factory, settings)) if session_factory else None
-    return Gateway(routes, provider, guard=guard, trace_text=bool(getattr(settings, "ai_trace_text", False)))
+    daily = routes.per_tenant_day_tokens if getattr(settings, "ai_routes_file", "") else None
+    guard = (lambda c, model: guarded(c, model, session_factory, settings, daily=daily)) if session_factory else None
+    return Gateway(routes, provider, guard=guard, trace_text=bool(getattr(settings, "ai_trace_text", False)),
+                   parallel=int(getattr(settings, "ai_parallel_reads", 1) or 1),
+                   skip_confident=bool(getattr(settings, "ai_skip_confident", True)))

@@ -109,9 +109,11 @@ class Settings(BaseSettings):
     worker_poison_crashes: int = 2
     # Waiting this long moves a job one priority step up, so bulk work is never starved.
     queue_aging_minutes: int = 15
-    # Fairness defaults when a tenant has no dps_tenant_limit row.
-    queue_max_running_per_tenant: int = 4
-    queue_max_running_per_batch: int = 2
+    # Fairness defaults when a tenant has no dps_tenant_limit row. Raised for many files and heavy jobs (improvement
+    # plan S3, 24 Nov 2026): 4 per tenant and 2 per batch made a bulk upload wait in line while workers and the Azure
+    # quota were free. A bulk batch still leaves room for interactive uploads (6 of 10).
+    queue_max_running_per_tenant: int = 10
+    queue_max_running_per_batch: int = 6
     queue_max_queued_per_tenant: int = 1000
     batch_max_items: int = 500
     # Part of the "same input runs once" key and of the page-model cache. "auto" (default): computed at start-up from
@@ -123,7 +125,7 @@ class Settings(BaseSettings):
     ocr_enabled: bool = True
 
     # Advisory AI (C3 suggestions, statement narrative). Empty: rules only. Example: azure/gpt-4o
-    # with AZURE_API_KEY, AZURE_API_BASE and AZURE_API_VERSION set for LiteLLM.
+    # with AZURE_API_KEY, AZURE_API_BASE and AZURE_API_VERSION set for the Azure client.
     ai_model: str = ""
     # Empty: the model's default (required by newer Azure OpenAI models). Set e.g. 0 where the model allows it.
     ai_temperature: float | None = None
@@ -151,6 +153,13 @@ class Settings(BaseSettings):
     # Phase 3a: model tokens allowed per calendar month (prompt + answer); empty: no cap. At 80% an alert is logged and
     # audited; at 100% the model is not called and the rules answer until the next month.
     ai_monthly_token_budget: int | None = Field(default=None, ge=1)
+    # Tokens allowed per calendar day (UTC); empty: the routes file's budgets.per_tenant_day_tokens when a routes file
+    # is used, else no daily cap. Production sets both (deploy/docker-compose.cts-dps.yml).
+    ai_daily_token_budget: int | None = Field(default=None, ge=1)
+    # Model calls one job may run at once (improvement plan S1, 24 Nov 2026): a document's AI reads (covenant parts,
+    # page batches, schedule batches) run in parallel, within each route's requests per minute. 1 = one at a time.
+    ai_parallel_reads: int = Field(default=1, ge=1, le=16)
+    ai_skip_confident: bool = True
     # The same messages to the same model are answered from the cache (dps_ai_cache) instead of a new call. Off by
     # default (full review G17): cached answers hold document quotes outside the DMS's custody. When on, an answer
     # is used only for the same pipeline version and for ai_cache_days, and older answers are purged daily.
@@ -161,8 +170,18 @@ class Settings(BaseSettings):
     def _resolve_pipeline(self) -> Settings:
         from dps.versioning import resolve
 
-        self.pipeline_version = resolve(self.pipeline_version, self.ai_routes_file, self.ai_model)
+        # Settings that change what is read, found or routed to a person (T3). Logging, limits and switches that
+        # do not change a result stay out, so they do not make every old job look stale.
+        options = ";".join(f"{name}={getattr(self, name)}" for name in OUTPUT_SETTINGS)
+        self.pipeline_version = resolve(self.pipeline_version, self.ai_routes_file, self.ai_model, options,
+                                        self.scorer_dir or "")
         return self
+
+
+OUTPUT_SETTINGS = ("review_confidence", "ocr_enabled", "ai_temperature", "statement_ai_check", "ai_skip_confident",
+                   "ai_parallel_reads", "statement_entity",
+                   "fiscal_year_end_month", "report_derived_values", "loan_account_pattern", "facility_id_pattern",
+                   "llm_enabled")
 
 
 def llm_allowed(settings: Settings) -> bool:
@@ -170,7 +189,7 @@ def llm_allowed(settings: Settings) -> bool:
     return bool(settings.llm_enabled and (settings.ai_model or settings.ai_routes_file))
 
 
-MODEL_URL_VARS = ("AZURE_API_BASE", "AZURE_OPENAI_ENDPOINT", "OPENAI_API_BASE", "OPENAI_BASE_URL")
+MODEL_URL_VARS = ("AZURE_API_BASE", "AZURE_ENDPOINT", "AZURE_OPENAI_ENDPOINT", "OPENAI_API_BASE", "OPENAI_BASE_URL")
 
 
 def endpoint_problem(settings: Settings, env: dict | None = None) -> str | None:
@@ -195,7 +214,7 @@ MODEL_ENV_PREFIXES = ("AZURE_", "OPENAI_")
 
 
 def export_model_env(path: str | Path = ".env") -> list[str]:
-    """The model library (LiteLLM, through CrewAI) reads AZURE_* / OPENAI_* from the process environment, but
+    """The model client reads AZURE_* / OPENAI_* from the process environment, but
     pydantic reads .env only into Settings. Copies those lines of .env into os.environ, never overriding a value
     already set (a vault or the shell wins). Returns the names copied (never the values)."""
     import os

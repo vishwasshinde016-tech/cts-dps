@@ -14,7 +14,7 @@
    "operator": ">=",
    "threshold": 2.5,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "9.1 The Borrower shall ensure that the Interest Coverage Ratio does not fall below 2.50 times."
   },
@@ -24,7 +24,7 @@
    "operator": ">=",
    "threshold": 40,
    "unit": "crore",
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "9.2 The Borrower shall maintain Minimum Liquidity of not less than INR 40 crore in unencumbered cash at all times."
   },
@@ -34,7 +34,7 @@
    "operator": "<=",
    "threshold": 1.5,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "9.3 The ratio of Total Debt to Net Worth shall not be more than 1.50 times."
   },

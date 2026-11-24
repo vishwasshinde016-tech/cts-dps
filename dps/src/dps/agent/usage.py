@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -40,6 +41,7 @@ class Call:
     # The model call's trace span (observability, 23 Nov 2026): the dps_ai_call row opens its trace in Langfuse.
     trace_id: str | None = None
     span_id: str | None = None
+    cached_tokens: int = 0
 
 
 @dataclass
@@ -49,9 +51,11 @@ class Tokens:
     completion: int = 0
     calls: int = 0
     detail: list[Call] = field(default_factory=list)
+    tenant: str | None = None
 
 
 _noted: ContextVar[Tokens | None] = ContextVar("dps_ai_tokens", default=None)
+_LOCK = threading.Lock()
 # Tokens of the most recent call only (the gateway charges them to the job's budget).
 _last: ContextVar[int] = ContextVar("dps_ai_last_call_tokens", default=0)
 
@@ -65,20 +69,24 @@ def last_call_tokens() -> int:
 
 
 def note(model: str, prompt_tokens: int, completion_tokens: int, *, seconds: float = 0.0,
-         messages: list[dict] | None = None, answer: str | None = None, error: str | None = None) -> None:
+         messages: list[dict] | None = None, answer: str | None = None, error: str | None = None,
+         cached_tokens: int = 0) -> None:
     """Called by the completion after each model call (or failed call); several calls in one request add up."""
     _last.set(_last.get() + int(prompt_tokens or 0) + int(completion_tokens or 0))
-    current = _noted.get()
-    if current is None:
-        current = Tokens(model)
-        _noted.set(current)
-    current.model = current.model or model
-    current.prompt += int(prompt_tokens or 0)
-    current.completion += int(completion_tokens or 0)
-    current.calls += 1
     trace_id, span_id = obs.current_ids()
-    current.detail.append(Call(model, int(prompt_tokens or 0), int(completion_tokens or 0), seconds, messages,
-                               answer, error, trace_id, span_id))
+    if cached_tokens:
+        obs.count("dps.ai.cached_input_tokens", cached_tokens, model=model)
+    with _LOCK:  # parallel reads of one job add to the same counter (improvement plan S1)
+        current = _noted.get()
+        if current is None:
+            current = Tokens(model)
+            _noted.set(current)
+        current.model = current.model or model
+        current.prompt += int(prompt_tokens or 0)
+        current.completion += int(completion_tokens or 0)
+        current.calls += 1
+        current.detail.append(Call(model, int(prompt_tokens or 0), int(completion_tokens or 0), seconds, messages,
+                                   answer, error, trace_id, span_id, cached_tokens))
 
 
 def last_call(span_id: str | None = None) -> Call | None:
@@ -93,10 +101,16 @@ def last_call(span_id: str | None = None) -> Call | None:
     return None
 
 
-def begin() -> None:
+def begin(tenant: str | None = None) -> None:
     """Starts counting for one background job. The flow may run its steps in another context: the counter set here
     is the object they all add to, so the worker reads the job's calls afterwards with ``take``."""
-    _noted.set(Tokens(""))
+    _noted.set(Tokens("", tenant=tenant))
+
+
+def budget_context() -> tuple[str | None, int]:
+    current = _noted.get()
+    with _LOCK:
+        return (current.tenant, current.prompt + current.completion) if current and current.tenant else (None, 0)
 
 
 def take() -> Tokens | None:

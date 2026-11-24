@@ -74,11 +74,12 @@ def part_pack(pack, part: Part):
 
 def read(pack, gateway, batches: list[list[dict]], notes: list | None = None, **kw) -> tuple[list | None, list | None]:
     """(covenant proposals, event-of-default proposals), each None when no read gave an answer."""
+    from dps.agent.parallel import run_all
     from dps.skills.common import batched_proposals
 
     covenants: list | None = None
     events: list | None = None
-    ran = False
+    todo = []
     for part in parts_of(pack) or [ALL]:
         pat = pattern(part)
         if pack.page_selection.get("same_batch_for_parts"):
@@ -88,10 +89,20 @@ def read(pack, gateway, batches: list[list[dict]], notes: list | None = None, **
         else:
             part_batches = [kept for kept in ([p for p in b if pat.search(p.get("text") or "")] for b in batches)
                             if kept]
-        if not part_batches:
-            continue
-        ran = True
-        got = batched_proposals(part_pack(pack, part), gateway, part_batches, notes=notes, **kw)
+        if part_batches:
+            todo.append((part, part_batches))
+    ran = bool(todo)
+
+    def read_part(part, part_batches):
+        part_notes: list = []
+        got = batched_proposals(part_pack(pack, part), gateway, part_batches, notes=part_notes, **kw)
+        return got, part_notes
+
+    # the parts are read in parallel too (S1); results and notes are merged in part order, as before
+    results = run_all(gateway, [lambda p=p, b=b: read_part(p, b) for p, b in todo])
+    for (part, _), (got, part_notes) in zip(todo, results, strict=True):
+        if notes is not None:
+            notes.extend(part_notes)
         if got is None:
             continue
         for p in got:

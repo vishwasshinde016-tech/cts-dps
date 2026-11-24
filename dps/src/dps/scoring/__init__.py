@@ -225,7 +225,8 @@ def sampled(field_id: str, rate: float = SAMPLE_RATE) -> bool:
     return h / 0xFFFFFFFF < rate
 
 
-def route(f: dict, risk: str, thresholds: dict | None = None, sample_rate: float = SAMPLE_RATE) -> None:
+def route(f: dict, risk: str, thresholds: dict | None = None, sample_rate: float = SAMPLE_RATE,
+          job_id: str = "") -> None:
     """Sets ``status`` (and the SAMPLED_FOR_QA reason) from confidence, risk and the pack's thresholds."""
     if f.get("status") in ("REJECTED", "CONFIRMED", "CORRECTED"):
         return
@@ -236,7 +237,9 @@ def route(f: dict, risk: str, thresholds: dict | None = None, sample_rate: float
     if f.get("status") == "NEEDS_REVIEW" or need is None or conf < need:
         f["status"] = "NEEDS_REVIEW"
         return
-    if sampled(f["id"], sample_rate):
+    # Per job and field (improvement plan G3, 24 Nov 2026): the field id alone has no job part, so the same covenant
+    # on the same page was always in, or never in, the sample across every document. Still reproducible per job.
+    if sampled(f"{job_id}:{f['id']}" if job_id else f["id"], sample_rate):
         f["status"] = "NEEDS_REVIEW"
         f["signals"] = {**(f.get("signals") or {}), "reasons": [*reasons, "SAMPLED_FOR_QA"], "sampled": True}
         return
@@ -258,7 +261,7 @@ class Scorer:
         return self.rules
 
     def apply(self, fields: list[dict], doc_type: str, risk_of, thresholds: dict | None = None,
-              page_quality: dict[int, tuple[float, str]] | None = None) -> None:
+              page_quality: dict[int, tuple[float, str]] | None = None, job_id: str = "") -> None:
         model = self.for_type(doc_type)
         for f in fields:
             risk = risk_of(f["name"])
@@ -268,4 +271,4 @@ class Scorer:
             f["signals"] = {**(f.get("signals") or {}),
                             **{k: v for k, v in s.items() if not k.startswith("_")},
                             "reasons": result.reasons, "scorer": result.scorer}
-            route(f, risk, thresholds)
+            route(f, risk, thresholds, job_id=job_id)

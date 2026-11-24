@@ -305,12 +305,12 @@ def test_the_live_provider_maps_a_content_filter_error_to_a_refusal(monkeypatch)
     errors = iter([RuntimeError("litellm.ContentPolicyViolationError: AzureException - content_filter (500)"),
                    RuntimeError("503 Service Unavailable")])
 
-    def fake_completion(model, temperature=None, timeout=None):
+    def fake_completion(model, temperature=None, timeout=None, max_tokens=None):
         def call(messages):
             raise next(errors)
         return call
 
-    monkeypatch.setattr(advisor, "crewai_completion", fake_completion)
+    monkeypatch.setattr(advisor, "azure_completion", fake_completion)
     settings = type("S", (), {"ai_routes_file": "", "ai_model": "azure/x", "ai_rpm_share": 1, "ai_trace_text": False,
                               "ai_temperature": None})()
     live = gw_module._live_gateway(settings)

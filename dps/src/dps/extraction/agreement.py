@@ -317,6 +317,19 @@ _SPELLED_THEN_FIGURES = re.compile(r"\b(?:" + _DIGIT + r")(?:\s+point(?:\s+(?:" 
                                    r"\((\d+(?:\.\d+)?)\)", re.I)
 _SYMBOL_THRESHOLD = re.compile(r"(>=|<=|≥|≤|>|<)\s*([0-9]+(?:\.[0-9]+)?)\s*(?:x\b|times?\b|:1\b)?", re.I)
 _FREQUENCY = re.compile(r"\b(monthly|quarterly|semi[-\s]?annual(?:ly)?|half[-\s]?yearly|annual(?:ly)?|yearly)\b", re.I)
+# Testing wordings without the adverb (golden-set check of 24 Nov 2026, improvement plan V2: "on each Quarter Date",
+# "in any quarter", "as at each financial quarter end" were read as no frequency).
+_QUARTER_WORDS = re.compile(r"\b(?:each|every|any)\s+(?:financial\s+|fiscal\s+|calendar\s+)?quarter(?:\s+(?:date|end|"
+                            r"end\s+date|ending))?\b|\bquarter[-\s]end(?:s|\s+dates?)?\b|\bquarterly\s+test", re.I)
+# "for any Financial Year": the covenant's own figure is yearly (it is never passed on to other covenants: see
+# _section_frequency, which takes only testing statements).
+_YEAR_WORDS = re.compile(r"\b(?:each|every|any)\s+(?:financial|fiscal|accounting)\s+year(?:[-\s]end)?\b|"
+                         r"\byear[-\s]end\s+(?:test|date)", re.I)
+# A clause number starts a clause ("7.2 Total Debt ..."): at the start or after a sentence, followed by a capital.
+# "1.35 times" is a threshold, not clause 1.35.
+_CLAUSE_NO = re.compile(r"(?:^|(?<=[.:;]\s)|(?<=\n))\s*(\d{1,2})\.\d{1,2}\.?\s+(?=[A-Z])")
+_ARTICLE_NO = re.compile(r"\b(?:ARTICLE|Article|SECTION|Section|CLAUSE|Clause)\s+(\d{1,2})\b")
+_TESTING = re.compile(r"\btest(?:ed|ing)?\b|\btest\s+dates?\b|\bquarter\s+dates?\b", re.I)
 _CLAUSE = re.compile(r"(?m)^[ \t]*(\d+(?:\.\d+)+)\.?[ \t]+([^\n]*)$")
 
 
@@ -421,6 +434,10 @@ def _metric_for_clause(heading: str, body: str) -> str | None:
 def _frequency(text: str) -> str | None:
     m = _FREQUENCY.search(text or "")
     if not m:
+        if _QUARTER_WORDS.search(text or ""):
+            return "QUARTERLY"
+        if _YEAR_WORDS.search(text or ""):
+            return "YEARLY"
         return None
     word = m.group(1).lower()
     if word.startswith("month"):
@@ -938,8 +955,10 @@ def _security_terms(doc: _Doc, found: set[str]) -> list[Term]:
             continue
         unit = {"percent": "%", "times": "x"}.get(kind) or (m.group(2) or "").strip().lower()
         quote, page = _quote(doc, m.start(), m.end())
-        out.append(Term(metric, "FINANCIAL", op, _number(m.group(1)), unit, _frequency(m.group(0)), page, quote,
-                        None, 0.75))
+        # the rest of the same sentence too: "... not exceeding INR 25 crore in any Financial Year"
+        rest = doc.text[m.end():m.end() + 120].split(".", 1)[0]
+        out.append(Term(metric, "FINANCIAL", op, _number(m.group(1)), unit, _frequency(m.group(0) + rest), page,
+                        quote, None, 0.75))
         found.add(metric)
     return out
 
@@ -1164,6 +1183,40 @@ def _schedules(pages: list[Page], doc: _Doc, financial: list[Term]) -> None:
             t.frequency = frequency_for(months)
         if right is not None:
             t.cure = right.as_dict()
+    _section_frequency(financial)
+
+
+def _article(t: Term) -> tuple[int | None, str | None]:
+    """(page, article number) of a covenant: "7" for clauses 7.1, 7.2 ... read from the start of its quote."""
+    quote = t.quote or ""
+    found = [m.group(1) for m in _CLAUSE_NO.finditer(quote)]
+    # the covenant's own clause is the last one its quote opens (the quote also takes in the clause before it);
+    # else the article heading it sits under ("ARTICLE 7 FINANCIAL COVENANTS 7.1 ...")
+    if found:
+        return t.page, found[-1]
+    heading = _ARTICLE_NO.findall(quote)
+    return t.page, heading[-1] if heading else None
+
+
+def _section_frequency(financial: list[Term]) -> None:
+    """A test frequency stated once in the financial covenants article ("7.1 ... tested quarterly") applies to the
+    other ratios of that article ("7.2 ... on each test date"), as the labelled agreements read it. Only when every
+    stated frequency in the article agrees; marked for the reviewer (FREQUENCY_FROM_SECTION). A different article or
+    a conflicting statement leaves the frequency empty (improvement plan V2, 24 Nov 2026)."""
+    stated: dict[tuple, set[str]] = {}
+    for t in financial:
+        # only a testing statement is passed on ("tested quarterly", "on each test date"), never the period one
+        # covenant is calculated over ("for any Financial Year")
+        if t.frequency and _article(t)[1] and _TESTING.search(t.quote or ""):
+            stated.setdefault(_article(t), set()).add(t.frequency)
+    for t in financial:
+        if t.frequency or t.threshold is None:
+            continue
+        found = stated.get(_article(t)) if _article(t)[1] else None
+        if found and len(found) == 1:
+            t.frequency = next(iter(found))
+            t.issues.append(f"FREQUENCY_FROM_SECTION: tested {t.frequency.lower()} as the other covenants of clause "
+                            f"{_article(t)[1]} say; check it")
 
 
 

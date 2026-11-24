@@ -9,7 +9,16 @@
       "required": ["cpId", "covenants"],
       "properties": {
         "cpId": { "type": "string" },
-        "certificateFileIds": { "type": "array", "items": { "type": "string" } },
+        "certificateFileIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "DMS version IDs matching document.versionId on the certificate extraction jobs. An explicit list selects only those versions. An empty or omitted list uses the newest certificate for the CP."
+        },
+        "includeCertificateDiagnostics": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include one status per distinct requested certificate version ID."
+        },
         "covenants": {
           "type": "array",
           "items": {
@@ -32,6 +41,22 @@
       "type": "object",
       "required": ["recommendations"],
       "properties": {
+        "certificateDiagnostics": {
+          "type": "array",
+          "description": "Returned only on request. Status describes version and reviewed-figure availability; an available version may still yield no recommendation for a particular covenant.",
+          "items": {
+            "type": "object",
+            "required": ["versionId", "status"],
+            "properties": {
+              "versionId": { "type": "string" },
+              "status": {
+                "type": "string",
+                "enum": ["UNAVAILABLE", "AWAITING_REVIEW", "NO_REVIEWED_FIGURES", "REVIEWED_FIGURES_AVAILABLE"],
+                "description": "UNAVAILABLE also covers IDs outside the requested CP or tenant. AWAITING_REVIEW indicates a known certificate job awaiting review. NO_REVIEWED_FIGURES indicates a completed certificate without usable reviewed figures."
+              }
+            }
+          }
+        },
         "recommendations": {
           "type": "array",
           "items": {

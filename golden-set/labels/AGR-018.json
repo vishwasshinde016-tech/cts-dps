@@ -24,7 +24,7 @@
    "operator": ">=",
    "threshold": 1.33,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "6.2 The Current Ratio of the Borrower shall be at least 1.33 times."
   },
@@ -34,7 +34,7 @@
    "operator": "<=",
    "threshold": 2.75,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "6.3 Total Debt to EBITDA shall not be more than 2.75 times."
   },
