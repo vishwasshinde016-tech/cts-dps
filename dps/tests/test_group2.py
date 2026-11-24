@@ -10,19 +10,36 @@ import httpx
 from conftest import h
 from sqlalchemy import select
 from test_jobapi import check
+from test_phase4_skills import fake_job
 
 from dps import feed, jobs
 from dps.integrations.spring import SpringClient
 from dps.models import AiCall, AuditEvent, Job, TraceEvent, utcnow
 from dps.ops.production import prune_diagnostics, scaling
 from dps.settings import Settings
-from dps.skills import load
+from dps.skills import load, runner
 from dps.skills.runner import token_budget
 from dps.worker import heartbeat_healthy
 
 
 def test_amendments_have_the_agreed_default_token_budget():
     assert token_budget(load("amendment_diff"), {"pages": [{}] * 250}) == 300_000
+
+
+def test_long_amendment_reaches_pages_past_the_previous_limit(monkeypatch):
+    page_text = "This amendment updates the administrative terms. " + "background " * 340
+    pages = [{"no": no, "text": page_text} for no in range(1, 26)]
+    read = []
+
+    def proposals(pack, gateway, batches, **kwargs):
+        if pack.name == "amendment_diff":
+            read.extend([[page["no"] for page in batch] for batch in batches])
+        return []
+
+    monkeypatch.setattr(runner, "batched_proposals", proposals)
+    runner.run_job(fake_job("EXTRACT_AMENDMENT"), {"pages": pages})
+    assert len(read) > 1
+    assert [page for batch in read for page in batch] == list(range(1, 26))
 
 
 def test_production_starts_in_shadow_unless_another_mode_is_set():

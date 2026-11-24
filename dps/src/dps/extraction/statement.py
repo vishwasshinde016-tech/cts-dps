@@ -683,8 +683,8 @@ def extract_values(rows: list[tuple[str, float, int | None, str | None]], header
     check(result)
     if found and not unit_stated(header_text):
         # Assuming crore when nothing says so must not pass silently: a person confirms the scale.
-        result.issues.append(f"UNIT_NOT_STATED: amounts read as {'INR crore' if currency == 'INR' else currency
-                                                                    + ' million'}")
+        default_unit = "INR crore" if currency == "INR" else f"{currency} million"
+        result.issues.append(f"UNIT_NOT_STATED: amounts read as {default_unit}")
     return result
 
 

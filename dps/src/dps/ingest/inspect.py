@@ -122,6 +122,10 @@ def _decode(data: bytes) -> tuple[str, str] | None:
 def _inspect_pdf(data: bytes, fmt: str, max_pages: int | None = None) -> Inspection:
     import pikepdf
 
+    # Recovery can reconstruct a broken cross-reference table, but a partial download has no PDF trailer end.
+    if b"%%EOF" not in data:
+        raise InspectionFailed("CORRUPT", "The PDF is missing its end-of-file marker.")
+
     max_pages = max_pages or MAX_PDF_PAGES
     flags: list[str] = []
     try:

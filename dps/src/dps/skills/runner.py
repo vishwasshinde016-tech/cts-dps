@@ -727,7 +727,8 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
         batches, page_note = covenant_batches(pages, fields, pack.page_selection.get("max_pages", 25),
                                               MAX_PROMPT_CHARS, pack.page_selection.get("max_batches", 1))
     else:
-        batches = [select_pages(pages, fields, KEYWORDS.get(pack.name), pack.page_selection.get("max_pages", 25))]
+        selected = select_pages(pages, fields, KEYWORDS.get(pack.name), pack.page_selection.get("max_pages", 25))
+        batches = page_batches(selected) if pack.name == "amendment_diff" else [selected]
     lookup_ctx = {"cpIds": ctx.get("cpIds") or [], "obligorId": ctx.get("obligorId"),
                   "facilityIds": ctx.get("facilityIds") or []}
     notes: list[dict] = []
