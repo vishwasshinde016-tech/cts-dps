@@ -790,6 +790,78 @@ def scaling_signals(db: DB, user: User) -> dict:
     return {"generatedAt": utcnow().isoformat(), "pools": ops.scaling(db)}
 
 
+class RoutePauseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    paused: bool
+    reason: str = Field(min_length=1, max_length=500, pattern=r"\S")
+
+
+@router.put("/dps/v1/ops/ai-routes/{route}")
+def pause_ai_route(route: str, body: RoutePauseRequest, request: Request, db: DB, user: User) -> dict:
+    """A shared operator control checked before each model call, including retries."""
+    from dps.agent.gateway import Routes
+    from dps.models import AiRoutePause
+
+    require_roles(user, ADMIN)
+    settings = _settings(request)
+    if len(route) > 64 or route not in Routes.load(settings.ai_routes_file or None, settings.ai_model).routes:
+        raise not_found("AI route")
+    current = db.get(AiRoutePause, route)
+    if body.paused and current is None:
+        db.add(AiRoutePause(route=route))
+    elif not body.paused and current is not None:
+        db.delete(current)
+    services.audit(db, user.user, "AI_ROUTE_PAUSE" if body.paused else "AI_ROUTE_RESUME", "ai_route", route,
+                   reason=body.reason)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise ApiError(409, "INVALID_INPUT", "The AI route state changed. Reload it before retrying.") from exc
+    return {"route": route, "paused": body.paused}
+
+
+@router.get("/dps/v1/ops/ai-routes")
+def ai_routes(request: Request, db: DB, user: User) -> dict:
+    from dps.agent.gateway import Routes
+    from dps.models import AiRoutePause
+
+    require_roles(user, SUPPORT, ADMIN)
+    settings = _settings(request)
+    paused = set(db.scalars(select(AiRoutePause.route)))
+    return {"items": [{"route": r.name, "deployment": r.deployment, "paused": r.name in paused}
+                      for r in Routes.load(settings.ai_routes_file or None, settings.ai_model).routes.values()]}
+
+
+@router.get("/dps/v1/ops/affected-results")
+def affected_results(db: DB, user: User, route: str | None = None, model: str | None = None,
+                     pipelineVersion: str | None = None, after: str | None = None) -> dict:  # noqa: N803
+    """Find current runs with the deployment, route or pipeline specified by an operator."""
+    from dps.api.access import tenant
+    from dps.models import Run
+
+    require_roles(user, SUPPORT, ADMIN)
+    if not (route or model or pipelineVersion):
+        raise ApiError(400, "INVALID_INPUT", "Specify an AI route, model or pipeline version.")
+    query = (select(Run, Job.pipeline_version).join(Job, Job.id == Run.job_id)
+             .where(Run.superseded_by.is_(None), Job.tenant_id == (tenant() or "default")))
+    if after:
+        query = query.where(Run.id > after)
+    batch = db.execute(query.order_by(Run.id).limit(501)).all()
+    items = []
+    for run, version in batch[:500]:
+        result = json.loads(run.result_json)
+        pipeline = result.get("pipeline") or {}
+        models = pipeline.get("models") or {}
+        version = pipeline.get("version") or version
+        if ((route and route not in models) or (model and model not in models.values())
+                or (pipelineVersion and version != pipelineVersion)):
+            continue
+        items.append({"jobId": run.job_id, "runId": result.get("runId") or run.job_id,
+                      "pipelineVersion": version, "documentType": (result.get("classification") or {}).get("type")})
+    return {"items": items, "nextCursor": batch[499][0].id if len(batch) > 500 else None}
+
+
 @router.get("/dps/v1/ops/audit-seals")
 def audit_seals(db: DB, user: User) -> dict:
     """Phase 6: the daily seals and whether the hash chain still matches the rows."""

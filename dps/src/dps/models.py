@@ -291,6 +291,7 @@ class ReviewDecision(Base):
     """Phase 5: one reviewer decision on one field (CONFIRM, CORRECT, REJECT, ADD). Never edited."""
 
     __tablename__ = "dps_review_decision"
+    __table_args__ = {"implicit_returning": False}
 
     id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
     job_id: Mapped[str] = mapped_column(Varchar(36), index=True)
@@ -406,6 +407,7 @@ class StatementValue(Base):
 
 class AuditEvent(Base):
     __tablename__ = "dps_audit_event"
+    __table_args__ = {"implicit_returning": False}
 
     id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
     actor: Mapped[str] = mapped_column(Varchar(255))
@@ -480,6 +482,13 @@ class AiCall(Base):
     # OpenTelemetry ids of the model call (observability, 23 Nov 2026): the row opens its trace in Langfuse.
     trace_id: Mapped[str | None] = mapped_column(Varchar(32))
     span_id: Mapped[str | None] = mapped_column(Varchar(16))
+
+
+class AiRoutePause(Base):
+    __tablename__ = "dps_ai_route_pause"
+
+    route: Mapped[str] = mapped_column(Varchar(64), primary_key=True)
+    paused_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
 
 
 class ToolCall(Base):
