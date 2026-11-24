@@ -102,7 +102,8 @@ def _read_picture_text(data: bytes, pages: list[Page], geometry: dict, engine: P
             continue
         try:
             text, _ = ocr.ocr_page(data, page.no - 1)
-        except Exception:  # noqa: BLE001 - the native text stands; the flag tells the reviewer
+        except Exception as ex:  # noqa: BLE001 - native text still supplies the page
+            log.warning("OCR for pictures on page %d failed, keeping native text: %s", page.no, type(ex).__name__)
             out.append(page)
             continue
         have = " ".join(page.text.split()).lower()

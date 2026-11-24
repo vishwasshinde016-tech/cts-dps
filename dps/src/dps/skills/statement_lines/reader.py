@@ -295,6 +295,7 @@ class StatementReader:
         except ParseError as ex:
             self.state.error, rows = str(ex), []
         except Exception as ex:  # noqa: BLE001 - a corrupt workbook or CSV is a content failure, not a crash
+            log.warning("Statement content could not be read: %s", type(ex).__name__)
             self.state.error, rows = f"Unreadable statement: {type(ex).__name__}", []
         return rows
 

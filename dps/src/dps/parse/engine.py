@@ -224,7 +224,8 @@ def _is_blank(page, depth: int = 0) -> bool:
                     return False
             elif obj.get("/Subtype") == "/Form" and (depth >= 3 or not _is_blank(obj, depth + 1)):
                 return False
-    except Exception:
+    except Exception as ex:  # PDF objects can fail lazily, so leave an uncertain page eligible for OCR
+        log.debug("Blank-page inspection failed, leaving OCR enabled: %s", type(ex).__name__)
         return False
     return True
 

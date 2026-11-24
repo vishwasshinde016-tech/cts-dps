@@ -706,6 +706,17 @@ def _taxonomy_version() -> str:
     return get().version
 
 
+def _extraction_batches(pack: Pack, pages: list[dict], fields: list[dict], max_pages: int):
+    if pack.page_selection.get("rules") == "covenant_section":  # rules, sections, duty sentences, definitions
+        from dps.skills.covenants.pages import covenant_batches
+
+        return covenant_batches(pages, fields, max_pages, MAX_PROMPT_CHARS, pack.page_selection.get("max_batches", 1))
+    if pack.name == "amendment_diff" and len(pages) <= max_pages:
+        return page_batches(pages), None
+    selected = select_pages(pages, fields, KEYWORDS.get(pack.name), max_pages)
+    return (page_batches(selected) if pack.name == "amendment_diff" else [selected]), None
+
+
 def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db):
     pages = model.get("pages", [])
     base_run_id = None
@@ -716,18 +727,8 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db):
             ctx["base"], base_run_id = base_fields(db, job, ctx.get("amendsVersionId"))
             ctx["baseSource"] = "DPS_EXTRACTION"
     fields = pack.rules(pages, ctx)
-    page_note = None
     max_pages = pack.page_selection.get("max_pages", 25)
-    if pack.page_selection.get("rules") == "covenant_section":  # rules, sections, duty sentences, definitions
-        from dps.skills.covenants.pages import covenant_batches
-
-        batches, page_note = covenant_batches(pages, fields, max_pages,
-                                              MAX_PROMPT_CHARS, pack.page_selection.get("max_batches", 1))
-    elif pack.name == "amendment_diff" and len(pages) <= max_pages:
-        batches = page_batches(pages)
-    else:
-        selected = select_pages(pages, fields, KEYWORDS.get(pack.name), max_pages)
-        batches = page_batches(selected) if pack.name == "amendment_diff" else [selected]
+    batches, page_note = _extraction_batches(pack, pages, fields, max_pages)
     lookup_ctx = {"cpIds": ctx.get("cpIds") or [], "obligorId": ctx.get("obligorId"),
                   "facilityIds": ctx.get("facilityIds") or []}
     notes: list[dict] = []
