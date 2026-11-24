@@ -169,6 +169,23 @@ def _block_for(page: dict, quote: str) -> tuple[str | None, list | None]:
     return None, None
 
 
+def _document_context_matches(text: str):
+    for match in PERIOD_END.finditer(text):
+        period_end = _date(match.group(2), match.group(3), match.group(4))
+        if period_end:
+            yield "PERIOD_END", period_end.isoformat(), match, {"periodWord": match.group(1).lower()}
+    for match in UNIT.finditer(text):
+        unit = next((value for name, value in UNIT_NAMES.items() if match.group(1).lower().startswith(
+            name.rstrip("s"))), None)
+        if unit:
+            yield "UNIT", unit, match, {}
+    for pattern in BORROWER:
+        for match in pattern.finditer(text):
+            name = re.sub(r"\s+", " ", match.group(1)).strip(" ,.")
+            if len(normalise_name(name)) >= 3:
+                yield "BORROWER_NAME", name, match, {}
+
+
 def find_identifiers(model: dict, loan_account_pattern: str | None = None,
                      facility_pattern: str | None = None) -> list[Found]:
     found: list[Found] = []
@@ -204,19 +221,8 @@ def find_identifiers(model: dict, loan_account_pattern: str | None = None,
         if facility:
             for m in facility.finditer(text):
                 add("FACILITY_ID", m.group(1) if m.groups() else m.group(0), page, m)
-        for m in PERIOD_END.finditer(text):
-            d = _date(m.group(2), m.group(3), m.group(4))
-            if d:
-                add("PERIOD_END", d.isoformat(), page, m, periodWord=m.group(1).lower())
-        for m in UNIT.finditer(text):
-            unit = next((v for k, v in UNIT_NAMES.items() if m.group(1).lower().startswith(k.rstrip("s"))), None)
-            if unit:
-                add("UNIT", unit, page, m)
-        for pattern in BORROWER:
-            for m in pattern.finditer(text):
-                name = re.sub(r"\s+", " ", m.group(1)).strip(" ,.")
-                if len(normalise_name(name)) >= 3:
-                    add("BORROWER_NAME", name, page, m)
+        for kind, value, match, extra in _document_context_matches(text):
+            add(kind, value, page, match, **extra)
     if not any(f.kind == "PERIOD_END" for f in found):
         for page in pages[:3]:
             m = AS_AT.search(page.get("text") or "")

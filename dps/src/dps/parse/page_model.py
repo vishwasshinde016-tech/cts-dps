@@ -102,7 +102,8 @@ def _read_picture_text(data: bytes, pages: list[Page], geometry: dict, engine: P
             continue
         try:
             text, _ = ocr.ocr_page(data, page.no - 1)
-        except Exception:  # noqa: BLE001 - the native text stands; the flag tells the reviewer
+        except Exception as ex:  # noqa: BLE001 - native text still supplies the page
+            log.warning("OCR for pictures on page %d failed, keeping native text: %s", page.no, type(ex).__name__)
             out.append(page)
             continue
         have = " ".join(page.text.split()).lower()
@@ -364,6 +365,13 @@ def build_docx(data: bytes, sha256: str, version_id: str | None, flags: list[str
     if document.inline_shapes and len(document.inline_shapes):
         found.add("IMAGES")
 
+    model["pages"] = _docx_pages(blocks)
+    model["pageCount"] = len(model["pages"])
+    model["flags"] = sorted(set(model["flags"]) | found)
+    return model
+
+
+def _docx_pages(blocks: list[dict]) -> list[dict]:
     pages: list[list[dict]] = [[]]
     size = 0
     for b in blocks:
@@ -372,6 +380,7 @@ def build_docx(data: bytes, sha256: str, version_id: str | None, flags: list[str
             size = 0
         pages[-1].append(b)
         size += len(b["text"]) + 1
+    output: list[dict] = []
     for no, page in enumerate((p for p in pages if p), start=1):
         out_blocks, tables = [], []
         for k, b in enumerate(page, start=1):
@@ -382,13 +391,11 @@ def build_docx(data: bytes, sha256: str, version_id: str | None, flags: list[str
             if b["kind"] == "TABLE":
                 tables.append({"id": f"p{no}t{len(tables) + 1}", "rows": b["shape"][0], "cols": b["shape"][1],
                                "cells": b["cells"], "ref": b["ref"]})
-        model["pages"].append({"no": no, "method": "NATIVE", "quality": 1.0,
-                               "text": "\n".join(b["text"] for b in page), "blocks": out_blocks, "tables": tables})
-    if not model["pages"]:
-        model["pages"].append({"no": 1, "method": "NATIVE", "quality": 1.0, "text": "", "blocks": [], "tables": []})
-    model["pageCount"] = len(model["pages"])
-    model["flags"] = sorted(set(model["flags"]) | found)
-    return model
+        output.append({"no": no, "method": "NATIVE", "quality": 1.0,
+                       "text": "\n".join(b["text"] for b in page), "blocks": out_blocks, "tables": tables})
+    if not output:
+        output.append({"no": 1, "method": "NATIVE", "quality": 1.0, "text": "", "blocks": [], "tables": []})
+    return output
 
 
 def _deleted_text(p_element) -> str:

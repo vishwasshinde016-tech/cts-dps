@@ -379,7 +379,9 @@ def test_an_agreement_job_result_gets_schedule_terms(client, app, settings, tmp_
 
 # ---------- evidence and ops endpoints ----------
 
-def test_page_image_runs_ask_and_data_values(client, app, settings, tmp_path):
+def test_page_image_runs_ask_and_data_values(client, app, settings, tmp_path, monkeypatch):
+    import pypdfium2
+
     settings.derived_dir = tmp_path / "derived"
     store = LocalStore(settings.storage_dir, tmp_path / "staging", settings.derived_dir)
     data = text_pdf([SANCTION])
@@ -394,7 +396,13 @@ def test_page_image_runs_ask_and_data_values(client, app, settings, tmp_path):
     Worker(settings, app.state.db.session_factory, object(), {}, ingestor, {}, None, pack_runner).run_once()
     r = client.get("/dps/v1/versions/sv-9/pages/1/image", headers=SERVICE)
     assert r.status_code == 200 and r.content.startswith(b"\x89PNG")
-    assert client.get("/dps/v1/versions/sv-9/pages/1/image", headers=SERVICE).content == r.content  # write-once
+    def unexpected_render(*args, **kwargs):
+        pytest.fail("A cached page image should be served without reopening the PDF.")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(pypdfium2, "PdfDocument", unexpected_render)
+        cached = client.get("/dps/v1/versions/sv-9/pages/1/image", headers=SERVICE)
+    assert cached.status_code == 200 and cached.content == r.content
     assert client.get("/dps/v1/versions/sv-9/pages/9/image", headers=SERVICE).status_code == 404
     assert client.get("/dps/v1/versions/nope/pages/1/image", headers=SERVICE).status_code == 404
     runs = client.get("/dps/v1/versions/sv-9/runs", headers=SERVICE).json()

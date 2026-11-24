@@ -41,7 +41,8 @@ def emit(db: Session, type_: str, *, tenant_id: str = "default", job_id: str | N
          document_version_id: str | None = None, correlation_id: str | None = None,
          payload: dict | None = None) -> EventFeed:
     """Adds an event to the session; the caller's commit publishes it together with the change."""
-    body = {**(payload or {}), "schemaVersion": PAYLOAD_VERSION}
+    version = "1.1" if type_ == "dps.analysis.completed" else PAYLOAD_VERSION
+    body = {**(payload or {}), "schemaVersion": version}
     event = EventFeed(type=type_, tenant_id=tenant_id, job_id=job_id, document_version_id=document_version_id,
                       correlation_id=correlation_id, payload_json=json.dumps(body, default=str),
                       occurred_at=_db_now(db))

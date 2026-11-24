@@ -260,10 +260,20 @@ class StatementReader:
                         self.state.parse_issues = [
                             f"LOW_OCR_QUALITY: scanned pages read at {table.ocr_quality:.0%} confidence"]
                 else:
+                    from dps.extraction.statement import rows_from_layout_table
+
                     pages = self._deps.parser.parse(data)
                     if not self._deps.heavy_pool and needs_heavy(pages):
                         self.state.route = "heavy"
-                    rows = rows_from_text([(p.no, p.text) for p in pages])
+                    rows = []
+                    for p in pages:
+                        table_rows = rows_from_layout_table(p.no, p.text, entity) if p.method == "DOCLING" else []
+                        text = "\n".join(line for line in p.text.splitlines() if not line.lstrip().startswith("|")) \
+                            if p.method == "DOCLING" else p.text
+                        table_keys = {match_key(row[0]) for row in table_rows}
+                        rows.extend(table_rows)
+                        rows.extend(row for row in rows_from_text([(p.no, text)])
+                                    if match_key(row[0]) not in table_keys)
                     self.state.header_text = " ".join(p.text[:600] for p in pages[:2])
                     self._raw_text = "\n".join(p.text for p in pages)
                     if not self.state.page_text:  # the AI reader cites pages of text PDFs too
@@ -285,6 +295,7 @@ class StatementReader:
         except ParseError as ex:
             self.state.error, rows = str(ex), []
         except Exception as ex:  # noqa: BLE001 - a corrupt workbook or CSV is a content failure, not a crash
+            log.warning("Statement content could not be read: %s", type(ex).__name__)
             self.state.error, rows = f"Unreadable statement: {type(ex).__name__}", []
         return rows
 

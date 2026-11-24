@@ -10,6 +10,7 @@ import csv
 import hashlib
 import io
 import json
+import logging
 from datetime import UTC, date
 from pathlib import Path
 from typing import Annotated, Literal
@@ -30,6 +31,7 @@ from dps.models import Batch, Document, DocumentCpLink, Job, TenantLimit, utcnow
 from dps.settings import Settings, llm_allowed
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 CONTRACT_VERSION = "1.0.0-draft"
 SCHEMA_NAMES = ("job-request", "job-status", "result", "page-model", "event", "review", "review-decisions",
@@ -408,7 +410,8 @@ def health(request: Request) -> dict:
     try:
         with request.app.state.db.engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-    except Exception:  # noqa: BLE001 - reported, not raised
+    except Exception as ex:  # noqa: BLE001 - a failed dependency check returns degraded health
+        log.debug("Health database probe failed: %s", type(ex).__name__)
         db_status = "DOWN"
     return {"status": "UP" if db_status == "UP" else "DEGRADED", "database": db_status, "version": __version__}
 
@@ -700,7 +703,8 @@ def ready(request: Request) -> JSONResponse:
         with request.app.state.db.engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         checks["database"] = "UP"
-    except Exception:  # noqa: BLE001 - reported, not raised
+    except Exception as ex:  # noqa: BLE001 - readiness reports unavailable dependencies
+        log.debug("Readiness database probe failed: %s", type(ex).__name__)
         checks["database"] = "DOWN"
     checks["storage"] = "UP" if request.app.state.store.root.is_dir() else "DOWN"
     up = all(v == "UP" for v in checks.values())
@@ -716,7 +720,8 @@ def ready(request: Request) -> JSONResponse:
             if lock is not None:
                 until = lock.until if lock.until.tzinfo else lock.until.replace(tzinfo=UTC)
                 workers = "UP" if until >= utcnow() else "DOWN"
-        except Exception:  # noqa: BLE001 - informational only
+        except Exception as ex:  # noqa: BLE001 - worker status is informational
+            log.debug("Readiness worker probe failed: %s", type(ex).__name__)
             workers = "UNKNOWN"
     settings = _settings(request)
     spring = "NOT_CONFIGURED"
@@ -771,7 +776,8 @@ def _model_state(request: Request, settings: Settings) -> str:
         with request.app.state.db.session_factory() as db:
             recent = list(db.scalars(select(AiCall.status).where(
                 AiCall.at >= utcnow() - timedelta(seconds=MODEL_WINDOW_SECONDS)).order_by(AiCall.at.desc()).limit(20)))
-    except Exception:  # noqa: BLE001 - informational only
+    except Exception as ex:  # noqa: BLE001 - recent AI status is informational
+        log.debug("Readiness AI probe failed: %s", type(ex).__name__)
         return "UNKNOWN"
     if not recent:
         return "IDLE"

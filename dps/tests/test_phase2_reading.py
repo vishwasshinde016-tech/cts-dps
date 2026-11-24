@@ -3,7 +3,10 @@ read by OCR too in the standard pool; a document with many such pages goes to th
 
 from __future__ import annotations
 
+import io
+
 import pytest
+from pypdf import PdfReader, PdfWriter
 
 import dps.parse.engine as engine
 from dps.parse.engine import HeavyEngine, Page, ParserEngine
@@ -52,6 +55,43 @@ def test_a_worse_ocr_reading_does_not_replace_the_page():
     fast = [Page(1, POOR, "TEXT", 0.4)]
     pages = _Preset(fast, _Ocr(text="ab", confidence=0.95)).ocr_poor_pages(b"%PDF", fast, [1])
     assert pages[0].method == "TEXT" and pages[0].text == POOR
+
+
+def test_long_heavy_document_slices_poor_pages_and_recovers_partial_docling_output():
+    writer = PdfWriter()
+    for _ in range(503):
+        writer.add_blank_page(width=72, height=72)
+    payload = io.BytesIO()
+    writer.write(payload)
+    fast = [Page(i, GOOD, "TEXT", 0.95) if i < 490 else Page(i, "", "NONE", 0.0) for i in range(1, 504)]
+    requests = []
+    ocr = _Ocr()
+
+    def convert(data, first, last):
+        requests.append((first, last))
+        sliced = engine.pdf_slice(data, first, last)
+        assert len(PdfReader(io.BytesIO(sliced)).pages) == last - first + 1
+        return {i: GOOD for i in range(first, last + 1) if i != 503}
+
+    pages = HeavyEngine(_Preset(fast, ocr), convert, chunk=10).parse(payload.getvalue())
+    assert requests == [(490, 499), (500, 503)] and ocr.pages == [503]
+    assert [p.no for p in pages] == list(range(1, 504))
+    assert [p.method for p in pages[488:491]] == ["TEXT", "DOCLING", "DOCLING"]
+    assert pages[-1].method == "OCR"
+
+
+def test_docling_tables_preserve_statement_columns_and_covenant_levels():
+    from dps.extraction.statement import rows_from_layout_table
+    from dps.skills.covenants.rules import step_tables
+
+    statement = "| Particulars | Note | 2024 | 2025 |\n| --- | --- | --- | --- |\n| Revenue | 4 | 3,500 | 5,000 |"
+    assert rows_from_layout_table(7, statement, "STANDALONE") == [("Revenue", 5000.0, 7, "P7:L3:C4")]
+    covenant = ("The Borrower shall not exceed the Debt to EBITDA ratio set out below:\n\n"
+                "| Test date | Maximum leverage |\n| --- | --- |\n"
+                "| 31 March 2027 | 4.00x |\n| 31 March 2028 | 3.50x |")
+    [field] = step_tables([{"no": 8, "text": covenant}], [])
+    assert field["source"]["page"] == 8 and field["status"] == "NEEDS_REVIEW"
+    assert [row["threshold"] for row in field["value"]["schedule"]] == [4.0, 3.5]
 
 
 class _Reader:

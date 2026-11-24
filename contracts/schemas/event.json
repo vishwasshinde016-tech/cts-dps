@@ -95,9 +95,21 @@
       }
     },
     "dps.analysis.completed": {
-      "$ref": "#/$defs/versionedPayload",
+      "allOf": [{
+        "if": {"properties": {"schemaVersion": {"const": "1.1"}}},
+        "then": {"properties": {"identifiers": {"items": {
+          "type": "object",
+          "required": ["kind", "match", "page"],
+          "properties": {"kind": {"type": "string"}, "match": {"type": "string"},
+                         "page": {"type": ["integer", "null"]}},
+          "additionalProperties": false
+        }}}},
+        "else": {"$ref": "#/$defs/versionedPayload"}
+      }],
       "required": ["resultUrl"],
       "properties": {
+        "runId": {"type": "string"},
+        "pipelineVersion": {"type": "string"},
         "type": {"type": "string"},
         "confidence": {"type": "number"},
         "mismatch": {"type": "boolean"},

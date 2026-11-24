@@ -93,7 +93,7 @@ def event_payload(result: dict) -> dict:
     c = result["classification"]
     return {"type": c["type"], "confidence": c["confidence"], "mismatch": c["mismatch"],
             "uncertain": c["confidence"] < 0.6, "expected": c.get("expected"),
-            "identifiers": [{"kind": i["kind"], "value": i["value"], "match": i["match"]["status"],
+            "identifiers": [{"kind": i["kind"], "match": i["match"]["status"],
                              "page": i["source"]["page"]} for i in result["identifiers"]],
             "legibility": result.get("legibility"),
             "missingRequired": next((w["message"] for w in result.get("warnings", [])
@@ -124,6 +124,9 @@ def save_run(db: Session, job: Job, result: dict, trigger: str = "SUBMIT") -> Ru
 
 def finish(db: Session, job: Job, result: dict) -> None:
     """Saves the run, emits dps.analysis.completed and ends the job (NEEDS_REVIEW when flagged)."""
+    jobs.guard_attempt(db)
+    if jobs.cancelled(db, job.id):
+        raise jobs.JobCancelled()
     save_run(db, job, result)
     feed.emit_for_job(db, "dps.analysis.completed", job, {**event_payload(result), **feed.result_metadata(result)})
     status = jobs.NEEDS_REVIEW if result["status"] == "NEEDS_REVIEW" else jobs.DONE

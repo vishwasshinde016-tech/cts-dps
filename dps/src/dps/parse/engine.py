@@ -224,7 +224,8 @@ def _is_blank(page, depth: int = 0) -> bool:
                     return False
             elif obj.get("/Subtype") == "/Form" and (depth >= 3 or not _is_blank(obj, depth + 1)):
                 return False
-    except Exception:
+    except Exception as ex:  # PDF objects can fail lazily, so leave an uncertain page eligible for OCR
+        log.debug("Blank-page inspection failed, leaving OCR enabled: %s", type(ex).__name__)
         return False
     return True
 
@@ -270,11 +271,13 @@ class HeavyEngine:
                 texts = self._convert(pdf_bytes, first, last)
             except Exception as ex:
                 log.warning("Docling failed on pages %d-%d: %s", first, last, type(ex).__name__)
-                failed += [no for no in poor if first <= no <= last]
-                continue
-            for no, text in texts.items():
-                if first <= no <= last:
+                texts = {}
+            for no in range(first, last + 1):
+                text = texts.get(no, "")
+                if text.strip():
                     pages[no - 1] = Page(no, text, "DOCLING", max(text_quality(text), HEAVY_THRESHOLD))
+                else:
+                    failed.append(no)
         # Where Docling failed (not installed, models missing, a crash), OCR reads the page rather than leaving it
         # unread (bulk run, 22 Nov 2026: 44 runs failed and their pages stayed unread)
         fallback = getattr(self._fast, "ocr_poor_pages", None)

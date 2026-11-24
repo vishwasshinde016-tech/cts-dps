@@ -527,6 +527,28 @@ def _spread_markers(lines: list[list[Word]], segs: list[list[_Segment]], reach: 
                 headers[col] = (headers.get(col, "") + " " + words).strip()
 
 
+def _read_column_headings(
+    line: list[Word], cols: list[tuple[float, float]], reach: dict[int, tuple[float, float]], headers: dict[int, str]
+) -> None:
+    for phrase in _heading_parts(line):  # a heading goes to the column it overlaps most
+        if any("%" in w.text for w in phrase):
+            continue  # "% Change" heads percentages, which are never read as amounts
+        x0, x1 = phrase[0].x0, phrase[-1].x1
+        overlap = {i: min(x1, b) - max(x0, a) for i, (a, b) in reach.items()}
+        best_col = max(overlap, key=overlap.get, default=None)
+        if len(phrase) == 1 and _YEAR.search(phrase[0].text) and reach:
+            # A year sits right-aligned or centred over its own column: nearest edge or centre.
+            mid = (x0 + x1) / 2
+            best_col = min(reach, key=lambda i: min(abs(x1 - cols[i][1]), abs(mid - sum(cols[i]) / 2)))
+            overlap[best_col] = max(overlap.get(best_col, 0), 1)
+        over = [i for i, (a, b) in enumerate(cols) if min(x1, b) > max(x0, a - 2 * CHAR_W)]
+        if len(phrase) > 1 and len(over) > 1:
+            continue  # a title across several columns ("Years ended December 31, 2025, 2024")
+        if best_col is not None and overlap[best_col] > 0:
+            words_text = " ".join(w.text for w in phrase)
+            headers[best_col] = (headers.get(best_col, "") + " " + words_text).strip()
+
+
 def rows_from_words(pages: list[list[Word]], numbers: list[int] | None = None,
                     entity: str = "STANDALONE", periods: Periods | None = None) -> list[Row]:
     """Rows from each page's words; ``numbers`` are the pages' 1-based numbers in the file (default 1, 2, ...).
@@ -559,24 +581,7 @@ def rows_from_words(pages: list[list[Word]], numbers: list[int] | None = None,
                 text = " ".join(w.text for w in line).strip()
                 # a row of dates is a heading; a sentence quoting amounts is not
                 if (_date_line(line) or not any(_is_amount(w.text) for w in line)) and (index < last or last < 0):
-                    for phrase in _heading_parts(line):  # a heading goes to the column it overlaps most
-                        if any("%" in w.text for w in phrase):
-                            continue  # "% Change" heads percentages, which are never read as amounts
-                        x0, x1 = phrase[0].x0, phrase[-1].x1
-                        overlap = {i: min(x1, b) - max(x0, a) for i, (a, b) in reach.items()}
-                        best_col = max(overlap, key=overlap.get, default=None)
-                        if len(phrase) == 1 and _YEAR.search(phrase[0].text) and reach:
-                            # A year sits right-aligned or centred over its own column: nearest edge or centre.
-                            mid = (x0 + x1) / 2
-                            best_col = min(reach, key=lambda i: min(abs(x1 - cols[i][1]),
-                                                                               abs(mid - sum(cols[i]) / 2)))
-                            overlap[best_col] = max(overlap.get(best_col, 0), 1)
-                        over = [i for i, (a, b) in enumerate(cols) if min(x1, b) > max(x0, a - 2 * CHAR_W)]
-                        if len(phrase) > 1 and len(over) > 1:
-                            continue  # a title across several columns ("Years ended December 31, 2025, 2024")
-                        if best_col is not None and overlap[best_col] > 0:
-                            words_text = " ".join(w.text for w in phrase)
-                            headers[best_col] = (headers.get(best_col, "") + " " + words_text).strip()
+                    _read_column_headings(line, cols, reach, headers)
                 if parsed and parsed[-1]["open"] and text[:1].islower():
                     parsed[-1]["label"] += " " + text  # a label wrapped onto the next line
                     parsed[-1]["open"] = False
