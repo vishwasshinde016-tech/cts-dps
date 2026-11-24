@@ -176,7 +176,7 @@ def train(rows: Iterable[tuple[dict, bool]], epochs: int = 400, lr: float = 0.5,
     return LogisticScorer(dict(zip(names, w, strict=True)), b)
 
 
-def isotonic(points: list[tuple[float, bool]]) -> list[tuple[float, float]]:
+def isotonic(points: list[tuple[float, bool]], *, precise: bool = False) -> list[tuple[float, float]]:
     """Pool-adjacent-violators: a non-decreasing map from raw score to observed accuracy."""
     pts = sorted((p, 1.0 if ok else 0.0) for p, ok in points)
     blocks: list[list[float]] = []  # [sum_y, count, max_x]
@@ -187,7 +187,7 @@ def isotonic(points: list[tuple[float, bool]]) -> list[tuple[float, float]]:
             blocks[-1][0] += y2
             blocks[-1][1] += c2
             blocks[-1][2] = x2
-    return [(round(b[2], 6), round(b[0] / b[1], 6)) for b in blocks]
+    return [(b[2] if precise else round(b[2], 6), round(b[0] / b[1], 6)) for b in blocks]
 
 
 def calibrate(p: float, table: list[tuple[float, float]]) -> float:
@@ -231,7 +231,7 @@ def route(f: dict, risk: str, thresholds: dict | None = None, sample_rate: float
     if f.get("status") in ("REJECTED", "CONFIRMED", "CORRECTED"):
         return
     limits = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
-    need = limits.get(risk)
+    need = None if risk == "HIGH" else limits.get(risk)
     conf = f.get("confidence") or 0.0
     reasons = (f.get("signals") or {}).get("reasons", [])
     if f.get("status") == "NEEDS_REVIEW" or need is None or conf < need:

@@ -29,6 +29,7 @@ frequencies fails CI.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from dataclasses import dataclass, field
@@ -66,11 +67,12 @@ class Score:
     material_correct: dict[str, int] = field(default_factory=dict)
     review_items: int = 0
     abstentions: int = 0
+    unsafe_auto_accepts: int = 0
 
     def add(self, other: Score) -> None:
         for name in ("labelled", "predicted", "matched", "financial_matched", "threshold_correct",
                      "with_page", "page_correct", "with_frequency", "frequency_correct", "with_unit", "unit_correct",
-                     "with_date", "date_correct", "review_items", "abstentions"):
+                     "with_date", "date_correct", "review_items", "abstentions", "unsafe_auto_accepts"):
             setattr(self, name, getattr(self, name) + getattr(other, name))
         for key in MATERIAL_FIELDS:
             self.material_checked[key] = self.material_checked.get(key, 0) + other.material_checked.get(key, 0)
@@ -91,6 +93,7 @@ class Score:
             "date_accuracy": self._ratio(self.date_correct, self.with_date),
             "review_items": self.review_items,
             "abstentions": self.abstentions,
+            "unsafe_auto_accepts": self.unsafe_auto_accepts,
             "material_accuracy": {key: self._ratio(self.material_correct.get(key, 0),
                                                    self.material_checked.get(key, 0)) for key in MATERIAL_FIELDS},
         }
@@ -145,32 +148,43 @@ def score_document(label: dict, prediction: dict) -> Score:
     pairs, missed, extra = _pairs(gold, pred)
     s.misses = [_key(g)[0] for g in missed]
     s.extras = [_key(p)[0] for p in extra]
+    s.unsafe_auto_accepts = sum(p.get("status") == "AUTO_ACCEPTED" for p in extra)
     for g, p in pairs:
         k = _key(g)
         s.matched += 1
+        safe = True
         if k[1] == "FINANCIAL":
             s.financial_matched += 1
             if _same_threshold(g, p):
                 s.threshold_correct += 1
             else:
+                safe = False
                 s.wrong_thresholds.append(f"{k[0]}: gold {g.get('operator')} {g.get('threshold')} "
                                           f"vs {p.get('operator')} {p.get('threshold')}")
         if g.get("page") is not None:
             s.with_page += 1
             if g.get("page") == p.get("page"):
                 s.page_correct += 1
+            else:
+                safe = False
         if g.get("frequency"):
             s.with_frequency += 1
             if str(g["frequency"]).upper() == str(p.get("frequency") or "").upper():
                 s.frequency_correct += 1
+            else:
+                safe = False
         if g.get("unit"):
             s.with_unit += 1
             if _norm_unit(g["unit"]) == _norm_unit(p.get("unit")):
                 s.unit_correct += 1
+            else:
+                safe = False
         if g.get("firstTestDate"):
             s.with_date += 1
             if g["firstTestDate"] == p.get("firstTestDate"):
                 s.date_correct += 1
+            else:
+                safe = False
         for key in MATERIAL_FIELDS:
             expected = g.get(key)
             if expected is None:
@@ -184,6 +198,10 @@ def score_document(label: dict, prediction: dict) -> Score:
             s.material_checked[key] = s.material_checked.get(key, 0) + 1
             if correct:
                 s.material_correct[key] = s.material_correct.get(key, 0) + 1
+            elif key != "quote" or not p.get("quote"):
+                safe = False
+        if not safe and p.get("status") == "AUTO_ACCEPTED":
+            s.unsafe_auto_accepts += 1
     return s
 
 
@@ -242,9 +260,28 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--include-drafts", action="store_true")
     ap.add_argument("--statuses", default="VERIFIED", help="comma-separated label statuses to count")
     ap.add_argument("--document", action="append", help="evaluate only this document ID (repeatable)")
+    ap.add_argument("--release-evidence", type=Path, help="write evaluation evidence for the signed release gate")
     args = ap.parse_args(argv)
     report = evaluate(args.labels, args.predictions, args.include_drafts,
                       tuple(s.strip() for s in args.statuses.split(",") if s.strip()), args.document)
+    if args.release_evidence:
+        if args.statuses != "VERIFIED" or args.include_drafts or args.document:
+            ap.error("Release evidence needs the complete VERIFIED set.")
+        benchmark = json.loads((args.predictions / "_benchmark.json").read_text(encoding="utf-8"))
+        if benchmark.get("mode") != "pipeline" or not benchmark.get("pipelineVersion") or not benchmark.get("predictedAt"):
+            ap.error("Release evidence needs predictions from the DPS pipeline.")
+        labels = {path.name: path.read_bytes() for path in sorted(args.labels.glob("*.json"))
+                  if (label := json.loads(path.read_bytes())).get("status") == "VERIFIED"
+                  and str(label.get("reviewedBy") or "").strip()}
+        if not labels or len(labels) != report["documents"] or not all((args.predictions / name).is_file()
+                                                                     for name in labels):
+            ap.error("Release evidence needs reviewer names and predictions for every verified label.")
+        dataset = hashlib.sha256(json.dumps({name: hashlib.sha256(data).hexdigest() for name, data in labels.items()},
+                                            sort_keys=True).encode()).hexdigest()
+        report["gate_passed"] = report["gate_passed"] and report["overall"]["unsafe_auto_accepts"] == 0
+        evidence = {**report, "verifiedOnly": True, "datasetSha256": dataset,
+                    "pipelineVersion": benchmark["pipelineVersion"], "evaluatedAt": benchmark["predictedAt"]}
+        args.release_evidence.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
     return 0 if report["gate_passed"] else 1
 

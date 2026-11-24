@@ -19,6 +19,7 @@ import json
 import os
 import platform
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -173,6 +174,7 @@ def _predict(args, parser) -> int:
     (args.out / "_benchmark.json").write_text(json.dumps({
         "mode": "pipeline" if args.pipeline else "extractor", "replies": bool(args.replies),
         "liveRecording": args.record, "parallel": args.parallel, "parser": args.parser,
+        "pipelineVersion": settings.pipeline_version, "predictedAt": datetime.now(UTC).isoformat(),
         "quality": quality, "modelUsage": costs,
         "documents": len(timings), "seconds": round(sum(timings.values()), 2),
         "slowest": sorted(timings.items(), key=lambda kv: -kv[1])[:5], "perDocument": timings,
