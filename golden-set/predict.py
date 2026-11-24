@@ -60,8 +60,11 @@ def predict_agreement_pipeline(document_id: str, data: bytes, gateway=None, pars
                     "threshold": v.get("threshold"), "unit": v.get("unit"),
                     "firstTestDate": (f.get("test") or {}).get("firstTestDate"),
                     "frequency": (f.get("test") or {}).get("frequency"), "page": (f.get("source") or {}).get("page"),
-                    "quote": (f.get("source") or {}).get("quote"), "method": f.get("method")})
-    return {"covenants": out, "warnings": [w["code"] for w in result.get("warnings", [])],
+                    "quote": (f.get("source") or {}).get("quote"), "method": f.get("method"),
+                    "status": f.get("status"), "scope": v.get("scope"), "conditions": v.get("conditions"),
+                    "change": v.get("change")})
+    return {"covenants": out, "reviewItems": sum(f.get("status") == "NEEDS_REVIEW" for f in result["fields"]),
+            "warnings": [w["code"] for w in result.get("warnings", [])],
             "pipeline": result.get("pipeline", {}).get("version")}
 
 

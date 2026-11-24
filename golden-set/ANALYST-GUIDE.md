@@ -16,6 +16,18 @@ app can go to full production, credit analysts must confirm the correct answer f
 Use real documents with personal data removed, or documents the bank can share for testing. Do not add documents
 that must not leave the bank's systems.
 
+## Group 3 first review batch
+
+Use the five selected PDFs from the local `dps-master-test-docs` corpus. The batch CSV in `_group3` lists each
+source file and what to check. In the answer-sheet CSV, add one row per expected finding and use the document ID
+from the batch. Record the exact source quote or table cell and the page number. Note anything unreadable or
+uncertain for follow-up. Keep PDFs and the worksheets in the approved local corpus.
+
+Confirm that the type matches the document and fill in its deal family. Treat amendments and waivers for the same
+facility as part of that deal family. An analyst records their name and signs off only after checking the whole
+document, including schedules and tables. This first batch supports a small comparison. The broader G6 release
+sample requirements above still apply.
+
 ## Checking an agreement (about 15 minutes each)
 
 1. Start the review page on your computer:

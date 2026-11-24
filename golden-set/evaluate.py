@@ -40,6 +40,8 @@ GATE_VALUE_ACCURACY = 0.95
 GATE_PRECISION = 0.90
 GATE_FREQUENCY_ACCURACY = 0.95
 GATE_DATE_ACCURACY = 0.95
+REVIEW_ONLY = {"ABSTAINED", "UNRESOLVED", "REJECTED"}
+MATERIAL_FIELDS = ("scope", "conditions", "change", "quote")
 
 
 @dataclass
@@ -60,12 +62,19 @@ class Score:
     misses: list[str] = field(default_factory=list)
     extras: list[str] = field(default_factory=list)
     wrong_thresholds: list[str] = field(default_factory=list)
+    material_checked: dict[str, int] = field(default_factory=dict)
+    material_correct: dict[str, int] = field(default_factory=dict)
+    review_items: int = 0
+    abstentions: int = 0
 
     def add(self, other: Score) -> None:
         for name in ("labelled", "predicted", "matched", "financial_matched", "threshold_correct",
                      "with_page", "page_correct", "with_frequency", "frequency_correct", "with_unit", "unit_correct",
-                     "with_date", "date_correct"):
+                     "with_date", "date_correct", "review_items", "abstentions"):
             setattr(self, name, getattr(self, name) + getattr(other, name))
+        for key in MATERIAL_FIELDS:
+            self.material_checked[key] = self.material_checked.get(key, 0) + other.material_checked.get(key, 0)
+            self.material_correct[key] = self.material_correct.get(key, 0) + other.material_correct.get(key, 0)
 
     @staticmethod
     def _ratio(a: int, b: int) -> float | None:
@@ -80,6 +89,10 @@ class Score:
             "frequency_accuracy": self._ratio(self.frequency_correct, self.with_frequency),
             "unit_accuracy": self._ratio(self.unit_correct, self.with_unit),
             "date_accuracy": self._ratio(self.date_correct, self.with_date),
+            "review_items": self.review_items,
+            "abstentions": self.abstentions,
+            "material_accuracy": {key: self._ratio(self.material_correct.get(key, 0),
+                                                   self.material_checked.get(key, 0)) for key in MATERIAL_FIELDS},
         }
 
 
@@ -123,7 +136,11 @@ def _pairs(gold: list[dict], pred: list[dict]) -> tuple[list[tuple[dict, dict]],
 def score_document(label: dict, prediction: dict) -> Score:
     s = Score()
     gold = list(label.get("covenants", []))
-    pred = list(prediction.get("covenants", []))
+    proposals = prediction.get("covenants", [])
+    pred = [p for p in proposals if p.get("status") not in REVIEW_ONLY]
+    s.review_items = prediction.get("reviewItems", sum(p.get("status") in {"NEEDS_REVIEW", "UNRESOLVED"}
+                                                        for p in proposals))
+    s.abstentions = sum(p.get("status") in {"ABSTAINED", "UNRESOLVED"} for p in proposals)
     s.labelled, s.predicted = len(gold), len(pred)
     pairs, missed, extra = _pairs(gold, pred)
     s.misses = [_key(g)[0] for g in missed]
@@ -154,6 +171,19 @@ def score_document(label: dict, prediction: dict) -> Score:
             s.with_date += 1
             if g["firstTestDate"] == p.get("firstTestDate"):
                 s.date_correct += 1
+        for key in MATERIAL_FIELDS:
+            expected = g.get(key)
+            if expected is None:
+                continue
+            actual = p.get(key)
+            correct = expected == actual
+            if key == "quote":
+                expected = " ".join(expected.casefold().split())
+                actual = " ".join((actual or "").casefold().split())
+                correct = bool(expected and expected in actual and (g.get("page") is None or g["page"] == p.get("page")))
+            s.material_checked[key] = s.material_checked.get(key, 0) + 1
+            if correct:
+                s.material_correct[key] = s.material_correct.get(key, 0) + 1
     return s
 
 
@@ -173,6 +203,7 @@ def evaluate(labels_dir: Path, predictions_dir: Path, include_drafts: bool = Fal
              statuses: tuple[str, ...] = ("VERIFIED",), documents: list[str] | None = None) -> dict:
     total = Score()
     per_doc = {}
+    families: dict[str, Score] = {}
     values_labelled = values_correct = 0
     counted = set(statuses) | ({"DRAFT_UNVERIFIED"} if include_drafts else set())
     for label_path in sorted(labels_dir.glob("*.json")):
@@ -189,6 +220,8 @@ def evaluate(labels_dir: Path, predictions_dir: Path, include_drafts: bool = Fal
             continue
         s = score_document(label, prediction)
         total.add(s)
+        if family := label.get("dealFamily"):
+            families.setdefault(family, Score()).add(s)
         per_doc[label["documentId"]] = {**s.metrics(), "misses": s.misses, "extras": s.extras,
                                         "wrong_thresholds": s.wrong_thresholds}
     overall = {**total.metrics(), "value_accuracy": Score._ratio(values_correct, values_labelled)}
@@ -198,7 +231,8 @@ def evaluate(labels_dir: Path, predictions_dir: Path, include_drafts: bool = Fal
               and (overall["frequency_accuracy"] is None or overall["frequency_accuracy"] >= GATE_FREQUENCY_ACCURACY)
               and (overall["date_accuracy"] is None or overall["date_accuracy"] >= GATE_DATE_ACCURACY)
               and (overall["value_accuracy"] is None or overall["value_accuracy"] >= GATE_VALUE_ACCURACY))
-    return {"documents": len(per_doc), "overall": overall, "gate_passed": passed, "per_document": per_doc}
+    return {"documents": len(per_doc), "overall": overall, "gate_passed": passed, "per_document": per_doc,
+            "by_deal_family": {family: score.metrics() for family, score in families.items()}}
 
 
 def main(argv: list[str] | None = None) -> int:

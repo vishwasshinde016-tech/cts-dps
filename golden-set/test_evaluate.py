@@ -15,7 +15,25 @@ PLEDGE = {"metric": "NEGATIVE_PLEDGE", "category": "NON_FINANCIAL", "operator": 
 def test_perfect_match():
     s = score_document(label([DSCR, ICR, PLEDGE]), {"covenants": [DSCR, ICR, PLEDGE]})
     assert s.metrics() == {"recall": 1.0, "precision": 1.0, "threshold_accuracy": 1.0, "page_accuracy": 1.0,
-                           "frequency_accuracy": None, "unit_accuracy": None, "date_accuracy": None}
+                           "frequency_accuracy": None, "unit_accuracy": None, "date_accuracy": None,
+                           "review_items": 0, "abstentions": 0,
+                           "material_accuracy": {"scope": None, "conditions": None, "change": None, "quote": None}}
+
+
+def test_evaluation_counts_abstention_as_a_miss_and_reports_deal_family(tmp_path):
+    labels, preds = tmp_path / "labels", tmp_path / "preds"
+    labels.mkdir()
+    preds.mkdir()
+    expected = {**DSCR, "scope": {"obligor": "Borrower"}, "quote": "A ratio of at least 1.25 times"}
+    (labels / "AGR-T.json").write_text(json.dumps({**label([expected, ICR]), "dealFamily": "DEAL-1"}))
+    (preds / "AGR-T.json").write_text(json.dumps({"covenants": [
+        {**expected, "quote": "a ratio of\nat least 1.25 times", "status": "NEEDS_REVIEW"},
+        {**ICR, "status": "UNRESOLVED"},
+    ]}))
+    result = evaluate(labels, preds)
+    metrics = result["by_deal_family"]["DEAL-1"]
+    assert metrics["review_items"] == 2 and metrics["abstentions"] == 1 and metrics["recall"] == 0.5
+    assert metrics["material_accuracy"]["scope"] == metrics["material_accuracy"]["quote"] == 1.0
 
 
 def test_two_covenants_of_one_metric_are_matched_one_to_one():
