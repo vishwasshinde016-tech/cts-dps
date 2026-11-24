@@ -34,6 +34,8 @@ def _db_now(db: Session):
     from sqlalchemy import func
 
     dialect = db.get_bind().dialect.name
+    if dialect == "mysql":
+        return func.utc_timestamp(6)
     return func.sysutcdatetime() if dialect == "mssql" else func.current_timestamp()
 
 

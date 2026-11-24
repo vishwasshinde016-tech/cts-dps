@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -15,9 +15,19 @@ class Base(DeclarativeBase):
 
 def make_engine(url: str) -> Engine:
     kwargs: dict = {"pool_pre_ping": True}
-    if url.startswith("sqlite"):
+    backend = make_url(url).get_backend_name()
+    if backend == "sqlite":
         kwargs["connect_args"] = {"check_same_thread": False}
-    return create_engine(url, **kwargs)
+    if backend == "mysql":
+        kwargs["isolation_level"] = "READ COMMITTED"
+        kwargs["connect_args"] = {"charset": "utf8mb4"}
+    engine = create_engine(url, **kwargs)
+    if backend == "mysql":
+        @event.listens_for(engine, "connect")
+        def set_utc(connection, _):
+            with connection.cursor() as cursor:
+                cursor.execute("SET time_zone = '+00:00'")
+    return engine
 
 
 def require_snapshot_isolation(engine: Engine) -> None:
