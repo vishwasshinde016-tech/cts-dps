@@ -21,6 +21,7 @@ from sqlalchemy import (
     false,
     text,
 )
+from sqlalchemy.dialects.mysql import DATETIME, DOUBLE, LONGTEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -45,8 +46,16 @@ class UtcDateTime(TypeDecorator):
     impl = DateTime(timezone=True)
     cache_ok = True
 
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "mysql":
+            return dialect.type_descriptor(DATETIME(fsp=6))
+        return dialect.type_descriptor(self.impl)
+
     def process_bind_param(self, value: datetime | None, dialect) -> datetime | None:
-        return value.astimezone(UTC) if value is not None and value.tzinfo else value
+        if value is None or value.tzinfo is None:
+            return value
+        value = value.astimezone(UTC)
+        return value.replace(tzinfo=None) if dialect.name == "mysql" else value
 
     def process_result_value(self, value: datetime | None, dialect) -> datetime | None:
         if value is None or value.tzinfo:
@@ -73,6 +82,9 @@ class Varchar(TypeDecorator):
 # Text read from documents or typed by people (quotes, labels, notes, file names) is NVARCHAR: a VARCHAR column
 # on SQL Server (code page 1252) stored "₹" as "?" and "≥" as "=". pymssql already sends str as NVARCHAR, so
 # these Unicode columns need no cast.
+LONG_TEXT = Text().with_variant(LONGTEXT(), "mysql")
+LONG_UNICODE_TEXT = UnicodeText().with_variant(LONGTEXT(), "mysql")
+DOUBLE_PRECISION = Float().with_variant(DOUBLE(asdecimal=False), "mysql")
 
 
 class Document(Base):
@@ -100,7 +112,7 @@ class Document(Base):
     object_key: Mapped[str | None] = mapped_column(Varchar(500))
     # Flow B: {"issues": [...], "unitScale": "lakh"}, so the reviewer sees why a statement waits and in what unit
     # it was printed.
-    review_json: Mapped[str | None] = mapped_column(Text)
+    review_json: Mapped[str | None] = mapped_column(LONG_TEXT)
 
     links: Mapped[list[DocumentCpLink]] = relationship(back_populates="document", cascade="all, delete-orphan")
 
@@ -150,8 +162,8 @@ class Job(Base):
     pool: Mapped[str] = mapped_column(Varchar(16), default="STANDARD")  # STANDARD | HEAVY
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     current_step: Mapped[str | None] = mapped_column(Varchar(32))
-    error: Mapped[str | None] = mapped_column(Text)
-    steps_json: Mapped[str] = mapped_column(Text, default="[]")
+    error: Mapped[str | None] = mapped_column(LONG_TEXT)
+    steps_json: Mapped[str] = mapped_column(LONG_TEXT, default="[]")
     locked_by: Mapped[str | None] = mapped_column(Varchar(64))
     locked_until: Mapped[datetime | None] = mapped_column(UtcDateTime())
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
@@ -165,7 +177,7 @@ class Job(Base):
     idempotency_key: Mapped[str | None] = mapped_column(Varchar(128))
     request_hash: Mapped[str | None] = mapped_column(Varchar(64))  # SHA-256 of the submitted body
     input_key: Mapped[str | None] = mapped_column(Varchar(64))
-    request_json: Mapped[str | None] = mapped_column(UnicodeText)
+    request_json: Mapped[str | None] = mapped_column(LONG_UNICODE_TEXT)
     batch_id: Mapped[str | None] = mapped_column(Varchar(36), index=True)
     client_file_reference: Mapped[str | None] = mapped_column(Unicode(128))
     correlation_id: Mapped[str | None] = mapped_column(Varchar(128))
@@ -243,7 +255,7 @@ class EventFeed(Base):
     document_version_id: Mapped[str | None] = mapped_column(Varchar(64))
     correlation_id: Mapped[str | None] = mapped_column(Varchar(128))
     occurred_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
-    payload_json: Mapped[str] = mapped_column(UnicodeText, default="{}")
+    payload_json: Mapped[str] = mapped_column(LONG_UNICODE_TEXT, default="{}")
 
 
 class Artifact(Base):
@@ -282,7 +294,7 @@ class Run(Base):
     base_run_id: Mapped[str | None] = mapped_column(Varchar(36))
     status: Mapped[str] = mapped_column(Varchar(16))  # DONE | NEEDS_REVIEW | FAILED
     trigger: Mapped[str] = mapped_column(Varchar(24), default="SUBMIT")  # SUBMIT | REPROCESS | REVIEW
-    result_json: Mapped[str] = mapped_column(UnicodeText)
+    result_json: Mapped[str] = mapped_column(LONG_UNICODE_TEXT)
     superseded_by: Mapped[str | None] = mapped_column(Varchar(64))  # phase 5: the run (or job) that replaced it
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
 
@@ -299,8 +311,8 @@ class ReviewDecision(Base):
     field_id: Mapped[str] = mapped_column(Varchar(64))
     reviewer: Mapped[str] = mapped_column(Varchar(255))
     action: Mapped[str] = mapped_column(Varchar(16))
-    old_value_json: Mapped[str | None] = mapped_column(UnicodeText)
-    new_value_json: Mapped[str | None] = mapped_column(UnicodeText)
+    old_value_json: Mapped[str | None] = mapped_column(LONG_UNICODE_TEXT)
+    new_value_json: Mapped[str | None] = mapped_column(LONG_UNICODE_TEXT)
     reason_code: Mapped[str | None] = mapped_column(Varchar(32))
     comment: Mapped[str | None] = mapped_column(Unicode(2000))
     sampled: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -316,7 +328,7 @@ class GoldenCandidate(Base):
     job_id: Mapped[str] = mapped_column(Varchar(36))
     field_id: Mapped[str] = mapped_column(Varchar(64))
     job_type: Mapped[str] = mapped_column(Varchar(32))
-    payload_json: Mapped[str] = mapped_column(UnicodeText)
+    payload_json: Mapped[str] = mapped_column(LONG_UNICODE_TEXT)
     status: Mapped[str] = mapped_column(Varchar(16), default="PENDING")  # PENDING | ACCEPTED | REJECTED
     decided_by: Mapped[str | None] = mapped_column(Varchar(255))
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
@@ -386,7 +398,7 @@ class StatementValue(Base):
     id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
     cp_id: Mapped[str] = mapped_column(Varchar(64))  # CP id or obligor id (entity key)
     key: Mapped[str] = mapped_column(Varchar(64))
-    value: Mapped[float] = mapped_column(Float)
+    value: Mapped[float] = mapped_column(DOUBLE_PRECISION)
     unit: Mapped[str] = mapped_column(Varchar(32))
     currency: Mapped[str | None] = mapped_column(Varchar(3))
     as_of_date: Mapped[date] = mapped_column(Date)
@@ -414,7 +426,7 @@ class AuditEvent(Base):
     action: Mapped[str] = mapped_column(Varchar(64))
     target_type: Mapped[str] = mapped_column(Varchar(32))
     target_id: Mapped[str] = mapped_column(Varchar(64))
-    detail_json: Mapped[str] = mapped_column(Text, default="{}")
+    detail_json: Mapped[str] = mapped_column(LONG_TEXT, default="{}")
     at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
 
 
@@ -426,7 +438,7 @@ class AiCache(Base):
 
     key: Mapped[str] = mapped_column(Varchar(64), primary_key=True)
     model: Mapped[str] = mapped_column(Varchar(128))
-    answer: Mapped[str] = mapped_column(UnicodeText)
+    answer: Mapped[str] = mapped_column(LONG_UNICODE_TEXT)
     hits: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
     last_used_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
@@ -449,7 +461,7 @@ class AiUsage(Base):
     calls: Mapped[int] = mapped_column(Integer, default=1)
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
-    cost: Mapped[float | None] = mapped_column(Float)  # in the currency of the configured rates
+    cost: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)  # in the currency of the configured rates
 
 
 class AiCall(Base):
@@ -473,12 +485,12 @@ class AiCall(Base):
     prompt_version: Mapped[str] = mapped_column(Varchar(16))  # first 8 characters of the system prompt's hash
     status: Mapped[str] = mapped_column(Varchar(8))  # OK | ERROR
     error: Mapped[str | None] = mapped_column(Unicode(500))
-    seconds: Mapped[float] = mapped_column(Float, default=0.0)
+    seconds: Mapped[float] = mapped_column(DOUBLE_PRECISION, default=0.0)
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
-    cost: Mapped[float | None] = mapped_column(Float)
-    request_text: Mapped[str | None] = mapped_column(UnicodeText)  # the messages sent, secrets masked
-    response_text: Mapped[str | None] = mapped_column(UnicodeText)
+    cost: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)
+    request_text: Mapped[str | None] = mapped_column(LONG_UNICODE_TEXT)  # the messages sent, secrets masked
+    response_text: Mapped[str | None] = mapped_column(LONG_UNICODE_TEXT)
     # OpenTelemetry ids of the model call (observability, 23 Nov 2026): the row opens its trace in Langfuse.
     trace_id: Mapped[str | None] = mapped_column(Varchar(32))
     span_id: Mapped[str | None] = mapped_column(Varchar(16))
@@ -523,6 +535,6 @@ class TraceEvent(Base):
     step: Mapped[str] = mapped_column(Varchar(16))  # UPLOAD | READ | FOUND | SHOWN | VALUE | MISSING | FLAG | AI ...
     actor: Mapped[str] = mapped_column(Varchar(255))
     summary: Mapped[str] = mapped_column(Unicode(1000))
-    detail_json: Mapped[str] = mapped_column(UnicodeText, default="{}")
+    detail_json: Mapped[str] = mapped_column(LONG_UNICODE_TEXT, default="{}")
     trace_id: Mapped[str | None] = mapped_column(Varchar(32))  # the job's trace (observability, 23 Nov 2026)
 

@@ -16,7 +16,7 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY alembic.ini ./
 COPY migrations ./migrations
-RUN pip install --no-cache-dir ".[worker,mssql]" \
+RUN pip install --no-cache-dir ".[worker,mssql,mysql]" \
     && if [ "$INSTALL_HEAVY" = "1" ]; then          pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu ".[heavy]"; fi
 # Every image carries the PP-OCRv6 text model for the fast OCR: RapidOCR's own model is for Chinese and runs English
 # words together (bulk run, 22 Nov 2026). Its SHA-256 is checked: a changed file fails the build. A bank network that

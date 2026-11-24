@@ -1,9 +1,8 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, inspect, pool, text
+from sqlalchemy.engine import make_url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -26,6 +25,11 @@ from dps.settings import get_settings  # noqa: E402
 # password (%21 for "!") breaks every migration.
 config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
 target_metadata = Base.metadata
+MYSQL_VERSION_TABLE = "dps_alembic_version"
+
+
+def include_dps_names(name, type_, _):
+    return type_ != "table" or name in target_metadata.tables
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -46,6 +50,8 @@ def run_migrations_offline() -> None:
 
     """
     url = config.get_main_option("sqlalchemy.url")
+    if make_url(url).get_backend_name() == "mysql":
+        raise RuntimeError("Use the DPS MySQL bootstrap SQL for the initial schema or online Alembic for upgrades.")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -71,9 +77,16 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        options = {}
+        if connection.dialect.name == "mysql":
+            if not inspect(connection).has_table(MYSQL_VERSION_TABLE):
+                raise RuntimeError("Install the reviewed DPS MySQL bootstrap before running Alembic.")
+            versions = connection.execute(text("SELECT version_num FROM dps_alembic_version")).scalars().all()
+            if len(versions) != 1:
+                raise RuntimeError("Incomplete DPS MySQL migration history. Check the installation before upgrading.")
+            connection.rollback()  # clear the transaction opened by the metadata lookup
+            options = {"version_table": MYSQL_VERSION_TABLE, "include_name": include_dps_names}
+        context.configure(connection=connection, target_metadata=target_metadata, **options)
 
         with context.begin_transaction():
             context.run_migrations()

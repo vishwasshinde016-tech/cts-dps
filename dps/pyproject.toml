@@ -55,6 +55,7 @@ dev = [
 # Production SQL Server driver (needs the Microsoft ODBC driver on the host).
 # SQL Server for production: DPS_DATABASE_URL=mssql+pymssql://user:password@host:1433/dps
 mssql = ["pymssql==2.3.*"]
+mysql = ["PyMySQL[rsa]==1.1.*"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
