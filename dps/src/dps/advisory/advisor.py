@@ -68,7 +68,7 @@ def _parse(text: str, allowed_ids: set[str]) -> list[dict]:
 
 
 def crewai_completion(model: str, temperature: float | None = None,  # pragma: no cover - live model
-                      timeout: float | None = None) -> Completion:
+                      timeout: float | None = None, max_tokens: int | None = None) -> Completion:
     from crewai import LLM
 
     from dps.agent import usage
@@ -77,8 +77,10 @@ def crewai_completion(model: str, temperature: float | None = None,  # pragma: n
     def call(messages: list[dict]) -> str:
         # One LLM per call: its token counters then belong to this call alone, even under concurrency.
         # None keeps the model's default: newer Azure OpenAI models refuse any other temperature.
-        llm = (LLM(model=model, timeout=timeout) if temperature is None
-               else LLM(model=model, temperature=temperature, timeout=timeout))
+        # max_tokens is passed (improvement plan A2, 24 Nov 2026: it was parsed from the routes file, never sent).
+        options = {"timeout": timeout, **({"max_tokens": max_tokens} if max_tokens else {}),
+                   **({} if temperature is None else {"temperature": temperature})}
+        llm = LLM(model=model, **options)
         timer = observability.Timer()
         # No span of its own: the gateway's "chat <model>" span is the trace of this call (observability, 23 Nov
         # 2026); a second span here showed every model call twice in Langfuse.

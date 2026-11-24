@@ -168,3 +168,56 @@ def test_a_wrong_token_is_never_skipped(client, app, settings):
     assert w.push_events() == 0
     with app.state.db.session_factory() as s:
         assert s.get(PushCursor, "spring").seq == 0  # waits for the token to be fixed
+
+
+# ---------- A2 model pins and every prompt hash
+
+def test_the_result_names_every_prompt_that_could_reach_the_model():
+    from dps.skills import load
+    from dps.skills.runner import _packs_used
+
+    used = _packs_used(load("covenants"))
+    assert {"covenants", "schedule_terms", "covenants.parts", "covenants.residual", "classify"} <= set(used)
+    assert all(len(v["promptSha"]) == 16 for v in used.values())
+
+
+def test_a_model_call_records_what_it_was_pinned_to(monkeypatch):
+    from dps.agent.gateway import Gateway, Route, Routes
+
+    monkeypatch.setenv("AZURE_API_VERSION", "2025-04-01-preview")
+    route = Route("strong", "azure", "azure/gpt-x", max_tokens=1234, timeout_s=90, temperature=None)
+    gw = Gateway(Routes({"strong": route}), lambda r: (lambda m: '{"ok": 1}'))
+    budget = gw.begin_job(1000)
+    gw.call("strong", [{"role": "user", "content": "x"}])
+    gw.end_job()
+    assert budget.pins["strong"] == {"deployment": "azure/gpt-x", "apiVersion": "2025-04-01-preview",
+                                     "maxTokens": 1234, "timeoutSeconds": 90, "temperature": None}
+
+
+# ---------- T3 the version follows the settings that change results
+
+def test_changing_an_output_setting_changes_the_pipeline_version(tmp_path):
+    base = Settings(pipeline_version="auto").pipeline_version
+    assert Settings(pipeline_version="auto", review_confidence=0.9).pipeline_version != base
+    assert Settings(pipeline_version="auto", queue_max_running_per_tenant=3).pipeline_version == base  # not output
+    (tmp_path / "loan_agreement.json").write_text('{"w": [1]}')
+    assert Settings(pipeline_version="auto", scorer_dir=str(tmp_path)).pipeline_version != base
+    assert Settings(pipeline_version="pinned-7", review_confidence=0.9).pipeline_version == "pinned-7"
+
+
+# ---------- G3 a fair QA sample
+
+def test_the_qa_sample_differs_between_jobs_for_the_same_field():
+    from dps.scoring import route
+
+    picked = 0
+    for n in range(2000):
+        f = {"id": "fin-dscr-p3", "confidence": 0.99, "status": None}
+        route(f, "LOW", job_id=f"job-{n}")
+        picked += f["status"] == "NEEDS_REVIEW"
+    assert 30 < picked < 95  # about 3 % of jobs, not all or none
+    again = {"id": "fin-dscr-p3", "confidence": 0.99, "status": None}
+    route(again, "LOW", job_id="job-7")
+    first = {"id": "fin-dscr-p3", "confidence": 0.99, "status": None}
+    route(first, "LOW", job_id="job-7")
+    assert again["status"] == first["status"]  # reproducible for one job

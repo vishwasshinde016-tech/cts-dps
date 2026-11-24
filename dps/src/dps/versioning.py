@@ -8,7 +8,10 @@ everything that changes what DPS reads and extracts:
 - the DPS package version;
 - the source of the reading and extracting code and the skill packs (prompts, schemas, rules, taxonomy);
 - the parser and model library versions;
-- the model routes (file content, or the single model name).
+- the model routes (file content, or the single model name);
+- the settings that change what is read or how it is routed, and the released scorer files (improvement plan T3,
+  24 Nov 2026: changing ``review_confidence`` or the scorer left the version unchanged, so a duplicate could return
+  a job made under the old behaviour).
 
 Any change gives a new version, so new jobs run fresh while old jobs and their runs stay as they were.
 """
@@ -37,7 +40,7 @@ def _library(name: str) -> str:
 
 
 @lru_cache(maxsize=8)
-def compute(routes_file: str = "", model: str = "") -> str:
+def compute(routes_file: str = "", model: str = "", options: str = "", scorer_dir: str = "") -> str:
     from dps import __version__
 
     digest = hashlib.sha256()
@@ -50,9 +53,16 @@ def compute(routes_file: str = "", model: str = "") -> str:
         digest.update(f"{lib}={_library(lib)};".encode())
     routes = Path(routes_file) if routes_file else None
     digest.update(routes.read_bytes() if routes is not None and routes.is_file() else model.encode())
+    if options:
+        digest.update(f"options={options};".encode())
+    scorer = Path(scorer_dir) if scorer_dir else None
+    if scorer is not None and scorer.is_dir():
+        for path in sorted(p for p in scorer.rglob("*") if p.is_file()):
+            digest.update(path.relative_to(scorer).as_posix().encode())
+            digest.update(path.read_bytes())
     return f"{__version__}+{digest.hexdigest()[:12]}"
 
 
-def resolve(value: str, routes_file: str = "", model: str = "") -> str:
+def resolve(value: str, routes_file: str = "", model: str = "", options: str = "", scorer_dir: str = "") -> str:
     """``auto`` (or empty) becomes the computed version; any other value is kept (pinned by operations)."""
-    return compute(routes_file or "", model or "") if value in ("", "auto") else value
+    return compute(routes_file or "", model or "", options, scorer_dir or "") if value in ("", "auto") else value

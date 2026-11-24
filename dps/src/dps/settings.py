@@ -166,8 +166,17 @@ class Settings(BaseSettings):
     def _resolve_pipeline(self) -> Settings:
         from dps.versioning import resolve
 
-        self.pipeline_version = resolve(self.pipeline_version, self.ai_routes_file, self.ai_model)
+        # Settings that change what is read, found or routed to a person (T3). Logging, limits and switches that
+        # do not change a result stay out, so they do not make every old job look stale.
+        options = ";".join(f"{name}={getattr(self, name)}" for name in OUTPUT_SETTINGS)
+        self.pipeline_version = resolve(self.pipeline_version, self.ai_routes_file, self.ai_model, options,
+                                        self.scorer_dir or "")
         return self
+
+
+OUTPUT_SETTINGS = ("review_confidence", "ocr_enabled", "ai_temperature", "statement_ai_check", "statement_entity",
+                   "fiscal_year_end_month", "report_derived_values", "loan_account_pattern", "facility_id_pattern",
+                   "llm_enabled")
 
 
 def llm_allowed(settings: Settings) -> bool:

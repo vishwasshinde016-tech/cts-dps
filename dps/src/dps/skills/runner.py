@@ -631,7 +631,7 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         quality = {p["no"]: (float(p.get("quality", 1.0)), p.get("method", "NATIVE"))
                    for p in (model or {}).get("pages", [])}
         with obs.span("dps.scoring", **{"dps.fields": len(fields)}) as score_span:
-            Scorer(scorer_dir).apply(fields, pack.name, pack.risk, pack.thresholds, quality)
+            Scorer(scorer_dir).apply(fields, pack.name, pack.risk, pack.thresholds, quality, job_id=job.id or "")
             obs.set_attrs(score_span, **{"dps.auto_accepted": sum(
                 1 for f in fields if f.get("status") == "AUTO_ACCEPTED")})
     check_numbers(fields)  # after scoring: a number not in its own quote always goes to a person
@@ -670,6 +670,7 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
         "documentId": job.document_id, "documentVersionId": job.document_version_id, "sha256": job.sha256,
         "pipeline": {"version": pipeline_version, "skillPack": pack.ref, "taxonomyVersion": _taxonomy_version(),
                      "models": dict(budget.models) if budget and budget.models else None,
+                "modelPins": dict(budget.pins) if budget and getattr(budget, "pins", None) else None,
                      "packs": _packs_used(pack)},
         "classification": None, "identifiers": [], "fields": fields,
         "document": {"confidence": None, "route": route, "reasons": reasons,
@@ -687,8 +688,22 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
 def _packs_used(pack: Pack) -> dict:
     """Each skill pack this result used, with its version and the hash of its prompt (full review G20)."""
     used = [pack] + ([load("schedule_terms")] if pack.name in ("sanction", "covenants", "amendment_diff") else [])
-    return {p.name: {"version": p.version, "promptSha": hashlib.sha256(p.prompt.encode("utf-8")).hexdigest()[:16]}
-            for p in used}
+    out = {p.name: {"version": p.version, "promptSha": _sha(p.prompt)} for p in used}
+    # Every other prompt text that can reach the model for this result (improvement plan A2, 24 Nov 2026: only the
+    # pack prompts were hashed): the four covenant parts' scopes, the residual read and the document-type check.
+    from dps.analyze.classify import PROMPT as CLASSIFY_PROMPT
+    from dps.skills.covenants import omissions, parts
+
+    if pack.name in ("covenants", "sanction"):
+        out["covenants.parts"] = {"version": pack.version, "promptSha": _sha("|".join(
+            f"{p.name}:{p.scope}:{p.exclusions}:{','.join(p.categories)}" for p in parts.PARTS.values()))}
+        out["covenants.residual"] = {"version": pack.version, "promptSha": _sha(omissions.INSTRUCTIONS)}
+    out["classify"] = {"version": "1", "promptSha": _sha(CLASSIFY_PROMPT)}
+    return out
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(str(text).encode("utf-8")).hexdigest()[:16]
 
 
 def _taxonomy_version() -> str:

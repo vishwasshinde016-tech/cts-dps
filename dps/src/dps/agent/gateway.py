@@ -170,6 +170,7 @@ class JobBudget:
     used: int = 0
     calls: int = 0
     models: dict[str, str] = field(default_factory=dict)
+    pins: dict[str, dict] = field(default_factory=dict)
 
 
 _JSON_BLOCK = re.compile(r"\{.*\}|\[.*\]", re.S)
@@ -240,6 +241,14 @@ class Gateway:
             self._completions[route.name] = self._guard(raw, route.deployment) if self._guard else raw
         return self._completions[route.name]
 
+    def pin(self, route: Route) -> dict:
+        """What the model call was pinned to, for the result (improvement plan A2): deployment, Azure API version,
+        token limit, timeout and temperature (null: the model's default)."""
+        import os
+
+        return {"deployment": route.deployment, "apiVersion": os.environ.get("AZURE_API_VERSION") or None,
+                "maxTokens": route.max_tokens, "timeoutSeconds": route.timeout_s, "temperature": route.temperature}
+
     def available(self, route_name: str) -> bool:
         route = self.routes.routes.get(route_name)
         return bool(route and route.deployment) and self._breakers[route_name].allow()
@@ -300,6 +309,7 @@ class Gateway:
                 budget.used += usage.last_call_tokens()
                 budget.calls += 1
                 budget.models[route_name] = route.deployment
+                budget.pins[route_name] = self.pin(route)
             return answer
         raise AiUnavailable(f"Route {route_name} failed after {route.retries + 1} attempts: {last}")
 
@@ -410,7 +420,7 @@ def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cove
                          int(getattr(settings, "ai_rpm_share", 1) or 1))
 
     def provider(route: Route) -> Completion:
-        raw = crewai_completion(route.deployment, temperature_for(route, settings), route.timeout_s)
+        raw = crewai_completion(route.deployment, temperature_for(route, settings), route.timeout_s, route.max_tokens)
 
         def call(messages: list[dict]) -> str:
             try:
