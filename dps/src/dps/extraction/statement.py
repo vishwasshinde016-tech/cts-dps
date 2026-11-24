@@ -484,6 +484,28 @@ def rows_from_text(pages: list[tuple[int, str]]) -> list[tuple[str, float, int |
     return out
 
 
+def rows_from_layout_table(page: int, text: str, entity: str) -> list[tuple[str, float, int | None, str | None]]:
+    """Read Docling Markdown tables using the statement reader's existing period and entity column selection."""
+    divider = re.compile(r"\s*\|(?:\s*:?-{3,}:?\s*\|){2,}\s*")
+    lines = text.splitlines()
+    output = []
+    for index, line in enumerate(lines[1:], start=1):
+        if not divider.fullmatch(line) or not lines[index - 1].lstrip().startswith("|"):
+            continue
+        grid = [[cell.strip() for cell in lines[index - 1].strip().strip("|").split("|")]]
+        for row in lines[index + 1:]:
+            if not row.lstrip().startswith("|"):
+                break
+            cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
+            if len(cells) != len(grid[0]):
+                break
+            grid.append(cells)
+        for label, value, _, cell in rows_from_grid(grid, lambda r, c, i=index: f"P{page}:L{i+r+1}:C{c+1}", entity):
+            if match_key(label) is not None:
+                output.append((label, value, page, cell))
+    return output
+
+
 def _cell_number(v) -> float | None:
     if isinstance(v, bool):
         return None

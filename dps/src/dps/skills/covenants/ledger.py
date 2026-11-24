@@ -74,6 +74,7 @@ CROSS_DEFAULT = re.compile(
 STEP_ROW = re.compile(
     r"(?P<date>\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Z][a-z]{2,8},?\s+\d{4}|\b[A-Z][a-z]{2,8}\s+\d{4}|\b\d{4}-\d{2}-\d{2}|\bQ[1-4]\s*\d{4}|"
     r"\bFY\s*\d{2,4})\b[^\n\d]{0,60}?(?P<value>\d{1,3}(?:\.\d{1,4})?)\s*(?::\s*1(?:\.0+)?|x|times|%)?")
+MARKDOWN_DIVIDER = re.compile(r"\s*\|(?:\s*:?-{3,}:?\s*\|){2,}\s*")
 
 
 def table_blocks(text: str) -> list[dict]:
@@ -90,7 +91,13 @@ def table_blocks(text: str) -> list[dict]:
         if not (_OBLIGATION.search(lead) and (_COMPARISON.search(lead) or _FINANCIAL.search(lead))):
             continue
         rows, end = [], m.end()
-        for line in (text[m.end():].split("\n"))[:30]:
+        lines = text[m.end():].split("\n")[:30]
+        while lines and not lines[0].strip():
+            end += len(lines.pop(0)) + 1
+        if len(lines) > 1 and lines[0].strip().startswith("|") and MARKDOWN_DIVIDER.fullmatch(lines[1]):
+            end += sum(len(line) + 1 for line in lines[:2])
+            lines = lines[2:]
+        for line in lines:
             if not line.strip():
                 end += len(line) + 1
                 continue
