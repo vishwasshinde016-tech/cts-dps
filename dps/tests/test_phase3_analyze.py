@@ -379,7 +379,8 @@ def test_parse_json_variants():
 
 # ---------- ANALYZE end to end ----------
 
-def test_analyze_job_from_staging_to_event(client, app, settings, tmp_path):
+@pytest.mark.parametrize("cancel_before_finish", [False, True])
+def test_analyze_job_from_staging_to_event(client, app, settings, tmp_path, cancel_before_finish):
     settings.staging_dir.mkdir(parents=True, exist_ok=True)
     data = text_pdf([SAMPLES["LOAN_AGREEMENT"] + "\nPAN AAPFU0939F"])
     digest = hashlib.sha256(data).hexdigest()
@@ -405,12 +406,22 @@ def test_analyze_job_from_staging_to_event(client, app, settings, tmp_path):
         sandbox.ParseRequest(req.data, req.fmt, req.sha256, req.version_id, False)), ocr=False)
 
     def analyzer(db, job, model):
-        analysis.finish(db, job, analysis.analyze(model, job, None, Tools(), "1"))
+        result = analysis.analyze(model, job, None, Tools(), "1")
+        if cancel_before_finish:
+            job.cancel_requested = True
+            db.commit()
+        analysis.finish(db, job, result)
 
     w = Worker(settings, app.state.db.session_factory, object(), {}, ingestor, {}, analyzer)
     assert w.run_once()
     with app.state.db.session_factory() as s:
         job = s.get(Job, job_id)
+        if cancel_before_finish:
+            assert (job.status, job.error_code) == (jobs.CANCELLED, "JOB_CANCELLED")
+            events = s.scalars(select(EventFeed.type).where(EventFeed.job_id == job_id).order_by(EventFeed.seq)).all()
+            assert events == ["dps.job.accepted", "dps.job.cancelled"]
+            assert s.scalars(select(Run).where(Run.job_id == job_id)).first() is None
+            return
         assert (job.status, job.error_code) == (jobs.NEEDS_REVIEW, "TYPE_MISMATCH")
         event = s.scalars(select(EventFeed).where(EventFeed.job_id == job_id,
                                                   EventFeed.type == "dps.analysis.completed")).one()
