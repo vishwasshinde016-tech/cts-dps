@@ -92,6 +92,74 @@ def test_each_model_call_is_one_span_with_model_tokens_and_no_text(spans):
     assert call.trace_id == format(s.context.trace_id, "032x") and call.span_id == format(s.context.span_id, "016x")
 
 
+def test_parse_duration_records_success_and_failure(spans, monkeypatch):
+    from dps.ingest.pipeline import sandbox_parser
+    from dps.parse import sandbox
+
+    readings = []
+
+    def parse_request(req, limits, hint):
+        if not req.data:
+            raise sandbox.ParseTimeout("Timed out")
+        return {"pages": []}
+
+    monkeypatch.setattr(sandbox, "run", parse_request)
+    monkeypatch.setattr(obs, "observe", lambda name, seconds, **tags: readings.append((name, seconds, tags)))
+    parse = sandbox_parser("STANDARD")
+    with obs.span("test job"):
+        assert parse(sandbox.ParseRequest(b"file", "PDF", "a"), 1) == {"pages": []}
+        with pytest.raises(sandbox.ParseTimeout):
+            parse(sandbox.ParseRequest(b"", "PDF", "a"), 1)
+    assert len(readings) == 2
+    assert all(name == "dps.parse.duration" and seconds >= 0 and tags == {"pool": "STANDARD", "transport": "process"}
+               for name, seconds, tags in readings)
+    parser_spans = [s for s in spans.get_finished_spans() if s.name == "dps.parse"]
+    assert len(parser_spans) == 2
+    assert parser_spans[1].attributes["error.type"] == "PARSE_TIMEOUT"
+
+
+def test_spring_gets_trace_context_without_baggage(spans):
+    import httpx
+    from opentelemetry import baggage, context
+
+    from dps.integrations.spring import SpringClient
+
+    def respond(request):
+        assert request.headers["traceparent"].split("-")[1:3] == [trace_id, span_id]
+        assert "baggage" not in request.headers
+        return httpx.Response(200, json={"currency": "INR"})
+
+    token = context.attach(baggage.set_baggage("test", "private"))
+    try:
+        with httpx.Client(base_url="http://spring", transport=httpx.MockTransport(respond)) as client, obs.span("job"):
+            trace_id, span_id = obs.current_ids()
+            assert SpringClient("http://spring", 5, client=client).cp_currency("CP-1") == "INR"
+    finally:
+        context.detach(token)
+
+
+def test_socket_parser_joins_the_worker_trace(spans, monkeypatch, tmp_path):
+    from dps.parse import sandbox, server
+
+    if not hasattr(server.socketserver, "ThreadingUnixStreamServer"):
+        pytest.skip("parser service requires a Unix socket")
+    path = str(tmp_path / "p.sock")
+    monkeypatch.setattr(server, "handle", lambda header, body, pool, parser: {"ok": True, "model": {}})
+    with server.socketserver.ThreadingUnixStreamServer(path, server._Handler) as listener:
+        listener.pool = "STANDARD"
+        thread = threading.Thread(target=listener.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with obs.span("worker parse") as parent:
+                assert server.SocketParser(path).parse(sandbox.ParseRequest(b"doc", "PDF", "a")) == {}
+        finally:
+            listener.shutdown()
+            thread.join()
+    [server_span] = [s for s in spans.get_finished_spans() if s.name == "dps.parser.handle"]
+    assert server_span.context.trace_id == parent.get_span_context().trace_id
+    assert server_span.parent.span_id == parent.get_span_context().span_id
+
+
 def test_text_goes_on_the_span_only_with_the_switch_and_masked(spans):
     secret = "api_key=sk-live-1234567890abcdef and password: hunter22 for ravi@example.com"
     gw = _gateway(_answer(text='{"items": [], "note": "Bearer abcdefghijklmnop"}'), trace_text=True)

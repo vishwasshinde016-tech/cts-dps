@@ -285,11 +285,11 @@ def current_ids() -> tuple[str | None, str | None]:
 
 
 def trace_headers() -> dict[str, str]:
-    """``traceparent`` for an outgoing call, so Core's part of the work joins the same trace."""
-    from opentelemetry import propagate
+    """W3C trace context for internal service calls."""
+    from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
     carrier: dict[str, str] = {}
-    propagate.inject(carrier)
+    TraceContextTextMapPropagator().inject(carrier)
     return carrier
 
 

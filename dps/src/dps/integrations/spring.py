@@ -15,6 +15,7 @@ import httpx
 
 from dps.api.auth import ROLES_HEADER, SERVICE, USER_HEADER
 from dps.integrations.service_auth import ClientCredentialsToken, TokenError
+from dps.ops import observability as obs
 from dps.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ class SpringClient:
             raise SpringUnavailable(str(exc)) from exc  # the job is retried, as for any Spring outage
 
     def _request(self, method: str, path: str, **kw) -> httpx.Response:
-        headers = {**(kw.pop("headers", None) or {}), **self._auth_headers()}
+        headers = {**(kw.pop("headers", None) or {}), **self._auth_headers(), **obs.trace_headers()}
         correlation = CORRELATION.get()
         if correlation and "X-Correlation-Id" not in headers:
             headers["X-Correlation-Id"] = correlation[:128]
