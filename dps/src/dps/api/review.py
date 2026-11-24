@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, true
 
 from dps import feed, jobs, results
+from dps.api.access import tenant
 from dps.api.auth import ADMIN, SERVICE, SUPPORT, require_roles
 from dps.api.deps import DB, User, job_view
 from dps.errors import ApiError, not_found
@@ -638,7 +639,9 @@ class CovenantIn(BaseModel):
 
 class CovenantStatusRequest(BaseModel):
     cpId: str  # noqa: N815
-    certificateFileIds: list[str] = Field(default_factory=list)  # noqa: N815
+    certificateFileIds: list[str] = Field(  # noqa: N815
+        default_factory=list, description="DMS version IDs submitted as document.versionId for extraction.")
+    includeCertificateDiagnostics: bool = False  # noqa: N815
     covenants: list[CovenantIn]
 
 
@@ -677,27 +680,42 @@ def covenant_status(body: CovenantStatusRequest, db: DB, user: User) -> dict:
     by AUTO count like EXTRACT_CERTIFICATE. A covenant is matched by its code, metric and name; two figures that
     match one covenant and disagree give no recommendation."""
     require_roles(user, SERVICE, ADMIN)
-    doc_ids = [d for (d,) in db.execute(select(DocumentCpLink.document_id).where(DocumentCpLink.cp_id == body.cpId))]
-    if not doc_ids:
-        return {"recommendations": []}
-    cert_jobs = db.scalars(select(Job).where(Job.document_id.in_(doc_ids),
-                                             Job.job_type.in_(("EXTRACT_CERTIFICATE", "AUTO")),
-                                             Job.status == jobs.DONE, Job.rollout != "SHADOW")
-                           .order_by(Job.finished_at.desc(), Job.created_at.desc())).all()
-    wanted = {i for i in body.certificateFileIds if i}
-    if wanted:
-        cert_jobs = [j for j in cert_jobs if j.document_version_id in wanted]
+    wanted = list(dict.fromkeys(body.certificateFileIds))
+    diagnostics = dict.fromkeys(wanted, "UNAVAILABLE") if body.includeCertificateDiagnostics else {}
+    statuses = (jobs.DONE, jobs.NEEDS_REVIEW) if diagnostics else (jobs.DONE,)
+    doc_ids = select(DocumentCpLink.document_id).where(DocumentCpLink.cp_id == body.cpId)
+    query = select(Job).where(Job.document_id.in_(doc_ids),
+                              Job.job_type.in_(("EXTRACT_CERTIFICATE", "AUTO")),
+                              Job.status.in_(statuses), Job.rollout != "SHADOW")
+    if scope := tenant():
+        query = query.where(Job.tenant_id == scope)
+    cert_jobs = db.scalars(query.order_by(Job.finished_at.desc(), Job.created_at.desc())).all()
+    selected = {version for version in wanted if version.strip()}
     figures: list[tuple[set[str], dict, str]] = []
     for job in cert_jobs:
-        run = db.scalars(select(Run).where(Run.job_id == job.id).order_by(Run.run_no.desc())).first()
-        if run is None:
+        version = job.document_version_id
+        if wanted and version not in selected:
             continue
-        certified = [f for f in json.loads(run.result_json).get("fields", []) if f.get("group") == "CERTIFIED_FIGURE"]
+        run = db.scalars(select(Run).where(Run.job_id == job.id).order_by(Run.run_no.desc())).first()
+        result = json.loads(run.result_json) if run is not None else {}
+        certified = [f for f in result.get("fields", []) if f.get("group") == "CERTIFIED_FIGURE"]
+        if diagnostics.get(version) == "UNAVAILABLE" and (
+                certified or job.job_type == "EXTRACT_CERTIFICATE"
+                or (result.get("classification") or {}).get("type") == "COMPLIANCE_CERTIFICATE"):
+            if job.status == jobs.NEEDS_REVIEW:
+                diagnostics[version] = "AWAITING_REVIEW"
+            elif run is not None:
+                diagnostics[version] = "NO_REVIEWED_FIGURES"
+        if job.status != jobs.DONE:
+            continue
         if not certified:
             continue  # an AUTO job that read another type of document
         for f in certified:
             if f.get("status") in ("CONFIRMED", "CORRECTED"):
-                figures.append((_covenant_keys(f["value"].get("covenant")), f, job.document_version_id or job.id))
+                keys = _covenant_keys(f["value"].get("covenant"))
+                figures.append((keys, f, version or job.id))
+                if version in diagnostics and keys and f["value"].get("declaredCompliant") is not None:
+                    diagnostics[version] = "REVIEWED_FIGURES_AVAILABLE"
         if not wanted:
             break  # the newest certificate only
     out = []
@@ -719,4 +737,8 @@ def covenant_status(body: CovenantStatusRequest, db: DB, user: User) -> dict:
         confidence = f.get("confidence")
         out.append({"appliedCovenantId": c.appliedCovenantId, "recommendedStatus": status,
                     "rationale": rationale[:1000], "confidence": confidence})
-    return {"recommendations": out}
+    response = {"recommendations": out}
+    if body.includeCertificateDiagnostics:
+        response["certificateDiagnostics"] = [{"versionId": version, "status": status}
+                                               for version, status in diagnostics.items()]
+    return response
