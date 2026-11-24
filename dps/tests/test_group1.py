@@ -221,3 +221,97 @@ def test_the_qa_sample_differs_between_jobs_for_the_same_field():
     first = {"id": "fin-dscr-p3", "confidence": 0.99, "status": None}
     route(first, "LOW", job_id="job-7")
     assert again["status"] == first["status"]  # reproducible for one job
+
+
+# ---------- N3 a closed statement stores the lines a person confirmed; N4 the period date set in the review
+
+def _auto_statement(client, app, settings, tmp_path, rows, version, key):
+    from test_cts_auto import _statement_worker
+    from test_flows import xlsx_bytes
+    from test_phase4_skills import submit
+
+    w = _statement_worker(app, settings, tmp_path)
+    r = submit(client, app, "AUTO", xlsx_bytes(rows), ".xlsx",
+               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", version, key)
+    assert r.status_code == 202, r.text
+    assert w.run_once()
+    return r.json()["jobId"]
+
+
+def _values(client, keys):
+    from conftest import h
+
+    return client.post("/api/data/values", headers=h("cts", "SERVICE"),
+                       json={"cpId": "CP-1", "to": "2026-12-31", "keys": keys}).json()
+
+
+def test_close_stores_only_the_confirmed_lines_of_a_statement(client, app, settings, tmp_path):
+    from conftest import h
+    from test_cts_auto import ROWS
+
+    svc = h("cts", "SERVICE")
+    job_id = _auto_statement(client, app, settings, tmp_path, ROWS, "n3-1", "key-n3-00001")
+    review = client.get(f"/dps/v1/jobs/{job_id}/review", headers=svc).json()
+    ebitda = next(f for f in review["fields"] if f["name"] == "EBITDA")
+    r = client.post(f"/dps/v1/jobs/{job_id}/review", headers={**svc, "If-Match": str(review["revision"])},
+                    json={"decisions": [{"fieldId": ebitda["fieldId"], "action": "CONFIRM"}]})
+    assert r.status_code == 202, r.text
+    closed = client.post(f"/dps/v1/jobs/{job_id}/close", headers=svc, json={"reason": "figures used in CTS"}).json()
+    assert closed["published"] == 1 and "notPublishedReason" not in closed
+    got = _values(client, ["EBITDA", "TOTAL_EQUITY", "NET_WORTH"])
+    assert got["points"][-1]["values"] == {"EBITDA": 5.0}  # only the confirmed line
+
+
+def test_close_stores_nothing_while_a_blocking_warning_is_open(client, app, settings, tmp_path):
+    from conftest import h
+    from test_cts_auto import ROWS
+
+    svc = h("cts", "SERVICE")
+    job_id = _auto_statement(client, app, settings, tmp_path, ROWS[1:], "n3-2", "key-n3-00002")  # no period date
+    review = client.get(f"/dps/v1/jobs/{job_id}/review", headers=svc).json()
+    assert "PERIOD_DATE_MISSING" in {w["code"] for w in review["warnings"]}
+    ebitda = next(f for f in review["fields"] if f["name"] == "EBITDA")
+    client.post(f"/dps/v1/jobs/{job_id}/review", headers={**svc, "If-Match": str(review["revision"])},
+                json={"decisions": [{"fieldId": ebitda["fieldId"], "action": "CONFIRM"}]})
+    closed = client.post(f"/dps/v1/jobs/{job_id}/close", headers=svc, json={"reason": "r"}).json()
+    assert closed["published"] == 0 and "PERIOD_DATE_MISSING" in closed["notPublishedReason"]
+
+
+def test_the_reviewer_sets_the_period_date_and_the_figures_are_stored(client, app, settings, tmp_path):
+    from conftest import h
+    from test_cts_auto import ROWS
+
+    from dps.models import Document, Job
+
+    svc = h("cts", "SERVICE")
+    job_id = _auto_statement(client, app, settings, tmp_path, ROWS[1:], "n4-1", "key-n4-00001")
+    review = client.get(f"/dps/v1/jobs/{job_id}/review", headers=svc).json()
+    decisions = [{"fieldId": "document:asOfDate", "action": "CORRECT", "value": {"asOfDate": "2026-03-31"}}]
+    decisions += [{"fieldId": f["fieldId"], "action": "CONFIRM"} for f in review["fields"]]
+    decisions += [{"fieldId": w["fieldId"], "action": "ACKNOWLEDGE", "comment": "checked"} for w in review["warnings"]
+                  if w["code"] != "PERIOD_DATE_MISSING"]
+    r = client.post(f"/dps/v1/jobs/{job_id}/review", headers={**svc, "If-Match": str(review["revision"])},
+                    json={"decisions": decisions})
+    assert r.status_code == 202 and r.json()["status"] == "DONE", r.text
+    with app.state.db.session_factory() as s:
+        assert str(s.get(Document, s.get(Job, job_id).document_id).as_of_date) == "2026-03-31"
+    assert _values(client, ["EBITDA"])["points"][-1] == {"asOfDate": "2026-03-31", "values": {"EBITDA": 5.0}}
+
+
+def test_the_period_date_is_refused_on_an_agreement(client, app, settings, tmp_path):
+    from conftest import h
+    from test_phase2_ingest import text_pdf
+    from test_phase4_skills import make_worker, submit
+
+    svc = h("cts", "SERVICE")
+    w = make_worker(app, settings, tmp_path)
+    r = submit(client, app, "EXTRACT_AGREEMENT", text_pdf(["The Borrower shall maintain a Debt Service Coverage "
+                                                            "Ratio of not less than 1.25 times."]),
+               ".pdf", "application/pdf", "n4-2", "key-n4-00002")
+    assert w.run_once()
+    review = client.get(f"/dps/v1/jobs/{r.json()['jobId']}/review", headers=svc).json()
+    bad = client.post(f"/dps/v1/jobs/{r.json()['jobId']}/review",
+                      headers={**svc, "If-Match": str(review["revision"])},
+                      json={"decisions": [{"fieldId": "document:asOfDate", "action": "CORRECT",
+                                           "value": {"asOfDate": "2026-03-31"}}]})
+    assert bad.status_code == 400

@@ -198,8 +198,37 @@ def _consistent_covenant(f: dict, change, reviewer: str) -> None:
         value["mapping"]["notes"].append(f"CORRECTED: by {reviewer}"[:200])
 
 
+PERIOD_FIELD = "document:asOfDate"
+
+
+def _set_period(result: dict, d: Decision, reviewer: str) -> tuple[dict, dict]:
+    """A statement's period end set by a person (improvement plan N4, 24 Nov 2026): CORRECT on fieldId
+    document:asOfDate with value {"asOfDate": "YYYY-MM-DD"}. Every statement line takes the date, and a
+    PERIOD_DATE_MISSING warning is acknowledged by it. Before, only a reclassify could change the date."""
+    if d.action != "CORRECT" or not isinstance(d.value, dict):
+        raise ApiError(400, "VALIDATION_FAILED", f"{PERIOD_FIELD} takes CORRECT with value {{\"asOfDate\": ...}}.")
+    try:
+        day = date.fromisoformat(str(d.value.get("asOfDate")))
+    except ValueError as ex:
+        raise ApiError(400, "VALIDATION_FAILED", "asOfDate must be a date (YYYY-MM-DD).") from ex
+    lines = [f for f in result.get("fields", []) if f.get("group") == "STATEMENT_LINE"]
+    before = next((f["value"].get("asOfDate") for f in lines if isinstance(f.get("value"), dict)), None)
+    for f in lines:
+        if isinstance(f.get("value"), dict):
+            f["value"]["asOfDate"] = day.isoformat()
+    for w in result.get("warnings", []):
+        if w.get("code") in ("PERIOD_DATE_MISSING", "PERIOD_FROM_DOCUMENT") and not w.get("acknowledged"):
+            w["acknowledged"] = {"by": reviewer, "comment": f"period end set to {day.isoformat()}"}
+    result["_periodSet"] = day.isoformat()  # stored on the document by submit_review
+    if not d.reasonCode:
+        d.reasonCode = "WRONG_VALUE"
+    return {"value": {"asOfDate": before}}, {"value": {"asOfDate": day.isoformat()}}
+
+
 def _apply(result: dict, d: Decision, reviewer: str) -> tuple[dict | None, dict | None]:
     """Applies one decision to the result in place; returns (old field, new field)."""
+    if d.fieldId == PERIOD_FIELD:
+        return _set_period(result, d, reviewer)
     if d.action == "ACKNOWLEDGE":
         code = d.fieldId.removeprefix("warning:")
         warning = next((w for w in result.get("warnings", []) if w.get("code") == code), None)
@@ -259,6 +288,8 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
     if if_match is None or if_match.strip('"') != str(revision):
         raise ApiError(409, "REVISION_CHANGED", "The result changed since you loaded it; reload and review again.",
                        {"revision": revision})
+    if any(d.fieldId == PERIOD_FIELD for d in body.decisions) and not is_statement(job, result):
+        raise ApiError(400, "VALIDATION_FAILED", f"{PERIOD_FIELD} is only for a statement's result.")
     reviewer = acting_user(x_user, user)
     has_run = db.scalar(select(func.count()).select_from(Run).where(Run.job_id == job.id))
     if not has_run:  # a proven-flow result reviewed here for the first time: keep the original as revision 1
@@ -280,6 +311,11 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
                                                             "versionId": job.document_version_id}, default=str)))
         if job.rollout != "SHADOW":
             _learn(db, job, d, old, new, reviewer)
+    period = result.pop("_periodSet", None)
+    if period:  # the statement's period end, as the person set it, is the document's (publish uses it)
+        doc = db.get(Document, job.document_id)
+        if doc is not None:
+            doc.as_of_date = date.fromisoformat(period)
     _rederive(result, job)
     remaining = [f for f in result["fields"] if f["status"] == "NEEDS_REVIEW"]
     from dps.skills.runner import BLOCKING
@@ -347,10 +383,11 @@ def close_review(job_id: str, body: CloseRequest, request: Request, db: DB, user
     for f in result.get("fields", []):
         if f.get("status") == "NEEDS_REVIEW":
             f["status"], not_used = "NOT_USED", not_used + 1
+    from dps.skills.runner import BLOCKING
+
+    held = [w["code"] for w in result.get("warnings", []) if w.get("code") in BLOCKING and not w.get("acknowledged")]
     shown = 0
     for w in result.get("warnings", []):
-        from dps.skills.runner import BLOCKING
-
         if w.get("code") in BLOCKING and not w.get("acknowledged"):
             comment = f"shown to the user in CTS; review closed: {body.reason}"[:500]
             w["acknowledged"] = {"by": closer, "comment": comment, "byClose": True}
@@ -363,14 +400,50 @@ def close_review(job_id: str, body: CloseRequest, request: Request, db: DB, user
     job.error_code = None
     from dps import services
 
+    published, not_published = _publish_on_close(db, job, result, held, closer, request)
     services.audit(db, closer, "REVIEW_CLOSE", "job", job.id, notUsed=not_used, warningsShown=shown,
-                   reason=body.reason[:200])
+                   reason=body.reason[:200], published=published)
     event = "dps.extraction.shadow" if job.rollout == "SHADOW" else "dps.extraction.completed"
-    feed.emit_for_job(db, event, job, {"resultUrl": f"/dps/v1/jobs/{job.id}/result", "revision": revision + 1,
-                                       "reviewedBy": closer, "closed": True, "notUsed": not_used})
+    payload = {"resultUrl": f"/dps/v1/jobs/{job.id}/result", "revision": revision + 1, "reviewedBy": closer,
+               "closed": True, "notUsed": not_used}
+    if published is not None:
+        payload["published"] = published
+    feed.emit_for_job(db, event, job, payload)
     db.commit()
     db.refresh(job)
-    return {**job_view(job), "revision": revision + 1, "remaining": 0, "closed": True, "notUsed": not_used}
+    out = {**job_view(job), "revision": revision + 1, "remaining": 0, "closed": True, "notUsed": not_used}
+    if published is not None:
+        out["published"] = published
+        if not_published:
+            out["notPublishedReason"] = not_published
+    return out
+
+
+def _publish_on_close(db, job: Job, result: dict, held: list[str], closer: str,
+                      request: Request) -> tuple[int | None, str | None]:
+    """A statement closed in CTS (improvement plan N3, 24 Nov 2026): the lines a person CONFIRMED or CORRECTED are
+    stored for the bank app's /api/data/values; lines nobody decided are not. Nothing is stored when a blocking
+    warning was still open at the close (an unsettled currency, entity, period or total must be acknowledged by a
+    person first) or in SHADOW. Returns (lines stored, or None when not a statement; the reason when none)."""
+    if not is_statement(job, result):
+        return None, None
+    if job.rollout == "SHADOW":
+        return 0, "SHADOW: figures are not stored during the pilot"
+    if held:
+        return 0, "blocking warning(s) open at the close: " + ", ".join(held)
+    decided = [f for f in result.get("fields", [])
+               if f.get("group") != "STATEMENT_LINE" or f.get("status") in ("CONFIRMED", "CORRECTED")]
+    if not any(f.get("group") == "STATEMENT_LINE" for f in decided):
+        return 0, "no statement line was confirmed or corrected"
+    from dps.skills.statement_lines.reader import CurrencyNotSettled, publish
+
+    settings = request.app.state.settings
+    try:
+        stored = publish(db, job, {**result, "fields": decided}, settings.report_derived_values,
+                         settings.fiscal_year_end_month, closer)
+    except CurrencyNotSettled as ex:
+        return 0, str(ex)[:300]
+    return stored, None if stored else "the statement has no period date"
 
 
 def _rederive(result: dict, job: Job) -> None:
