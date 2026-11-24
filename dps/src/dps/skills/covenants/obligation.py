@@ -302,6 +302,21 @@ def _flag(f: dict, code: str, message: str) -> None:
         f["status"] = "NEEDS_REVIEW"
 
 
+def _review_obligation(f: dict, stated: list[str], expected: str | None) -> None:
+    found = f["value"]["conditions"]
+    scope = f["value"]["scope"]
+    basis, confidence, obligor = scope["basis"], scope["confidence"], scope["obligor"]
+    if found:
+        _flag(f, "CONDITIONAL", "applies only when: " + "; ".join(c["text"] for c in found)[:240])
+    if f.get("group") == "FINANCIAL_COVENANT" and basis and expected and basis != expected:
+        _flag(f, "ENTITY_DIFFERS", f"the agreement tests this on {BASIS_WORDS[basis]}; this borrower's "
+                                   f"statements are read for {BASIS_WORDS[expected]}")
+    if f.get("group") == "FINANCIAL_COVENANT" and confidence == "UNKNOWN":
+        _flag(f, "SCOPE_UNKNOWN", "the clause does not say whose figures are tested; set the company")
+    if len(stated) > 1:
+        _flag(f, "SCOPE_SEVERAL", f"the clause binds {obligor}; if their figures are tested apart, split it")
+
+
 def enrich(fields: list[dict], pages: list[dict] | None = None, ctx: dict | None = None, review: bool = True) -> None:
     """Adds scope, conditions, baskets, first test date, holiday and equity cure to every covenant-like field, and
     (``review``) sends the ones a person must decide to review. The proven agreement flow's stored terms keep the
@@ -369,13 +384,4 @@ def enrich(fields: list[dict], pages: list[dict] | None = None, ctx: dict | None
                 value["equityCure"] = cure
         if not review or f.get("status") not in OPEN:
             continue  # a person already decided (or the proven flow did): the new values are shown, nothing else
-        if found:
-            _flag(f, "CONDITIONAL", "applies only when: " + "; ".join(c["text"] for c in found)[:240])
-        expected = ctx.get("basis")  # whose figures this borrower's statements are read for (Spring's context)
-        if f.get("group") == "FINANCIAL_COVENANT" and basis and expected and basis != expected:
-            _flag(f, "ENTITY_DIFFERS", f"the agreement tests this on {BASIS_WORDS[basis]}; this borrower's "
-                                       f"statements are read for {BASIS_WORDS[expected]}")
-        if f.get("group") == "FINANCIAL_COVENANT" and confidence == "UNKNOWN":
-            _flag(f, "SCOPE_UNKNOWN", "the clause does not say whose figures are tested; set the company")
-        if len(stated) > 1:
-            _flag(f, "SCOPE_SEVERAL", f"the clause binds {obligor}; if their figures are tested apart, split it")
+        _review_obligation(f, stated, ctx.get("basis"))

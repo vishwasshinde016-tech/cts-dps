@@ -204,8 +204,7 @@ def _extra_files() -> list[Path]:
     raise TaxonomyError(f"{ENV}={where} is neither a file nor a folder")
 
 
-def build(documents: list[tuple[str, dict]]) -> Taxonomy:
-    """Merges the taxonomy documents in order and checks the result."""
+def _merge_documents(documents: list[tuple[str, dict]]) -> tuple[list[str], dict[str, str], dict[str, dict]]:
     versions, categories, raw = [], {}, {}
     for name, doc in documents:
         if doc.get("version"):
@@ -226,6 +225,12 @@ def build(documents: list[tuple[str, dict]]) -> Taxonomy:
                 raw[code] = merged
             else:
                 raw[code] = {k: v for k, v in entry.items() if k != "replace_aliases"}
+    return versions, categories, raw
+
+
+def build(documents: list[tuple[str, dict]]) -> Taxonomy:
+    """Merges the taxonomy documents in order and checks the result."""
+    versions, categories, raw = _merge_documents(documents)
     types: dict[str, CovenantType] = {}
     problems, notes = [], []
     for code, e in raw.items():

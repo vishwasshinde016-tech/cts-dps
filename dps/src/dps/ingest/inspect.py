@@ -221,12 +221,7 @@ def _active_content(pdf, flags: list[str] | None = None) -> str | None:
 
 # ---------- XLSX / DOCX ----------
 
-def _inspect_ooxml(data: bytes, fmt: str) -> Inspection:
-    try:
-        zf = zipfile.ZipFile(io.BytesIO(data))
-        infos = zf.infolist()
-    except (zipfile.BadZipFile, ValueError) as ex:
-        raise InspectionFailed("CORRUPT", "The file is not a readable Office file.") from ex
+def _office_part_names(infos: list[zipfile.ZipInfo]) -> list[str]:
     if len(infos) > MAX_ZIP_ENTRIES:
         raise InspectionFailed("UNSAFE_CONTENT", "The file has too many parts.")
     unpacked = 0
@@ -241,6 +236,16 @@ def _inspect_ooxml(data: bytes, fmt: str) -> Inspection:
         if info.compress_size and info.file_size / info.compress_size > MAX_ZIP_RATIO:
             raise InspectionFailed("UNSAFE_CONTENT", "The file is compressed suspiciously well (zip bomb).")
         names.append(name)
+    return names
+
+
+def _inspect_ooxml(data: bytes, fmt: str) -> Inspection:
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+        infos = zf.infolist()
+    except (zipfile.BadZipFile, ValueError) as ex:
+        raise InspectionFailed("CORRUPT", "The file is not a readable Office file.") from ex
+    names = _office_part_names(infos)
     lower = [n.lower() for n in names]
     main = "xl/workbook.xml" if fmt == "XLSX" else "word/document.xml"
     if main not in lower:

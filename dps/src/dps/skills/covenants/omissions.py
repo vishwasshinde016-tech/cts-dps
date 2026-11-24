@@ -81,6 +81,22 @@ def _types_text() -> str:
     return taxonomy().prompt_lines(COVENANT_CATEGORIES)
 
 
+def _collect_residual_answer(batch: list[dict], answer: dict | None, decisions: dict[str, dict],
+                             proposals: list[dict]) -> None:
+    ids = {e["id"] for e in batch}
+    for item in (answer or {}).get("items", []):
+        cid = item.get("candidate")
+        if cid not in ids or cid in decisions:
+            continue
+        decisions[cid] = item
+        if item.get("decision") == "COVENANT" and item.get("quote") and item.get("page"):
+            value = {k: v for k, v in (item.get("value") or {}).items() if v is not None}
+            for key in ("metric", "operator", "threshold", "unit", "expression"):
+                value.setdefault(key, "OTHER" if key == "metric" else None)
+            proposals.append({"name": item.get("name") or value.get("metric") or "OTHER", "value": value,
+                              "page": item["page"], "quote": item["quote"], "_residual": cid})
+
+
 def read(gateway, entries: list[dict], pages: list[dict], notes: list | None = None,
          route: str = "strong") -> tuple[list[dict], dict[str, dict]]:
     """(covenant proposals in the covenants pack's shape, {candidate id: decision}) for the unresolved entries."""
@@ -140,16 +156,5 @@ def read(gateway, entries: list[dict], pages: list[dict], notes: list | None = N
                 notes.append(issue("RESIDUAL_INCOMPLETE", f"one residual read failed ({type(answer).__name__}); its "
                                    "sentences are listed for review"))
             continue
-        ids = {e["id"] for e in batches[n]}
-        for item in (answer or {}).get("items", []):
-            cid = item.get("candidate")
-            if cid not in ids or cid in decisions:
-                continue
-            decisions[cid] = item
-            if item.get("decision") == "COVENANT" and item.get("quote") and item.get("page"):
-                value = {k: v for k, v in (item.get("value") or {}).items() if v is not None}
-                for key in ("metric", "operator", "threshold", "unit", "expression"):
-                    value.setdefault(key, "OTHER" if key == "metric" else None)
-                proposals.append({"name": item.get("name") or value.get("metric") or "OTHER", "value": value,
-                                  "page": item["page"], "quote": item["quote"], "_residual": cid})
+        _collect_residual_answer(batches[n], answer, decisions, proposals)
     return proposals, decisions

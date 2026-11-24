@@ -227,6 +227,19 @@ def app_measure(f: dict, hit: dict | None) -> str | None:
 
 # ---------------------------------------------------------------------------------------------------- the formula
 
+def _scope_constraints(value: dict, reasons: list[str], notes: list[str]) -> None:
+    if value.get("conditions"):
+        reasons.append("CONDITIONAL: applies only when " + "; ".join(
+            str(c.get("text") if isinstance(c, dict) else c) for c in value["conditions"])[:200])
+    if value.get("qualifiers"):
+        reasons.append("QUALIFIED: " + "; ".join(map(str, value["qualifiers"]))[:200])
+    scope = value.get("scope") if isinstance(value.get("scope"), dict) else {}
+    if scope.get("obligor") not in BORROWER:
+        reasons.append(f"SCOPE: binds {scope['obligor']}, not the borrower")
+    if scope.get("basis"):
+        notes.append(f"BASIS: tested on {scope['basis'].lower()} figures")
+
+
 def build(f: dict, hit: dict | None, as_of: date | None = None) -> dict:
     """Sets ``value.expression`` (or None) and ``value.mapping`` on one covenant field; returns the mapping."""
     value = f["value"]
@@ -269,16 +282,7 @@ def build(f: dict, hit: dict | None, as_of: date | None = None) -> dict:
                 app_unit = "INR_CR"
         if number is not None and not reasons:
             expression = f"{measure} {APP_OPERATOR[op]} {plain_number(number)}"
-    if value.get("conditions"):
-        reasons.append("CONDITIONAL: applies only when " + "; ".join(
-            str(c.get("text") if isinstance(c, dict) else c) for c in value["conditions"])[:200])
-    if value.get("qualifiers"):
-        reasons.append("QUALIFIED: " + "; ".join(map(str, value["qualifiers"]))[:200])
-    scope = value.get("scope") if isinstance(value.get("scope"), dict) else {}
-    if scope.get("obligor") not in BORROWER:
-        reasons.append(f"SCOPE: binds {scope['obligor']}, not the borrower")
-    if scope.get("basis"):
-        notes.append(f"BASIS: tested on {scope['basis'].lower()} figures")
+    _scope_constraints(value, reasons, notes)
     value["expression"] = expression
     mapping = {"mappable": expression is not None and not reasons, "reasons": reasons, "notes": notes,
                "measure": measure, "unit": app_unit}

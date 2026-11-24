@@ -1054,6 +1054,28 @@ def _article_score(articles: list[tuple[int, str]], pos: int) -> int:
     return 2 if "COVENANT" in title else -1 if _NOT_COVENANTS.search(title) else 0
 
 
+def _unnumbered_non_financial(doc: _Doc, out: dict[str, Term]) -> None:
+    # Not in a numbered clause ("(b) The Borrower shall not create any Lien ..." or a plain paragraph): the first
+    # sentence that says it, with less confidence, so a person confirms it. A definition is not a duty.
+    for m in re.finditer(r"[^.\n][^.]{20,600}?(?:\.(?!\d)|$)", doc.text):
+        sentence = normalize_ws(m.group(0))
+        if _DEFINES.search(sentence):
+            continue
+        if not _INTENT.search(sentence) and not re.search(r"\bchange\s+of\s+control\b", sentence, re.I):
+            continue
+        for metric, patterns, _ in NON_FINANCIAL_RULES:
+            if metric in out or not any(re.search(p, sentence, re.I) for p in patterns):
+                continue
+            if metric == "INSURANCE_MAINTENANCE" and not re.search(r"\b(?:maintain|keep|kept|insured|renew)\b",
+                                                                   sentence, re.I):
+                continue
+            if _control_is_a_payment_trigger(metric, sentence):
+                continue
+            quote, page = _quote(doc, m.start(), m.end())
+            out[metric] = Term(metric, "NON_FINANCIAL", None, None, None, _frequency(sentence), page, quote,
+                               sentence[:320], 0.7)
+
+
 def _non_financial(doc: _Doc, clauses: list[_Clause]) -> list[Term]:
     out: dict[str, Term] = {}
     best: dict[str, int] = {}
@@ -1083,25 +1105,7 @@ def _non_financial(doc: _Doc, clauses: list[_Clause]) -> list[Term]:
             out[metric] = Term(metric, "NON_FINANCIAL", None, None, None, _frequency(context), page, quote,
                                context[:320], 0.8)
             best[metric] = score
-    # Not in a numbered clause ("(b) The Borrower shall not create any Lien ..." or a plain paragraph): the first
-    # sentence that says it, with less confidence, so a person confirms it. A definition is not a duty.
-    for m in re.finditer(r"[^.\n][^.]{20,600}?(?:\.(?!\d)|$)", doc.text):
-        sentence = normalize_ws(m.group(0))
-        if _DEFINES.search(sentence):
-            continue
-        if not _INTENT.search(sentence) and not re.search(r"\bchange\s+of\s+control\b", sentence, re.I):
-            continue
-        for metric, patterns, _ in NON_FINANCIAL_RULES:
-            if metric in out or not any(re.search(p, sentence, re.I) for p in patterns):
-                continue
-            if metric == "INSURANCE_MAINTENANCE" and not re.search(r"\b(?:maintain|keep|kept|insured|renew)\b",
-                                                                   sentence, re.I):
-                continue
-            if _control_is_a_payment_trigger(metric, sentence):
-                continue
-            quote, page = _quote(doc, m.start(), m.end())
-            out[metric] = Term(metric, "NON_FINANCIAL", None, None, None, _frequency(sentence), page, quote,
-                               sentence[:320], 0.7)
+    _unnumbered_non_financial(doc, out)
     return list(out.values())
 
 

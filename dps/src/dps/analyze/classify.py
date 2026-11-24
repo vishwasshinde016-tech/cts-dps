@@ -190,33 +190,7 @@ def number_density(text: str) -> float:
     return sum(bool(re.fullmatch(r"\(?-?[\d,]+(\.\d+)?\)?%?", t)) for t in tokens) / len(tokens)
 
 
-def rule_scores(model: dict) -> tuple[dict[str, float], list[dict]]:
-    head = _pages(model)
-    text = "\n".join(t for _, t in head)
-    scores: dict[str, float] = {}
-    evidence: dict[str, list[dict]] = {}
-    for cls, signals in SIGNALS.items():
-        total = 0.0
-        for pattern, weight in signals:
-            for no, page_text in head:
-                m = pattern.search(page_text)
-                if m:
-                    total += weight
-                    line = _line_of(page_text, m.start())
-                    evidence.setdefault(cls, []).append({"page": no, "quote": line})
-                    break
-        scores[cls] = min(1.0, total)
-    # Whole-document signals.
-    whole = "\n".join(p.get("text") or "" for p in model.get("pages", []))
-    if len(re.findall(r"\bshall\b", whole, re.I)) >= 30:
-        scores["LOAN_AGREEMENT"] = min(1.0, scores["LOAN_AGREEMENT"] + 0.15)
-    items = {m.group(0).lower() for m in LINE_ITEMS.finditer(text)}
-    if len(items) >= 4:
-        scores["FINANCIAL_STATEMENT"] = min(1.0, scores["FINANCIAL_STATEMENT"] + (0.7 if len(items) >= 6 else 0.5))
-    if number_density(text) > 0.3:
-        scores["FINANCIAL_STATEMENT"] = min(1.0, scores["FINANCIAL_STATEMENT"] + 0.3)
-    if any(SHEET_HINT.match(s.get("name", "")) for s in model.get("sheets", [])):
-        scores["FINANCIAL_STATEMENT"] = min(1.0, scores["FINANCIAL_STATEMENT"] + 0.4)
+def _resolve_conflicting_types(head: list[tuple[int, str]], scores: dict[str, float]) -> None:
     # A page-1 title "... LOAN AGREEMENT" outweighs a mention of the sanction letter it follows (bulk run, 22 Nov
     # 2026), unless the document is an amendment, a restatement, a waiver or a trust deed of that agreement
     other = max(scores["AMENDMENT"], scores["AMENDED_AND_RESTATED"], scores["WAIVER_CONSENT"], scores["TRUST_DEED"])
@@ -246,6 +220,36 @@ def rule_scores(model: dict) -> tuple[dict[str, float], list[dict]]:
         scores["AMENDMENT"] = max(0.0, scores["AMENDMENT"] - 0.3)
         # ... and the compliance it waives ("the Borrower has not complied with Section 5.9"): not a certificate
         scores["COMPLIANCE_CERTIFICATE"] = max(0.0, scores["COMPLIANCE_CERTIFICATE"] - 0.4)
+
+
+def rule_scores(model: dict) -> tuple[dict[str, float], list[dict]]:
+    head = _pages(model)
+    text = "\n".join(t for _, t in head)
+    scores: dict[str, float] = {}
+    evidence: dict[str, list[dict]] = {}
+    for cls, signals in SIGNALS.items():
+        total = 0.0
+        for pattern, weight in signals:
+            for no, page_text in head:
+                m = pattern.search(page_text)
+                if m:
+                    total += weight
+                    line = _line_of(page_text, m.start())
+                    evidence.setdefault(cls, []).append({"page": no, "quote": line})
+                    break
+        scores[cls] = min(1.0, total)
+    # Whole-document signals.
+    whole = "\n".join(p.get("text") or "" for p in model.get("pages", []))
+    if len(re.findall(r"\bshall\b", whole, re.I)) >= 30:
+        scores["LOAN_AGREEMENT"] = min(1.0, scores["LOAN_AGREEMENT"] + 0.15)
+    items = {m.group(0).lower() for m in LINE_ITEMS.finditer(text)}
+    if len(items) >= 4:
+        scores["FINANCIAL_STATEMENT"] = min(1.0, scores["FINANCIAL_STATEMENT"] + (0.7 if len(items) >= 6 else 0.5))
+    if number_density(text) > 0.3:
+        scores["FINANCIAL_STATEMENT"] = min(1.0, scores["FINANCIAL_STATEMENT"] + 0.3)
+    if any(SHEET_HINT.match(s.get("name", "")) for s in model.get("sheets", [])):
+        scores["FINANCIAL_STATEMENT"] = min(1.0, scores["FINANCIAL_STATEMENT"] + 0.4)
+    _resolve_conflicting_types(head, scores)
     winner = max(scores, key=scores.get)
     return {k: round(v, 3) for k, v in scores.items()}, evidence.get(winner, [])[:3]
 
