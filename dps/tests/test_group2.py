@@ -27,8 +27,9 @@ def test_amendments_have_the_agreed_default_token_budget():
 
 
 def test_long_amendment_reaches_pages_past_the_previous_limit(monkeypatch):
-    page_text = "This amendment updates the administrative terms. " + "background " * 340
+    page_text = "Administrative terms and conditions. " + "background " * 340
     pages = [{"no": no, "text": page_text} for no in range(1, 26)]
+    pages[0]["text"] += "Amendment to the agreement."
     read = []
 
     def proposals(pack, gateway, batches, **kwargs):
