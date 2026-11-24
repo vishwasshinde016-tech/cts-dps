@@ -75,7 +75,44 @@ touches the app's. Set these on the DPS server (values come from the vault; noth
 | `DPS_LLM_ENABLED`, `DPS_AI_MODEL`, `DPS_AI_ALLOWED_HOSTS` | `true`, `azure/<deployment>`, the Azure host | The Document Agent; without it every field is rules-only and reviewed. |
 | `DPS_QUEUE_MAX_RUNNING_PER_TENANT` | 8 to 12 | The default 4 makes a batch upload wait. |
 | `DPS_ROLLOUT_DEFAULT` | `SHADOW` for the pilot | Results are stored for comparison and not shown to analysts until switched to `NORMAL`. |
-| `DPS_DATABASE_URL` | SQLite on the server now; DPS's own SQL Server later (`READ_COMMITTED_SNAPSHOT ON`) | Never the app's MySQL. |
+| `DPS_DATABASE_URL` | DPS's own SQL Server for the shared pilot | Set from the vault. The API and workers require `READ_COMMITTED_SNAPSHOT ON`. |
+| `DPS_GO_LIVE_EVALUATION_FILE` | Optional JSON file mounted read-only under `/config` | Supply the evaluation for the active pipeline. Missing or mismatched evidence stays `NO_DATA`. |
+| `DPS_DIAGNOSTICS_RETENTION_DAYS` | `0` until Ops approves retention | A positive number prunes expired AI-call and trace detail in batches. Langfuse retention is configured independently. |
+| `DPS_CORE_HEALTH_PATH` | `/actuator/health` in Compose | Spring health is reported independently on `/health/ready`. The API readiness status still reflects database and storage. |
+
+### Group 2 pilot setup
+
+Have the DBA create a dedicated DPS SQL Server database and enable
+`READ_COMMITTED_SNAPSHOT` before starting DPS. Verify the setting against the pilot database with
+`SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()`.
+Run `alembic upgrade head` once with the pilot database URL and run `alembic check`
+before starting the workers. Keep `DPS_ROLLOUT_DEFAULT=SHADOW` for the pilot.
+Submit concurrent STANDARD and HEAVY jobs and verify the queue drains, retries stay bounded,
+and events arrive in sequence.
+
+The [KEDA manifest](../../deploy/keda/dps-workers.yaml) applies where Kubernetes and KEDA
+are available. Match each target to its worker Deployment, set the Prometheus address for
+this environment, and verify the age and depth metrics are present for both pools.
+Mount a distinct shared Unix socket per worker and parser pod, leave time for active jobs
+to finish during pod termination, and size `DPS_AI_RPM_SHARE` for the maximum total
+number of workers. Scale STANDARD and HEAVY independently. On Compose VMs, use
+`GET /dps/v1/ops/scaling` to size the existing worker/parser pairs.
+
+The go-live report accepts a JSON file with the deployed pipeline ID and per-job-type
+classification and calibration results. Supply only measured results from the evaluation.
+
+```json
+{
+  "pipelineVersion": "<deployed pipeline ID>",
+  "jobTypes": {
+    "EXTRACT_AGREEMENT": {"classificationAccuracy": 0.99, "calibrationError": 0.03}
+  }
+}
+```
+
+For retention, Ops chooses a period and configures it in Langfuse separately from
+`DPS_DIAGNOSTICS_RETENTION_DAYS`. Check both settings against the organization policy
+before enabling deletion. Audit and aggregate usage rows are retained independently.
 
 Run the API, at least one STANDARD worker and one HEAVY worker (scans, photos and long documents go to HEAVY).
 The compose file passes all of these; `DPS_AUTH_MODE` defaults to `JWT` there, so set it to `SERVICE_TOKEN`

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from dps.ingest.inspect import InspectionFailed, declared_format
 from dps.ingest.store import LocalStore, StoreError
 from dps.models import Artifact, Document, Job
+from dps.ops import observability as obs
 from dps.parse import sandbox
 from dps.parse.engine import HEAVY_POOR_SHARE, HEAVY_THRESHOLD
 
@@ -140,7 +141,19 @@ def sandbox_parser(pool: str, socket_path: str = "") -> Parse:
     if socket_path:
         from dps.parse.server import SocketParser
 
-        client = SocketParser(socket_path)
-        return lambda req, hint: client.parse(req, hint)
-    limits = sandbox.Limits.for_pool(pool)
-    return lambda req, hint: sandbox.run(req, limits, hint)
+        parse = SocketParser(socket_path).parse
+    else:
+        limits = sandbox.Limits.for_pool(pool)
+        parse = lambda req, hint: sandbox.run(req, limits, hint)  # noqa: E731
+
+    def measured(req: sandbox.ParseRequest, hint: int | None) -> dict:
+        timer = obs.Timer()
+        with obs.span("dps.parse", kind="client" if socket_path else None,
+                      **{"dps.pool": pool, "dps.format": req.fmt, "dps.statement": req.statement is not None}):
+            try:
+                return parse(req, hint)
+            finally:
+                obs.observe("dps.parse.duration", timer.seconds, pool=pool,
+                            transport="socket" if socket_path else "process")
+
+    return measured

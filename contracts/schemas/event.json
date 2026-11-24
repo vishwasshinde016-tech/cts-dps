@@ -20,6 +20,201 @@
     "jobId": { "type": ["string", "null"] },
     "documentVersionId": { "type": ["string", "null"] },
     "schema": { "type": "string", "const": "dps.event/1.0" },
-    "payload": { "type": "object" }
+    "payload": { "type": "object", "description": "Versioned payloads are validated by event type. Historical payloads may omit schemaVersion." }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"type": {"const": "dps.job.accepted"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.job.accepted"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.analysis.completed"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.analysis.completed"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.extraction.completed"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.extraction.completed"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.extraction.needs_review"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.extraction.needs_review"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.extraction.shadow"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.extraction.shadow"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.job.failed"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.job.failed"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.job.dead"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.job.dead"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.job.cancelled"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.job.cancelled"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.job.retry_wait"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.job.retry_wait"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.job.moved"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.job.moved"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.job.requeued"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.job.requeued"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.job.superseded"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.job.superseded"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "dps.batch.completed"}, "payload": {"required": ["schemaVersion"]}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/dps.batch.completed"}}}
+    }
+  ],
+  "$defs": {
+    "versionedPayload": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": {"const": "1.0"},
+        "runId": {"type": "string"},
+        "pipelineVersion": {"type": "string"}
+      }
+    },
+    "dps.job.accepted": {
+      "$ref": "#/$defs/versionedPayload",
+      "properties": {
+        "jobType": {"type": "string"},
+        "priority": {"type": "string"},
+        "batchId": {"type": ["string", "null"]}
+      }
+    },
+    "dps.analysis.completed": {
+      "$ref": "#/$defs/versionedPayload",
+      "required": ["resultUrl"],
+      "properties": {
+        "type": {"type": "string"},
+        "confidence": {"type": "number"},
+        "mismatch": {"type": "boolean"},
+        "uncertain": {"type": "boolean"},
+        "expected": {"type": ["string", "null"]},
+        "identifiers": {"type": "array"},
+        "legibility": {"type": "number"},
+        "missingRequired": {"type": ["string", "null"]},
+        "keyPages": {"type": "array"},
+        "mismatches": {"type": "array"},
+        "route": {"type": "string"},
+        "resultUrl": {"type": "string"}
+      }
+    },
+    "dps.extraction.completed": {
+      "$ref": "#/$defs/versionedPayload",
+      "required": ["resultUrl"],
+      "properties": {
+        "skillPack": {"type": "string"},
+        "fields": {"type": "integer"},
+        "toReview": {"type": "integer"},
+        "route": {"type": ["string", "null"]},
+        "documentType": {"type": ["string", "null"]},
+        "resultUrl": {"type": "string"},
+        "revision": {"type": "integer"},
+        "reviewedBy": {"type": "string"},
+        "closed": {"type": "boolean"},
+        "notUsed": {"type": "integer"},
+        "published": {"type": "integer"}
+      }
+    },
+    "dps.extraction.needs_review": {
+      "$ref": "#/$defs/versionedPayload",
+      "required": ["resultUrl"],
+      "properties": {
+        "skillPack": {"type": "string"},
+        "fields": {"type": "integer"},
+        "toReview": {"type": "integer"},
+        "route": {"type": ["string", "null"]},
+        "documentType": {"type": ["string", "null"]},
+        "resultUrl": {"type": "string"}
+      }
+    },
+    "dps.extraction.shadow": {
+      "$ref": "#/$defs/versionedPayload",
+      "required": ["resultUrl"],
+      "properties": {
+        "skillPack": {"type": "string"},
+        "fields": {"type": "integer"},
+        "resultUrl": {"type": "string"},
+        "revision": {"type": "integer"},
+        "reviewedBy": {"type": "string"},
+        "closed": {"type": "boolean"},
+        "notUsed": {"type": "integer"},
+        "published": {"type": "integer"}
+      }
+    },
+    "dps.job.failed": {
+      "$ref": "#/$defs/versionedPayload",
+      "properties": {
+        "errorCode": {"type": "string"},
+        "message": {"type": "string"},
+        "quarantine": {"type": "boolean"}
+      }
+    },
+    "dps.job.dead": {
+      "$ref": "#/$defs/versionedPayload",
+      "properties": {
+        "errorCode": {"type": "string"},
+        "message": {"type": "string"},
+        "attempts": {"type": "integer"}
+      }
+    },
+    "dps.job.cancelled": {
+      "$ref": "#/$defs/versionedPayload",
+      "properties": {
+        "cancelledBy": {"type": "string"},
+        "cancelled": {"type": "boolean"},
+        "errorCode": {"type": "string"},
+        "message": {"type": "string"}
+      }
+    },
+    "dps.job.retry_wait": {
+      "$ref": "#/$defs/versionedPayload",
+      "properties": {
+        "errorCode": {"type": "string"},
+        "attempts": {"type": "integer"},
+        "dueAt": {"type": "string"}
+      }
+    },
+    "dps.job.moved": {
+      "$ref": "#/$defs/versionedPayload",
+      "properties": {
+        "pool": {"type": "string"}
+      }
+    },
+    "dps.job.requeued": {
+      "$ref": "#/$defs/versionedPayload",
+      "properties": {
+        "requeuedBy": {"type": "string"},
+        "previousStatus": {"type": "string"}
+      }
+    },
+    "dps.job.superseded": {
+      "$ref": "#/$defs/versionedPayload",
+      "properties": {
+        "supersededBy": {"type": "string"},
+        "status": {"type": "string"}
+      }
+    },
+    "dps.batch.completed": {
+      "$ref": "#/$defs/versionedPayload",
+      "properties": {
+        "batchId": {"type": "string"},
+        "counts": {"type": "object"},
+        "errorsUrl": {"type": ["string", "null"]}
+      }
+    }
   }
 }

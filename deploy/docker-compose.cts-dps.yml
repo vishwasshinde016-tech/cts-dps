@@ -30,8 +30,11 @@ x-dps-env: &dps-env
   DPS_AI_DAILY_TOKEN_BUDGET: ${DPS_AI_DAILY_TOKEN_BUDGET:-20000000}
   DPS_DATABASE_URL: ${DPS_DATABASE_URL:?set from the vault}
   DPS_CORE_BASE_URL: ${DPS_CORE_BASE_URL:?Spring app URL}
+  DPS_CORE_HEALTH_PATH: "${DPS_CORE_HEALTH_PATH:-/actuator/health}"
   DPS_EVENTS_PUSH_PATH: ${DPS_EVENTS_PUSH_PATH:-}
   DPS_ROLLOUT_DEFAULT: ${DPS_ROLLOUT_DEFAULT:-SHADOW}
+  DPS_GO_LIVE_EVALUATION_FILE: ${DPS_GO_LIVE_EVALUATION_FILE:-}
+  DPS_DIAGNOSTICS_RETENTION_DAYS: ${DPS_DIAGNOSTICS_RETENTION_DAYS:-0}
   DPS_SCORER_DIR: ${DPS_SCORER_DIR:-}
   DPS_JWT_ISSUER: ${DPS_JWT_ISSUER:-}
   DPS_JWT_AUDIENCE: ${DPS_JWT_AUDIENCE:-dps}
@@ -68,7 +71,7 @@ x-worker: &worker
   cpus: 2
   mem_limit: 3g
   healthcheck:
-    test: ["CMD", "python", "-c", "import dps.worker"]
+    test: ["CMD", "python", "-m", "dps.worker", "--healthcheck"]
     interval: 60s
     timeout: 10s
 x-parser: &parser
@@ -101,7 +104,7 @@ services:
   # LIGHT pool: three worker + parser pairs (the parser has no network; they share only the socket volume).
   dps-worker-1:
     <<: *worker
-    environment: { <<: *dps-env, DPS_WORKER_POOL: STANDARD, DPS_WORKER_ID: light-1,
+    environment: { <<: *dps-env, DPS_WORKER_HEARTBEAT_FILE: /tmp/dps-worker.heartbeat, DPS_WORKER_POOL: STANDARD, DPS_WORKER_ID: light-1,
                    DPS_PARSER_SOCKET: /run/dps-parser/parser.sock }
     volumes:
       - ${DMS_BLOBS:-/srv/dms/blobs}:/dms/blobs:ro
@@ -117,7 +120,7 @@ services:
     volumes: ["sock-light-1:/run/dps-parser"]
   dps-worker-2:
     <<: *worker
-    environment: { <<: *dps-env, DPS_WORKER_POOL: STANDARD, DPS_WORKER_ID: light-2,
+    environment: { <<: *dps-env, DPS_WORKER_HEARTBEAT_FILE: /tmp/dps-worker.heartbeat, DPS_WORKER_POOL: STANDARD, DPS_WORKER_ID: light-2,
                    DPS_PARSER_SOCKET: /run/dps-parser/parser.sock }
     volumes:
       - ${DMS_BLOBS:-/srv/dms/blobs}:/dms/blobs:ro
@@ -133,7 +136,7 @@ services:
     volumes: ["sock-light-2:/run/dps-parser"]
   dps-worker-3:
     <<: *worker
-    environment: { <<: *dps-env, DPS_WORKER_POOL: STANDARD, DPS_WORKER_ID: light-3,
+    environment: { <<: *dps-env, DPS_WORKER_HEARTBEAT_FILE: /tmp/dps-worker.heartbeat, DPS_WORKER_POOL: STANDARD, DPS_WORKER_ID: light-3,
                    DPS_PARSER_SOCKET: /run/dps-parser/parser.sock }
     volumes:
       - ${DMS_BLOBS:-/srv/dms/blobs}:/dms/blobs:ro
@@ -154,7 +157,7 @@ services:
     image: ${DPS_HEAVY_IMAGE:-covenant-dps-heavy}:${DPS_IMAGE_TAG:-latest}
     cpus: 4
     mem_limit: 8g
-    environment: { <<: *dps-env, DPS_WORKER_POOL: HEAVY, DPS_WORKER_ID: heavy-1,
+    environment: { <<: *dps-env, DPS_WORKER_HEARTBEAT_FILE: /tmp/dps-worker.heartbeat, DPS_WORKER_POOL: HEAVY, DPS_WORKER_ID: heavy-1,
                    DPS_PARSER_SOCKET: /run/dps-parser/parser.sock }
     volumes:
       - ${DMS_BLOBS:-/srv/dms/blobs}:/dms/blobs:ro

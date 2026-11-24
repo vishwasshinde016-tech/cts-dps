@@ -18,7 +18,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from dps import jobs
+from dps import feed, jobs
 from dps.models import Job
 from dps.ops import observability as obs
 from dps.skills import Pack, for_job_type, load
@@ -721,13 +721,17 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
             ctx["base"], ctx["baseSource"] = base_fields(db, job, pipeline_version), "DPS_EXTRACTION"
     fields = pack.rules(pages, ctx)
     page_note = None
+    max_pages = pack.page_selection.get("max_pages", 25)
     if pack.page_selection.get("rules") == "covenant_section":  # rules, sections, duty sentences, definitions
         from dps.skills.covenants.pages import covenant_batches
 
-        batches, page_note = covenant_batches(pages, fields, pack.page_selection.get("max_pages", 25),
+        batches, page_note = covenant_batches(pages, fields, max_pages,
                                               MAX_PROMPT_CHARS, pack.page_selection.get("max_batches", 1))
+    elif pack.name == "amendment_diff" and len(pages) <= max_pages:
+        batches = page_batches(pages)
     else:
-        batches = [select_pages(pages, fields, KEYWORDS.get(pack.name), pack.page_selection.get("max_pages", 25))]
+        selected = select_pages(pages, fields, KEYWORDS.get(pack.name), max_pages)
+        batches = page_batches(selected) if pack.name == "amendment_diff" else [selected]
     lookup_ctx = {"cpIds": ctx.get("cpIds") or [], "obligorId": ctx.get("obligorId"),
                   "facilityIds": ctx.get("facilityIds") or []}
     notes: list[dict] = []
@@ -825,6 +829,9 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     if page_note and page_note["notSent"] and gateway is not None:
         warnings.append(issue("PAGES_NOT_SENT", "duty pages not in the agent's prompt (it could open them with its "
                                                 "tools): " + ", ".join(map(str, page_note["notSent"][:30]))))
+    if pack.name == "amendment_diff" and len(pages) > max_pages and gateway is not None:
+        count = sum(map(len, batches))
+        warnings.append(issue("PAGES_NOT_SENT", f"Amendment prompts included {count} of {len(pages)} pages."))
     # the library match and the app formula run in run(), after the taxonomy stamp and the scope enrichment
     warnings += pack.checks(fields, ctx)
     extra = {}
@@ -970,7 +977,8 @@ def finish(db: Session, job: Job, result: dict) -> None:
     mapping = (result.get("document") or {}).get("route") == "MAPPING_REVIEW"
     # fields: every field; toReview: the ones waiting for a person; route: why (MAPPING_REVIEW, NEEDS_REVIEW ...)
     jobs.finish(db, job, status, None, "MAPPING_REVIEW" if mapping and status == jobs.NEEDS_REVIEW else None,
-                payload={"skillPack": result["pipeline"]["skillPack"], "fields": len(result["fields"]),
+                payload={**feed.result_metadata(result),
+                         "skillPack": result["pipeline"]["skillPack"], "fields": len(result["fields"]),
                          "toReview": sum(1 for f in result["fields"] if f.get("status") == "NEEDS_REVIEW"),
                          "route": (result.get("document") or {}).get("route"),
                          "documentType": (result.get("classification") or {}).get("type")})

@@ -484,7 +484,8 @@ paths:
       description: >
         status is UP when the database and the storage are reachable. Also reported, not part of status:
         workers (UP while a worker holds the scheduler lock), parser (UP, DOWN, or IN_PROCESS when no parser socket
-        is configured) and model (OFF, IDLE, UP, DEGRADED or DOWN, from the model calls of the last 5 minutes).
+        is configured), model (OFF, IDLE, UP, DEGRADED or DOWN, from the model calls of the last 5 minutes),
+        and spring (UP, DOWN or NOT_CONFIGURED).
       responses:
         "200": { description: Ready }
         "503": { description: Not ready }

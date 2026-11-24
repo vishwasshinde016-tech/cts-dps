@@ -7,11 +7,12 @@ from datetime import timedelta
 
 from conftest import h
 from sqlalchemy import select
+from test_jobapi import check
 from test_phase2_ingest import text_pdf
 from test_phase4_skills import CERTIFICATE, make_worker, submit
 
 from dps import jobs
-from dps.models import EventFeed, Job, ReviewDecision, utcnow
+from dps.models import EventFeed, Job, ReviewDecision, Run, utcnow
 
 SERVICE = h("cts-spring", "SERVICE")
 OPS = h("ops-1", "SUPPORT")
@@ -25,9 +26,17 @@ def test_shadow_mode_stores_but_emits_shadow_event(client, app, settings, tmp_pa
     make_worker(app, settings, tmp_path).run_once()
     with app.state.db.session_factory() as s:
         assert s.get(Job, job_id).rollout == "SHADOW"
-        types = {e.type for e in s.scalars(select(EventFeed).where(EventFeed.job_id == job_id))}
+        events = {e.type: e for e in s.scalars(select(EventFeed).where(EventFeed.job_id == job_id))}
+        types = set(events)
         assert "dps.extraction.shadow" in types and not types & {"dps.extraction.completed",
                                                                  "dps.extraction.needs_review"}
+        from dps.feed import view
+
+        shadow = view(events["dps.extraction.shadow"])
+        check("event", shadow)
+        assert shadow["payload"]["runId"] == job_id
+        saved = s.scalar(select(Run).where(Run.job_id == job_id))
+        assert shadow["payload"]["pipelineVersion"] == json.loads(saved.result_json)["pipeline"]["version"]
     result = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
     assert result["rollout"] == "SHADOW" and result["fields"]
 

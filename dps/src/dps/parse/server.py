@@ -18,6 +18,7 @@ import struct
 import sys
 
 from dps.ingest.inspect import InspectionFailed
+from dps.ops import observability as obs
 from dps.parse import sandbox
 
 log = logging.getLogger(__name__)
@@ -71,7 +72,11 @@ class _Handler(socketserver.StreamRequestHandler):
             header, body = recv_frame(self.request)
         except (ValueError, ConnectionError, json.JSONDecodeError):
             return
-        reply = handle(header, body, self.server.pool, getattr(self.server, "parser", None))  # type: ignore[attr-defined]
+        carrier = {key: header[key] for key in ("traceparent", "tracestate") if isinstance(header.get(key), str)}
+        with obs.span("dps.parser.handle", headers=carrier) as span:
+            reply = handle(header, body, self.server.pool, getattr(self.server, "parser", None))  # type: ignore[attr-defined]
+            if "error" in reply:
+                obs.mark_failed(span, reply["error"])
         payload = json.dumps(reply).encode("utf-8")
         send_frame(self.request, {"len": len(payload)}, payload)
 
@@ -90,7 +95,7 @@ class SocketParser:
             sock.connect(self.path)
             send_frame(sock, {"format": req.fmt, "sha256": req.sha256, "versionId": req.version_id,
                               "ocr": req.ocr, "pagesHint": pages_hint, "target": target,
-                              "statement": req.statement}, req.data)
+                              "statement": req.statement, **obs.trace_headers()}, req.data)
             _, payload = recv_frame(sock)
         except (OSError, ConnectionError) as ex:
             raise sandbox.ParserCrash(f"Parser service unreachable: {type(ex).__name__}") from ex

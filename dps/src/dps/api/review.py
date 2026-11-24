@@ -345,7 +345,7 @@ def submit_review(job_id: str, body: Decisions, request: Request, db: DB, user: 
         event = "dps.extraction.shadow" if job.rollout == "SHADOW" else "dps.extraction.completed"
         feed.emit_for_job(db, event, job,
                           {"resultUrl": f"/dps/v1/jobs/{job.id}/result", "revision": revision + 1,
-                           "reviewedBy": reviewer})
+                           "reviewedBy": reviewer, **feed.result_metadata(result)})
     db.commit()
     db.refresh(job)
     return {**job_view(job), "revision": revision + 1, "remaining": len(remaining)}
@@ -406,7 +406,7 @@ def close_review(job_id: str, body: CloseRequest, request: Request, db: DB, user
                    reason=body.reason[:200], published=published)
     event = "dps.extraction.shadow" if job.rollout == "SHADOW" else "dps.extraction.completed"
     payload = {"resultUrl": f"/dps/v1/jobs/{job.id}/result", "revision": revision + 1, "reviewedBy": closer,
-               "closed": True, "notUsed": not_used}
+               "closed": True, "notUsed": not_used, **feed.result_metadata(result)}
     if published is not None:
         payload["published"] = published
     feed.emit_for_job(db, event, job, payload)
@@ -594,7 +594,8 @@ def go_live(request: Request, db: DB, user: User, days: int = 30) -> dict:
     from dps.ops import golive
 
     settings = request.app.state.settings
-    body = golive.report(db, max(1, min(days, 366)))
+    offline = golive.load_offline(settings.go_live_evaluation_file, settings.pipeline_version)
+    body = golive.report(db, max(1, min(days, 366)), offline)
     for t in body["types"]:
         t["rollout"] = settings.rollout_modes.get(t["jobType"], settings.rollout_default)
     return body

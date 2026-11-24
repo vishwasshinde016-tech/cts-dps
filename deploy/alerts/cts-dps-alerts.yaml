@@ -19,6 +19,16 @@ groups:
         for: 2m
         labels: { severity: info }
         annotations: { summary: "Add a {{ $labels.pool }} replica (autoscaling rule)", runbook: "ScaleOut" }
+      - alert: DpsSchedulerMetricsMissing
+        expr: absent_over_time(dps_queue_ready{pool="STANDARD"}[5m]) or absent_over_time(dps_queue_ready{pool="HEAVY"}[5m])
+        for: 2m
+        labels: { severity: page }
+        annotations: { summary: "DPS queue metrics stopped arriving for {{ $labels.pool }}", runbook: "QueueSlow" }
+      - alert: DpsWorkerPoolStalled
+        expr: time() - max by (pool) (dps_worker_heartbeat_timestamp) > 180
+        for: 2m
+        labels: { severity: page }
+        annotations: { summary: "No fresh DPS worker heartbeat in {{ $labels.pool }}", runbook: "QueueSlow" }
       - alert: DpsDeadJobs
         expr: max(dps_jobs_dead) > 0
         for: 1m
@@ -63,9 +73,13 @@ groups:
         labels: { severity: page }
         annotations: { summary: "The Document Agent's model is failing: documents are read by rules only and sent to review", runbook: "AiUnavailable" }
       - alert: DpsAiMonthlyBudgetSpent
-        expr: sum(increase(dps_ai_budget_spent_total[10m])) > 0
+        expr: sum(increase(dps_ai_budget_spent_total{scope="month"}[10m])) > 0
         labels: { severity: ticket }
         annotations: { summary: "The month's AI token budget is spent: documents are read by the rules only and sent to review (not an Azure outage)", runbook: "AiBudget" }
+      - alert: DpsAiDailyBudgetSpent
+        expr: sum(increase(dps_ai_budget_spent_total{scope="day"}[10m])) > 0
+        labels: { severity: ticket }
+        annotations: { summary: "A tenant reached the daily AI token budget", runbook: "AiBudget" }
       - alert: DpsAiRefusals
         expr: sum(increase(dps_ai_refused_total[1h])) > 5
         labels: { severity: ticket }

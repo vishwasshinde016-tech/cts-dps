@@ -1,0 +1,25 @@
+rule_files: [cts-dps-alerts.yaml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'dps_queue_oldest_seconds{pool="STANDARD"}'
+        values: '0 0 301 302 303 304'
+      - series: 'dps_queue_oldest_seconds{pool="HEAVY"}'
+        values: '0+0x5'
+      - series: 'dps_queue_ready{pool="STANDARD"}'
+        values: '1+0x5'
+      - series: 'dps_queue_ready{pool="HEAVY"}'
+        values: '0+0x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: DpsInteractiveQueueSlow
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: DpsInteractiveQueueSlow
+        exp_alerts:
+          - exp_labels: {pool: STANDARD, severity: page}
+            exp_annotations: {summary: "Oldest queued job in STANDARD waited over 5 minutes", runbook: "QueueSlow"}
+      - eval_time: 4m
+        alertname: DpsSchedulerMetricsMissing
+        exp_alerts: []

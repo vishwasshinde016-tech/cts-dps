@@ -8,17 +8,41 @@ measured from the live tables: grounding rate of stored values, the 3% QA sample
 from __future__ import annotations
 
 import json
+import logging
 from datetime import timedelta
+from pathlib import Path
 
 from sqlalchemy import select, true
 from sqlalchemy.orm import Session
 
 from dps.models import Job, ReviewDecision, Run, utcnow
 
+log = logging.getLogger(__name__)
 TARGETS = {"classificationAccuracy": 0.98, "groundingRate": 1.0, "sampledErrorRate": 0.01,
            "calibrationError": 0.05, "p95SecondsNative": 300, "p95SecondsScan": 900}
 EXTRACTION_TYPES = ("EXTRACT_AGREEMENT", "EXTRACT_STATEMENT", "EXTRACT_SANCTION", "EXTRACT_CERTIFICATE",
                     "EXTRACT_AMENDMENT", "EXTRACT_WAIVER", "AUTO")
+
+
+def load_offline(path: str, pipeline_version: str) -> dict:
+    """Load the evaluation supplied for this pipeline by the deployment."""
+    if not path:
+        return {}
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if not isinstance(data, dict) or data.get("pipelineVersion") != pipeline_version:
+            raise ValueError("evaluation pipeline version differs from the running pipeline")
+        by_type = data.get("jobTypes")
+        if not isinstance(by_type, dict):
+            raise ValueError("missing evaluation results by job type")
+    except (OSError, ValueError):
+        log.warning("Go-live evaluation is unavailable or does not match this pipeline")
+        return {}
+    return {
+        job_type: {key: value for key in ("classificationAccuracy", "calibrationError")
+                   if type(value := measures.get(key)) in (float, int) and 0 <= value <= 1}
+        for job_type, measures in by_type.items() if job_type in EXTRACTION_TYPES and isinstance(measures, dict)
+    }
 
 
 def _p95(values: list[float]) -> float | None:
