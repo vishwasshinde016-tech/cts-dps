@@ -24,7 +24,7 @@
    "operator": ">=",
    "threshold": 1.25,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "7.2 The Debt Service Coverage Ratio must be no less than 1.25 times."
   },
@@ -34,7 +34,7 @@
    "operator": ">=",
    "threshold": 0.9,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "7.3 The Quick Ratio shall not be less than 0.90 times."
   }

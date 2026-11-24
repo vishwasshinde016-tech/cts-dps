@@ -19,6 +19,11 @@ construction; --include-drafts adds DRAFT_UNVERIFIED labels.
 
 Gate (initial, to be agreed): threshold accuracy >= 0.95 and covenant recall >= 0.85, and value accuracy
 >= 0.95 when statement labels count.
+
+Improvement plan V2 (24 Nov 2026): several covenants of one metric are matched one to one (a step-down kept only the
+last before); frequency and unit are scored where the label gives them (frequency accuracy, unit accuracy); and
+precision and frequency accuracy are gated too (>= 0.90 and >= 0.95), so a flood of false covenants or wrong test
+frequencies fails CI.
 """
 
 from __future__ import annotations
@@ -32,6 +37,8 @@ from pathlib import Path
 GATE_THRESHOLD_ACCURACY = 0.95
 GATE_RECALL = 0.85
 GATE_VALUE_ACCURACY = 0.95
+GATE_PRECISION = 0.90
+GATE_FREQUENCY_ACCURACY = 0.95
 
 
 @dataclass
@@ -43,13 +50,17 @@ class Score:
     threshold_correct: int = 0
     with_page: int = 0
     page_correct: int = 0
+    with_frequency: int = 0
+    frequency_correct: int = 0
+    with_unit: int = 0
+    unit_correct: int = 0
     misses: list[str] = field(default_factory=list)
     extras: list[str] = field(default_factory=list)
     wrong_thresholds: list[str] = field(default_factory=list)
 
     def add(self, other: Score) -> None:
         for name in ("labelled", "predicted", "matched", "financial_matched", "threshold_correct",
-                     "with_page", "page_correct"):
+                     "with_page", "page_correct", "with_frequency", "frequency_correct", "with_unit", "unit_correct"):
             setattr(self, name, getattr(self, name) + getattr(other, name))
 
     @staticmethod
@@ -62,6 +73,8 @@ class Score:
             "precision": self._ratio(self.matched, self.predicted),
             "threshold_accuracy": self._ratio(self.threshold_correct, self.financial_matched),
             "page_accuracy": self._ratio(self.page_correct, self.with_page),
+            "frequency_accuracy": self._ratio(self.frequency_correct, self.with_frequency),
+            "unit_accuracy": self._ratio(self.unit_correct, self.with_unit),
         }
 
 
@@ -78,16 +91,41 @@ def _same_threshold(a: dict, b: dict) -> bool:
     return abs(float(x) - float(y)) <= 1e-9
 
 
+def _norm_unit(u) -> str:
+    return str(u or "").strip().upper().rstrip(".").replace("X", "TIMES") if u else ""
+
+
+def _pairs(gold: list[dict], pred: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict], list[dict]]:
+    """One-to-one pairs per (metric, category): every exact threshold match first, then the rest in order."""
+    pairs, left, waiting = [], list(pred), []
+    for g in gold:  # pass 1: same metric and same threshold
+        exact = next((p for p in left if _key(p) == _key(g) and _same_threshold(g, p)), None)
+        if exact is None:
+            waiting.append(g)
+            continue
+        left.remove(exact)
+        pairs.append((g, exact))
+    misses = []
+    for g in waiting:  # pass 2: same metric, another threshold (a wrong threshold, still found)
+        same = next((p for p in left if _key(p) == _key(g)), None)
+        if same is None:
+            misses.append(g)
+            continue
+        left.remove(same)
+        pairs.append((g, same))
+    return pairs, misses, left
+
+
 def score_document(label: dict, prediction: dict) -> Score:
     s = Score()
-    gold = {_key(c): c for c in label.get("covenants", [])}
-    pred = {_key(c): c for c in prediction.get("covenants", [])}
+    gold = list(label.get("covenants", []))
+    pred = list(prediction.get("covenants", []))
     s.labelled, s.predicted = len(gold), len(pred)
-    for k, g in gold.items():
-        p = pred.get(k)
-        if p is None:
-            s.misses.append(k[0])
-            continue
+    pairs, missed, extra = _pairs(gold, pred)
+    s.misses = [_key(g)[0] for g in missed]
+    s.extras = [_key(p)[0] for p in extra]
+    for g, p in pairs:
+        k = _key(g)
         s.matched += 1
         if k[1] == "FINANCIAL":
             s.financial_matched += 1
@@ -100,7 +138,14 @@ def score_document(label: dict, prediction: dict) -> Score:
             s.with_page += 1
             if g.get("page") == p.get("page"):
                 s.page_correct += 1
-    s.extras = [k[0] for k in pred if k not in gold]
+        if g.get("frequency"):
+            s.with_frequency += 1
+            if str(g["frequency"]).upper() == str(p.get("frequency") or "").upper():
+                s.frequency_correct += 1
+        if g.get("unit"):
+            s.with_unit += 1
+            if _norm_unit(g["unit"]) == _norm_unit(p.get("unit")):
+                s.unit_correct += 1
     return s
 
 
@@ -141,6 +186,8 @@ def evaluate(labels_dir: Path, predictions_dir: Path, include_drafts: bool = Fal
     overall = {**total.metrics(), "value_accuracy": Score._ratio(values_correct, values_labelled)}
     passed = (overall["threshold_accuracy"] is not None and overall["recall"] is not None
               and overall["threshold_accuracy"] >= GATE_THRESHOLD_ACCURACY and overall["recall"] >= GATE_RECALL
+              and (overall["precision"] is None or overall["precision"] >= GATE_PRECISION)
+              and (overall["frequency_accuracy"] is None or overall["frequency_accuracy"] >= GATE_FREQUENCY_ACCURACY)
               and (overall["value_accuracy"] is None or overall["value_accuracy"] >= GATE_VALUE_ACCURACY))
     return {"documents": len(per_doc), "overall": overall, "gate_passed": passed, "per_document": per_doc}
 

@@ -315,3 +315,46 @@ def test_the_period_date_is_refused_on_an_agreement(client, app, settings, tmp_p
                       json={"decisions": [{"fieldId": "document:asOfDate", "action": "CORRECT",
                                            "value": {"asOfDate": "2026-03-31"}}]})
     assert bad.status_code == 400
+
+
+# ---------- V2 test frequencies (golden-set check)
+
+@pytest.mark.parametrize("text,expected", [
+    ("shall not be greater than 3.00:1 on each Quarter Date", "QUARTERLY"),
+    ("shall not be less than 1.50 times in any quarter", "QUARTERLY"),
+    ("as at each financial quarter end", "QUARTERLY"),
+    ("not exceeding INR 25 crore in any Financial Year", "YEARLY"),
+    ("tested quarterly on a trailing twelve month basis", "QUARTERLY"),
+    ("shall at no time be lower than 2.25 times", None),
+])
+def test_testing_wordings_give_the_frequency(text, expected):
+    from dps.extraction.agreement import _frequency
+
+    assert _frequency(text) == expected
+
+
+def test_a_section_testing_statement_applies_to_its_other_ratios_only():
+    from dps.extraction.agreement import Term, _section_frequency
+
+    def term(metric, quote, freq=None):
+        return Term(metric, "FINANCIAL", ">=", 1.0, None, freq, 1, quote)
+
+    dscr = term("DSCR", "ARTICLE 7 FINANCIAL COVENANTS 7.1 The DSCR shall not be less than 1.35 times, tested "
+                        "quarterly.", "QUARTERLY")
+    lev = term("DEBT_TO_EBITDA", "1.35 times, tested quarterly. 7.2 Total Debt to EBITDA shall not be more than "
+                                 "3.50 times on each test date.")
+    other = term("ICR", "ARTICLE 9 OTHER 9.1 The Interest Coverage Ratio shall not be less than 2.00 times.")
+    _section_frequency([dscr, lev, other])
+    assert lev.frequency == "QUARTERLY" and any(i.startswith("FREQUENCY_FROM_SECTION") for i in lev.issues)
+    assert other.frequency is None  # another article: never guessed
+
+
+def test_a_calculation_period_is_not_passed_on():
+    from dps.extraction.agreement import Term, _section_frequency
+
+    dscr = Term("DSCR", "FINANCIAL", ">=", 1.2, None, "YEARLY", 1,
+                "ARTICLE 6 FINANCIAL COVENANTS 6.1 The DSCR shall not fall below 1.20 times for any Financial Year.")
+    cur = Term("CURRENT_RATIO", "FINANCIAL", ">=", 1.1, None, None, 1,
+               "below 1.20 times for any Financial Year. 6.2 The Current Ratio shall not be less than 1.10 times.")
+    _section_frequency([dscr, cur])
+    assert cur.frequency is None

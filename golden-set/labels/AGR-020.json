@@ -24,7 +24,7 @@
    "operator": "<=",
    "threshold": 4.0,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "5.2 Total Debt to EBITDA shall not be more than 4.00 times."
   },
@@ -34,7 +34,7 @@
    "operator": ">=",
    "threshold": 9500,
    "unit": "lakhs",
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "5.3 The Borrower shall maintain a Net Worth of not less than INR 9,500 lakhs."
   },

@@ -24,7 +24,7 @@
    "operator": ">=",
    "threshold": 1.1,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "6.2 The Current Ratio shall not be less than 1.10 times."
   },
@@ -34,7 +34,7 @@
    "operator": "<=",
    "threshold": 2.0,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "6.3 Total Debt to Net Worth shall not exceed 2.00 times."
   },

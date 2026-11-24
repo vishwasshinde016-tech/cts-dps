@@ -14,7 +14,7 @@
    "operator": ">=",
    "threshold": 1.15,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "12.1 The Borrower shall ensure that the Debt Service Coverage Ratio shall not be less than 1.15 times during construction and shall not be less than 1.30 times after commercial operation."
   },
@@ -24,7 +24,7 @@
    "operator": "<=",
    "threshold": 3.0,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "12.2 Debt to Equity shall at no time exceed 3.00 times."
   },
@@ -34,7 +34,7 @@
    "operator": ">=",
    "threshold": 1200,
    "unit": "crore",
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "12.3 The Borrower shall maintain a Tangible Net Worth of not less than INR 1,200 crore."
   },

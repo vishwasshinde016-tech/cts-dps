@@ -48,6 +48,12 @@ jobs:
         run: |
           python ../golden-set/predict.py --out ../golden-predictions
           python ../golden-set/evaluate.py --predictions ../golden-predictions --statuses SYNTHETIC
+      # The same documents through the production pipeline (skill pack, ledger, merge, scoring), AI off; with
+      # recorded replies once they are committed (golden-set/replies). Improvement plan Q1.
+      - name: Golden-set gate on the production pipeline
+        run: |
+          python ../golden-set/predict.py --out ../golden-predictions-pipeline --pipeline
+          python ../golden-set/evaluate.py --predictions ../golden-predictions-pipeline --statuses SYNTHETIC
 
   # Production DPS runs on SQL Server; SQLite hides dialect bugs.
   dps-sqlserver:

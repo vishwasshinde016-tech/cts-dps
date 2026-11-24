@@ -14,7 +14,7 @@
    "operator": "<=",
    "threshold": 4.0,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "7.1 The Net Leverage Ratio shall not exceed 4.00 times until 31 March 2027 and shall not exceed 3.50 times thereafter."
   },
@@ -24,7 +24,7 @@
    "operator": ">=",
    "threshold": 1.4,
    "unit": null,
-   "frequency": "QUARTERLY",
+   "frequency": null,
    "page": 1,
    "quote": "7.2 The DSCR shall at no time be less than 1.40 times."
   }

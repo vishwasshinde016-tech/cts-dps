@@ -14,7 +14,25 @@ PLEDGE = {"metric": "NEGATIVE_PLEDGE", "category": "NON_FINANCIAL", "operator": 
 
 def test_perfect_match():
     s = score_document(label([DSCR, ICR, PLEDGE]), {"covenants": [DSCR, ICR, PLEDGE]})
-    assert s.metrics() == {"recall": 1.0, "precision": 1.0, "threshold_accuracy": 1.0, "page_accuracy": 1.0}
+    assert s.metrics() == {"recall": 1.0, "precision": 1.0, "threshold_accuracy": 1.0, "page_accuracy": 1.0,
+                           "frequency_accuracy": None, "unit_accuracy": None}
+
+
+def test_two_covenants_of_one_metric_are_matched_one_to_one():
+    """V2: a step-down or two DSCR tests (historic, projected) were scored as one; the last one won."""
+    low, high = {**DSCR, "threshold": 1.1}, {**DSCR, "threshold": 1.4}
+    s = score_document(label([low, high]), {"covenants": [high, low]})
+    assert s.matched == 2 and s.threshold_correct == 2
+    s = score_document(label([low, high]), {"covenants": [high]})
+    assert s.matched == 1 and s.misses == ["DSCR"] and s.threshold_correct == 1
+
+
+def test_frequency_and_unit_are_scored_where_labelled():
+    gold = {**DSCR, "frequency": "QUARTERLY", "unit": "times"}
+    s = score_document(label([gold, ICR]), {"covenants": [{**gold, "frequency": "YEARLY", "unit": "x"}, ICR]})
+    m = s.metrics()
+    assert m["frequency_accuracy"] == 0.0 and m["unit_accuracy"] == 1.0  # x and times are one unit
+    assert s.with_frequency == 1  # ICR has no labelled frequency: not counted
 
 
 def test_miss_extra_wrong_threshold_and_page():
