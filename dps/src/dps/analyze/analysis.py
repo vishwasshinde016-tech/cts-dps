@@ -108,9 +108,11 @@ def save_run(db: Session, job: Job, result: dict, trigger: str = "SUBMIT") -> Ru
     from dps import results
 
     jobs.guard_attempt(db)
+    base_run_id = result.pop("_baseRunId", None)
     results.flag_format(result)  # never saved silently in a shape Spring cannot read (22 Nov 2026)
     last = db.scalar(select(func.max(Run.run_no)).where(Run.job_id == job.id)) or 0
     run = Run(job_id=job.id, run_no=last + 1, status=result["status"], trigger=trigger,
+              attempt_no=job.attempts or None, base_run_id=base_run_id,
               result_json=json.dumps(result, default=str, separators=(",", ":")))
     if run.run_no > 1:
         result["runId"] = f"{job.id}:{run.run_no}"

@@ -203,6 +203,17 @@ def test_an_event_of_default_is_not_merged_into_a_covenant():
     assert len(out) == 2
 
 
+def test_distinct_thresholds_and_quotes_are_not_merged_away():
+    from dps.skills.runner import merge_same_sentence
+
+    quote = "The Borrower shall deliver reports and meet its leverage obligation. " * 4
+    fields = [_f("AI", "FINANCIAL_COVENANT", "FIN_LEVERAGE", quote + ending)
+              for ending in (" First test.", " First test.", " Second test.")]
+    for field, value in zip(fields, (3.5, 4.0, 3.5), strict=True):
+        field["value"]["threshold"] = value
+    assert len(merge_same_sentence(fields)) == 3
+
+
 def test_an_other_code_becomes_the_specific_one_its_name_is_known_by():
     """B6: the undertakings part gave AFF_OTHER to "Officer's Certificate"; the taxonomy calls it REP_COMPLIANCE_CERT.
     A name that is not a covenant type keeps OTHER, and an event-of-default code is never put on a covenant."""

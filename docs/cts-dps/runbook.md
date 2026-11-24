@@ -114,6 +114,23 @@ For retention, Ops chooses a period and configures it in Langfuse separately fro
 `DPS_DIAGNOSTICS_RETENTION_DAYS`. Check both settings against the organization policy
 before enabling deletion. Audit and aggregate usage rows are retained independently.
 
+### Pause an AI route and find affected runs
+
+1. Read `GET /dps/v1/ops/ai-routes`. An administrator can pause one route with
+   `PUT /dps/v1/ops/ai-routes/{route}` and `{"paused":true,"reason":"incident reference"}`.
+2. Check that new calls on the route stop. An already-dispatched request can finish. The database setting applies
+   to all DPS processes using that database. Calls to other AI routes can still run.
+3. Find current affected runs with `GET /dps/v1/ops/affected-results`, filtering by `model`, `route` or
+   `pipelineVersion`. Continue with `after=<nextCursor>` until the cursor is null, even if a page has no matches.
+4. Record the selected job IDs and rerun them using the existing reclassify operation where the observed document
+   type supports it. Supply an incident reason and an idempotency key. Verify the superseded event and the new run
+   before coordinating changes to any downstream CTS records.
+5. Resume the route with the same PUT operation and `paused=false` once Ops authorizes it. Record the outcome of
+   the rehearsal and validate alerting and trace continuity in the pilot.
+
+The audit and review decision tables reject updates and deletes on migrated databases. Limit schema and trigger
+administration to the DBA. Verify the daily audit seals and preserve copies according to the bank's controls.
+
 Run the API, at least one STANDARD worker and one HEAVY worker (scans, photos and long documents go to HEAVY).
 The compose file passes all of these; `DPS_AUTH_MODE` defaults to `JWT` there, so set it to `SERVICE_TOKEN`
 for the bank app.

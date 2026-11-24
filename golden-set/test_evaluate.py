@@ -15,7 +15,25 @@ PLEDGE = {"metric": "NEGATIVE_PLEDGE", "category": "NON_FINANCIAL", "operator": 
 def test_perfect_match():
     s = score_document(label([DSCR, ICR, PLEDGE]), {"covenants": [DSCR, ICR, PLEDGE]})
     assert s.metrics() == {"recall": 1.0, "precision": 1.0, "threshold_accuracy": 1.0, "page_accuracy": 1.0,
-                           "frequency_accuracy": None, "unit_accuracy": None, "date_accuracy": None}
+                           "frequency_accuracy": None, "unit_accuracy": None, "date_accuracy": None,
+                           "review_items": 0, "abstentions": 0, "unsafe_auto_accepts": 0,
+                           "material_accuracy": {"scope": None, "conditions": None, "change": None, "quote": None}}
+
+
+def test_evaluation_counts_abstention_as_a_miss_and_reports_deal_family(tmp_path):
+    labels, preds = tmp_path / "labels", tmp_path / "preds"
+    labels.mkdir()
+    preds.mkdir()
+    expected = {**DSCR, "scope": {"obligor": "Borrower"}, "quote": "A ratio of at least 1.25 times"}
+    (labels / "AGR-T.json").write_text(json.dumps({**label([expected, ICR]), "dealFamily": "DEAL-1"}))
+    (preds / "AGR-T.json").write_text(json.dumps({"covenants": [
+        {**expected, "quote": "a ratio of\nat least 1.25 times", "status": "NEEDS_REVIEW"},
+        {**ICR, "status": "UNRESOLVED"},
+    ]}))
+    result = evaluate(labels, preds)
+    metrics = result["by_deal_family"]["DEAL-1"]
+    assert metrics["review_items"] == 2 and metrics["abstentions"] == 1 and metrics["recall"] == 0.5
+    assert metrics["material_accuracy"]["scope"] == metrics["material_accuracy"]["quote"] == 1.0
 
 
 def test_two_covenants_of_one_metric_are_matched_one_to_one():
@@ -44,11 +62,13 @@ def test_first_test_date_is_scored_where_labelled():
 
 
 def test_miss_extra_wrong_threshold_and_page():
-    pred = [{**DSCR, "threshold": 1.5, "page": 9}, {"metric": "CURRENT_RATIO", "category": "FINANCIAL"}]
+    pred = [{**DSCR, "threshold": 1.5, "page": 9, "status": "AUTO_ACCEPTED"},
+            {"metric": "CURRENT_RATIO", "category": "FINANCIAL", "status": "NEEDS_REVIEW"}]
     s = score_document(label([DSCR, ICR]), {"covenants": pred})
     m = s.metrics()
     assert m["recall"] == 0.5 and m["precision"] == 0.5
     assert m["threshold_accuracy"] == 0.0 and m["page_accuracy"] == 0.0
+    assert m["unsafe_auto_accepts"] == 1
     assert s.misses == ["ICR"] and s.extras == ["CURRENT_RATIO"] and "gold >= 1.25" in s.wrong_thresholds[0]
 
 
@@ -80,3 +100,19 @@ def test_empty_set_does_not_pass(tmp_path):
     (tmp_path / "l").mkdir()
     (tmp_path / "p").mkdir()
     assert evaluate(tmp_path / "l", tmp_path / "p")["gate_passed"] is False
+
+
+def test_release_evidence_uses_the_prediction_time_and_requires_verified_coverage(tmp_path):
+    labels, preds = tmp_path / "labels", tmp_path / "preds"
+    labels.mkdir()
+    preds.mkdir()
+    (labels / "AGR-T.json").write_text(json.dumps({**label([DSCR]), "reviewedBy": "Review test"}))
+    (preds / "AGR-T.json").write_text(json.dumps({"covenants": [DSCR]}))
+    benchmark = {"mode": "pipeline", "pipelineVersion": "v-test", "predictedAt": "2026-01-01T12:00:00+00:00"}
+    (preds / "_benchmark.json").write_text(json.dumps(benchmark))
+    evidence = tmp_path / "evidence.json"
+    assert main(["--labels", str(labels), "--predictions", str(preds), "--release-evidence", str(evidence)]) == 0
+    result = json.loads(evidence.read_text())
+    assert result["verifiedOnly"] and result["evaluatedAt"] == benchmark["predictedAt"]
+    assert result["pipelineVersion"] == benchmark["pipelineVersion"]
+    assert len(result["datasetSha256"]) == 64

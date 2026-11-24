@@ -122,6 +122,21 @@ def test_one_bad_quote_no_longer_throws_away_the_good_covenants():
     assert notes[0]["code"] == "AI_UNGROUNDED"  # nothing grounded: the rules' answer stands
 
 
+def test_missing_short_or_contradictory_ai_evidence_does_not_vote():
+    quote = "Debt Service Coverage Ratio shall be at least 1.25 times."
+    candidate = {"name": "DSCR", "page": 1, "quote": quote, "value": {"threshold": 1.25, "unit": "TIMES"}}
+    proposals = [
+        {**candidate, "page": None, "quote": None},
+        {**candidate, "quote": "1.25 times"},
+        {**candidate, "value": {"threshold": 2.0, "unit": "TIMES"}},
+        candidate,
+    ]
+    notes = []
+    result = agent_proposals(load("covenants"), Salvage(proposals), [{"no": 1, "text": quote}], notes=notes)
+    assert result == [candidate]
+    assert notes[0]["code"] == "AI_UNGROUNDED"
+
+
 def test_a_quote_from_a_page_outside_the_prompt_is_kept_when_it_is_on_that_page():
     doc = [{"no": 1, "text": FILLER}, {"no": 2, "text": "The Current Ratio shall be at least 1.10 times."}]
     item = {"name": "CURRENT_RATIO", "page": 2, "quote": "Current Ratio shall be at least 1.10 times",

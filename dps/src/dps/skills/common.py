@@ -55,7 +55,7 @@ def grounded(pages: list[dict], page_no: int | None, quote: str | None) -> bool:
     the break between the cited page and a neighbour. Line breaks and hyphenated line ends are ignored."""
     q = _flat(quote)
     page = page_of(pages, page_no)
-    if page is None or len(q) < 4:
+    if page is None or len(q.split()) < 5:
         return False
     here = _flat(page.get("text"))
     if q in here:
@@ -161,18 +161,25 @@ def agent_proposals(pack, gateway, pages: list[dict], extra: str = "", route: st
         return None
     from dps.agent.gateway import GatewayError, ModelOutputInvalid
     from dps.agent.guard import model_safe_text
+    from dps.extraction.verify import threshold_in
     from dps.jobs import JobCancelled
 
     every = [{**p, "text": model_safe_text(p.get("text") or "")} for p in (all_pages or pages)]
 
     def bad(item) -> bool:
-        return bool(item.get("page") is not None and item.get("quote") and not grounded(every, item["page"],
-                                                                                         item["quote"]))
+        quote = item.get("quote")
+        if not grounded(every, item.get("page"), quote):
+            return True
+        value = item.get("value") or {}
+        threshold = value.get("threshold")
+        unit = str(value.get("unit") or "").upper()
+        return (type(threshold) in (int, float) and unit in {"TIMES", "MULTIPLE", "RATIO", "X", "PERCENT", "%"}
+                and not threshold_in(quote, threshold))
 
     def check(answer) -> str | None:
         for item in (answer or {}).get("items", []):
             if bad(item):
-                return f"{UNGROUNDED_PREFIX} {item['page']}: {str(item['quote'])[:60]!r}"
+                return f"{UNGROUNDED_PREFIX} {item.get('page')}: {str(item.get('quote'))[:60]!r}"
         return None
 
     route = route or pack.routes.get("extract", "strong")
@@ -199,7 +206,7 @@ def agent_proposals(pack, gateway, pages: list[dict], extra: str = "", route: st
         dropped = len((ex.data or {}).get("items") or []) - len(kept)
         log.info("%s agent: kept %d grounded item(s), dropped %d", pack.name, len(kept), dropped)
         if notes is not None:
-            notes.append(issue("AI_UNGROUNDED", f"{pack.name}: {dropped} answer(s) quoted text not on their page "
+            notes.append(issue("AI_UNGROUNDED", f"{pack.name}: {dropped} answer(s) lacked supporting page evidence "
                                                  "and were dropped"))
         answer = {"items": kept}
     except GatewayError as ex:

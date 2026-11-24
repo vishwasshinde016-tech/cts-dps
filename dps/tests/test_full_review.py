@@ -39,7 +39,7 @@ def test_f12_rules_only_says_the_agent_did_not_read():
         id, correlation_id, job_type, document_version_id, tenant_id = "j", None, "ONBOARD", "v", "default"
 
     pages = [{"no": 1, "text": CLEAN[0].text, "quality": 0.95, "sourceMethod": "TEXT"}]
-    _, warnings, _ = _extract(load("covenants"), Job(), {"pages": pages}, {}, None, None, None, "1")
+    _, warnings, _ = _extract(load("covenants"), Job(), {"pages": pages}, {}, None, None, None)
     assert "AI_NOT_USED" in {w["code"] for w in warnings}
 
 

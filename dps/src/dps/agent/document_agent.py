@@ -21,18 +21,22 @@ decide what is accepted.
 from __future__ import annotations
 
 import contextvars
+import hashlib
 import json
 import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import wraps
 
 from crewai import Agent
 from crewai.llms.base_llm import BaseLLM
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field, PrivateAttr
 
+from dps.agent import usage
 from dps.agent.gateway import Gateway, ModelOutputInvalid, parse_json
+from dps.integrations.spring_tools import response_version
 
 log = logging.getLogger(__name__)
 
@@ -99,6 +103,7 @@ class ToolContext:
     limit: int = 8
     used: int = 0
     calls: list[str] = field(default_factory=list)
+    record_tool: Callable = field(default_factory=usage.tool_recorder, repr=False)
 
     def spend(self, name: str) -> str | None:
         if self.used >= self.limit:
@@ -144,11 +149,35 @@ class _DpsTool(BaseTool):
         self._ctx = ctx
 
 
+def _recorded_tool(run):
+    @wraps(run)
+    def traced(self, *args, **kwargs):
+        encoded = json.dumps([args, kwargs], sort_keys=True, default=str).encode("utf-8")
+        request_sha = hashlib.sha256(encoded).hexdigest()
+        token = response_version.set(None)
+        response_sha, error_type = None, None
+        try:
+            reply = run(self, *args, **kwargs)
+            response_sha = hashlib.sha256(reply.encode("utf-8", errors="replace")).hexdigest()
+            return reply
+        except Exception as ex:
+            error_type = type(ex).__name__[:96]
+            raise
+        finally:
+            version = response_version.get()
+            response_version.reset(token)
+            self._ctx.record_tool(tool=self.name, request_sha256=request_sha, response_sha256=response_sha,
+                                  error_type=error_type, spring_version=version)
+
+    return traced
+
+
 class PageTextTool(_DpsTool):
     name: str = "page_text"
     description: str = "The text of any page of the document, by page number."
     args_schema: type[BaseModel] = PageArgs
 
+    @_recorded_tool
     def _run(self, page: int) -> str:
         stop = self._ctx.spend(self.name)
         if stop:
@@ -166,6 +195,7 @@ class SearchTextTool(_DpsTool):
     description: str = "Lines of the whole document that contain the words, with their page numbers."
     args_schema: type[BaseModel] = QueryArgs
 
+    @_recorded_tool
     def _run(self, query: str) -> str:
         stop = self._ctx.spend(self.name)
         if stop:
@@ -186,6 +216,7 @@ class FindDefinitionTool(_DpsTool):
     description: str = "Where the document defines a term (\"X\" means ..., X shall mean ...)."
     args_schema: type[BaseModel] = TermArgs
 
+    @_recorded_tool
     def _run(self, term: str) -> str:
         stop = self._ctx.spend(self.name)
         if stop:
@@ -213,6 +244,7 @@ class CovenantLibraryTool(_DpsTool):
     description: str = "Find a covenant in the bank's covenant library (Java, in the Spring app) by name or metric."
     args_schema: type[BaseModel] = NameArgs
 
+    @_recorded_tool
     def _run(self, name: str) -> str:
         stop = self._ctx.spend(self.name)
         if stop:
@@ -236,6 +268,7 @@ class ValidateFormulaTool(_DpsTool):
     description: str = "Check a covenant formula with the Spring app's formula engine (Java)."
     args_schema: type[BaseModel] = ExpressionArgs
 
+    @_recorded_tool
     def _run(self, expression: str) -> str:
         stop = self._ctx.spend(self.name)
         if stop:
@@ -255,6 +288,7 @@ class LookupIdentifierTool(_DpsTool):
     description: str = "Check a borrower or facility identifier against the bank's master data (Spring app)."
     args_schema: type[BaseModel] = IdentifierArgs
 
+    @_recorded_tool
     def _run(self, kind: str, value: str) -> str:
         stop = self._ctx.spend(self.name)
         if stop:

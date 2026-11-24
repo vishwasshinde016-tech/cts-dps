@@ -518,6 +518,51 @@ paths:
               schema: { $ref: "#/components/schemas/UsageReport" }
         "403": { $ref: "#/components/responses/Error" }
 
+  /dps/v1/ops/ai-routes:
+    get:
+      operationId: listAiRoutes
+      x-phase: 7
+      summary: List configured AI routes and their pause status
+      responses:
+        '200':
+          description: Route names, deployments and current pause status
+  /dps/v1/ops/ai-routes/{route}:
+    put:
+      operationId: setAiRoutePause
+      x-phase: 7
+      summary: Pause or resume an AI route as an administrator
+      parameters:
+        - name: route
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paused, reason]
+              additionalProperties: false
+              properties:
+                paused: {type: boolean}
+                reason: {type: string, minLength: 1, maxLength: 500}
+      responses:
+        '200':
+          description: The committed pause status
+  /dps/v1/ops/affected-results:
+    get:
+      operationId: listAffectedResults
+      x-phase: 7
+      summary: Find results for an AI route, deployment or pipeline version in the current tenant
+      parameters:
+        - {name: route, in: query, schema: {type: string}}
+        - {name: model, in: query, schema: {type: string}}
+        - {name: pipelineVersion, in: query, schema: {type: string}}
+        - {name: after, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Matching current results and the next scan cursor
   /dps/v1/ops/scaling:
     get:
       tags: [ops]

@@ -48,6 +48,10 @@ class AiUnavailable(GatewayError):
     code = "AI_UNAVAILABLE"
 
 
+class AiRoutePaused(AiUnavailable):
+    code = "AI_ROUTE_PAUSED"
+
+
 class AiBudgetExceeded(GatewayError):
     code = "AI_BUDGET_EXCEEDED"
 
@@ -196,12 +200,14 @@ class Gateway:
     def __init__(self, routes: Routes, provider: Callable[[Route], Completion],
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
                  guard: Callable[[Completion, str], Completion] | None = None, trace_text: bool = False,
-                 parallel: int = 1, skip_confident: bool = False) -> None:
+                 parallel: int = 1, skip_confident: bool = False,
+                 route_paused: Callable[[str], bool] | None = None) -> None:
         self.routes = routes
         # How many model calls may run at once (improvement plan S1: a document's reads run in parallel); each
         # route's requests-per-minute bucket still applies. 1 = one call at a time, as before.
         self.parallel = max(1, int(parallel or 1))
         self.skip_confident = skip_confident
+        self._route_paused = route_paused
         self._slots = threading.BoundedSemaphore(self.parallel)
         self._budget_ready = threading.Condition()
         self._completion_lock = threading.Lock()
@@ -297,7 +303,8 @@ class Gateway:
 
     def available(self, route_name: str) -> bool:
         route = self.routes.routes.get(route_name)
-        return bool(route and route.deployment) and self._breakers[route_name].allow()
+        return (bool(route and route.deployment) and self._breakers[route_name].allow()
+                and not (self._route_paused and self._route_paused(route_name)))
 
     def call(self, route_name: str, messages: list[dict]) -> str:
         from dps.jobs import JobCancelled, stop_if_cancelled
@@ -305,6 +312,8 @@ class Gateway:
         route = self.routes.routes.get(route_name)
         if route is None or not route.deployment:
             raise AiUnavailable(f"No model configured for route {route_name}")
+        if self._route_paused and self._route_paused(route_name):
+            raise AiRoutePaused(f"Ops paused AI route {route_name}")
         budget = self._budget()
         breaker = self._breakers[route_name]
         if not breaker.allow():
@@ -327,8 +336,10 @@ class Gateway:
                 try:
                     with self._slots, self._reserve(budget, route, messages):
                         stop_if_cancelled()
+                        if self._route_paused and self._route_paused(route_name):
+                            raise AiRoutePaused(f"Ops paused AI route {route_name}")
                         answer = completion(messages)
-                except (JobCancelled, AiBudgetExceeded):
+                except (JobCancelled, AiBudgetExceeded, AiRoutePaused):
                     raise
                 except TransientModelError as ex:
                     breaker.failure()
@@ -493,6 +504,20 @@ def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cove
 
     daily = routes.per_tenant_day_tokens if getattr(settings, "ai_routes_file", "") else None
     guard = (lambda c, model: guarded(c, model, session_factory, settings, daily=daily)) if session_factory else None
+
+    def route_paused(name: str) -> bool:
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from dps.models import AiRoutePause
+
+        try:
+            with session_factory() as db:
+                return db.get(AiRoutePause, name) is not None
+        except SQLAlchemyError:
+            log.warning("AI route state unavailable; temporarily holding route %s", name)
+            return True
+
     return Gateway(routes, provider, guard=guard, trace_text=bool(getattr(settings, "ai_trace_text", False)),
                    parallel=int(getattr(settings, "ai_parallel_reads", 1) or 1),
-                   skip_confident=bool(getattr(settings, "ai_skip_confident", True)))
+                   skip_confident=bool(getattr(settings, "ai_skip_confident", True)),
+                   route_paused=route_paused if session_factory else None)

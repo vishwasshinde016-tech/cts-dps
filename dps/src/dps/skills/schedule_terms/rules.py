@@ -13,7 +13,8 @@ FREQ_WORDS = {"quarter": "QUARTERLY", "quarterly": "QUARTERLY", "half": "HALF_YE
               "half year": "HALF_YEARLY", "semi-annual": "HALF_YEARLY", "year": "YEARLY", "financial year": "YEARLY",
               "annual": "YEARLY", "annually": "YEARLY", "month": "MONTHLY", "monthly": "MONTHLY"}
 DEADLINE = re.compile(r"within\s+(\d{1,3})\s*(?:\(\w+\)\s*)?days\s+(?:of|from|after)\s+(?:the\s+)?(?:end|close|expiry)?"
-                      r"\s*(?:of\s+)?(?:each|every|the|its)?\s*(financial\s+year|half[\s-]*year|quarter|month|year)",
+                      r"\s*(?:of\s+)?(?:(?:each|every)(?:\s+of)?\s+)?(?:(?:the|its)\s+)?"
+                      r"((?:financial\s+)?(?:half[\s-]*year|quarter|month|year)s?)\b",
                       re.I)
 TESTED = re.compile(r"\btested\s+(quarterly|half[\s-]*yearly|semi[\s-]*annually|annually|monthly|on\s+each\s+"
                     r"(quarter|half[\s-]*year|financial\s+year)\s+(?:end\s+)?date)", re.I)
@@ -38,7 +39,8 @@ DELIVERABLES = (
     (re.compile(r"compliance\s+certificate", re.I), "COMPLIANCE_CERTIFICATE"),
     (re.compile(r"\baudited\s+(?:annual\s+|standalone\s+|consolidated\s+)*(?:financial\s+statements|accounts|"
                 r"financials|balance\s+sheet)", re.I), "AUDITED_FINANCIAL_STATEMENTS"),
-    (re.compile(r"\b(?:unaudited|quarterly|half[\s-]*yearly|interim|provisional)\s+(?:financial\s+statements|"
+    (re.compile(r"\b(?:unaudited|quarterly|half[\s-]*yearly|interim|provisional)\s+"
+                r"(?:(?:standalone|consolidated)\s+)*(?:financial\s+statements|"
                 r"accounts|financials|results)", re.I), "INTERIM_FINANCIAL_STATEMENTS"),
     (re.compile(r"\bstock\s+(?:and\s+(?:book\s+)?debtors?\s+)?statements?", re.I), "STOCK_STATEMENT"),
     (re.compile(r"\binsurance\s+(?:policy|policies|certificates?)", re.I), "INSURANCE"),
@@ -91,7 +93,12 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
         if key in seen:
             return
         seen.add(key)
-        quote = line_at(page["text"], m.start(), m.end())
+        text = page["text"]
+        quote = line_at(text, m.start(), m.end())
+        if kind == "REPORTING_DEADLINE" and quote.rstrip().lower().endswith("financial"):
+            line_end = text.find("\n", m.end())
+            if line_end >= 0 and re.match(r"[ \t]*statements?\b", text[line_end + 1:], re.I):
+                quote = line_at(text, m.start(), line_end + 1)
         out.append(make_field(PACK, pages, "SCHEDULE_TERM", kind, value, page["no"], quote, confidence=conf,
                               key=str(key)))
 

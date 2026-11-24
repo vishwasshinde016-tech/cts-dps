@@ -105,7 +105,9 @@ def _save_revision(db, job: Job, result: dict, revision: int, trigger: str) -> N
     409 REVISION_CHANGED, never a server error (the run number is unique per job)."""
     from sqlalchemy.exc import IntegrityError
 
-    new_run = Run(job_id=job.id, run_no=revision + 1, status=result["status"], trigger=trigger, result_json="{}")
+    prev = db.scalars(select(Run).where(Run.job_id == job.id, Run.run_no == revision)).first()
+    new_run = Run(job_id=job.id, run_no=revision + 1, status=result["status"], trigger=trigger, result_json="{}",
+                  attempt_no=prev.attempt_no if prev else None, base_run_id=prev.base_run_id if prev else None)
     result["runId"] = f"{job.id}:{revision + 1}"
     results.flag_format(result)
     new_run.result_json = json.dumps(result, default=str, separators=(",", ":"))
@@ -116,7 +118,6 @@ def _save_revision(db, job: Job, result: dict, revision: int, trigger: str) -> N
         db.rollback()
         raise ApiError(409, "REVISION_CHANGED", "Someone else saved this result at the same time; reload it.",
                        {"revision": revision + 1}) from ex
-    prev = db.scalars(select(Run).where(Run.job_id == job.id, Run.run_no == revision)).first()
     if prev is not None:
         prev.superseded_by = result["runId"]
 

@@ -19,7 +19,7 @@ from datetime import timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from dps.models import AiCall, AiUsage, utcnow
+from dps.models import AiCall, AiUsage, ToolCall, utcnow
 from dps.ops import observability as obs
 from dps.settings import Settings
 
@@ -52,12 +52,26 @@ class Tokens:
     calls: int = 0
     detail: list[Call] = field(default_factory=list)
     tenant: str | None = None
+    tools: list[dict] = field(default_factory=list)
 
 
 _noted: ContextVar[Tokens | None] = ContextVar("dps_ai_tokens", default=None)
 _LOCK = threading.Lock()
 # Tokens of the most recent call only (the gateway charges them to the job's budget).
 _last: ContextVar[int] = ContextVar("dps_ai_last_call_tokens", default=0)
+
+
+def tool_recorder():
+    """Capture this job's collector before CrewAI can run the tool on another thread."""
+    current = _noted.get()
+    trace_id, read_span_id = obs.current_ids()
+
+    def record_tool(**tool) -> None:
+        if current is not None:
+            with _LOCK:
+                current.tools.append({**tool, "trace_id": trace_id, "read_span_id": read_span_id})
+
+    return record_tool
 
 
 def begin_call() -> None:
@@ -165,9 +179,14 @@ def _text(value: object, keep: bool) -> str | None:
 
 
 def record(db: Session, settings: Settings, purpose: str, user: str, *, cp_id: str | None = None,
-           document_id: str | None = None, job_id: str | None = None) -> AiUsage | None:
+           document_id: str | None = None, job_id: str | None = None,
+           attempt_no: int | None = None) -> AiUsage | None:
     """Stores the request's model usage, if it made any model call."""
     tokens = take()
+    if tokens is not None and job_id and tokens.tools:
+        db.add_all(ToolCall(job_id=job_id, attempt_no=attempt_no, **tool) for tool in tokens.tools)
+        if not tokens.calls:
+            db.commit()
     if tokens is None or not tokens.calls:
         return None
     row = AiUsage(purpose=purpose, user=user, cp_id=cp_id, document_id=document_id, job_id=job_id,
@@ -179,6 +198,7 @@ def record(db: Session, settings: Settings, purpose: str, user: str, *, cp_id: s
         status = "ERROR" if call.error else "OK"
         call_cost = _cost(settings, call.prompt_tokens, call.completion_tokens)
         db.add(AiCall(purpose=purpose, user=user, cp_id=cp_id, document_id=document_id, job_id=job_id,
+                      attempt_no=attempt_no,
                       request_id=None if request_id == "-" else request_id, model=call.model,
                       prompt_version=prompt_version(call.messages), status=status,
                       error=(call.error or "")[:500] or None, seconds=call.seconds,

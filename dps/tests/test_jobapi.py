@@ -98,10 +98,10 @@ def test_schemas_and_catalogues_are_valid():
     assert {e["type"] for e in events} == set(_schema("event")["properties"]["type"]["enum"])
 
 
-def test_openapi_lists_32_dps_endpoints_and_2_compatibility_ones():
+def test_openapi_lists_35_dps_endpoints_and_2_compatibility_ones():
     spec = openapi()
     operations = [(path, method) for path, item in spec["paths"].items() for method in item]
-    assert len([o for o in operations if not o[0].startswith("/api/")]) == 32  # + health, close
+    assert len([o for o in operations if not o[0].startswith("/api/")]) == 35
     assert len([o for o in operations if o[0].startswith("/api/")]) == 2
     assert all("x-phase" in spec["paths"][p][m] for p, m in operations)
 
