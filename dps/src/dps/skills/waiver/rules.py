@@ -35,7 +35,8 @@ CLAUSE = re.compile(r"\b(?:clause|section|article|paragraph)\s+(\d+(?:\.\d+)*(?:
 PERIOD_FROM_TO = re.compile(r"\bfrom\s+(?:and\s+including\s+)?(?P<a>" + DATE.pattern.replace("?P<", "?P<a_") + r")"
                             r"\s+(?:to|until|till|up\s+to)\s+(?:and\s+including\s+)?(?P<b>"
                             + DATE.pattern.replace("?P<", "?P<b_") + r")", re.I)
-TEST_DATE = re.compile(r"\b(?:ending|ended|falling\s+on|as\s+(?:at|of|on)|test(?:ing)?\s+date|on)\s+(?:the\s+)?(?:"
+TEST_DATE = re.compile(r"\b(?:ending|ended|falling\s+on|as\s+(?:at|of|on)|test(?:ing)?\s+date|on)\s+"
+                       r"(?:(?:on\s+)?or\s+about\s+|on\s+or\s+about\s+)?(?:the\s+)?(?:"
                        + DATE.pattern + r")", re.I)
 CONDITION = re.compile(r"\b(?:subject\s+to|provided\s+(?:that|always)|on\s+(?:the\s+)?condition\s+that|"
                        r"conditional\s+(?:up)?on|in\s+consideration\s+of)\b[^.;]{5,300}", re.I)
@@ -48,6 +49,13 @@ FEE = re.compile(r"\b(?:waiver|consent|amendment)\s+fee\b[^.;]{0,120}", re.I)
 NOT_WAIVED = re.compile(r"\b(?:does\s+not|shall\s+not|will\s+not)\s+(?:constitute\s+)?(?:a\s+)?waive|"
                         r"\bno\s+waiver\b|\bwithout\s+(?:any\s+)?waiver\b|\bnot\s+be\s+construed\s+as\s+a\s+waiver\b",
                         re.I)
+LIST_INTRO = re.compile(r"\bhereby\s+waive\b[^.;]{0,160}?(?=\([ivx]+\)\s+breach\b)", re.I)
+LIST_ITEM = re.compile(r"\([ivx]+\)\s+breach\b", re.I)
+LIST_END = re.compile(r"\bprovided\s+(?:that\s+)?such\s+waivers?\b|\b\d+\.\s+Representations and Warranties\b",
+                      re.I)
+TERMINATION = re.compile(r"\bWaiver Termination Event[”\"']?\s+means\s+(?:the\s+)?earliest\b.*?"
+                         r"(?=\s+\d+\.\s+Representations\b|$)", re.I)
+RESTORED_AT_EXPIRY = re.compile(r"\bupon such expiration\b.*?\bas if such waivers? had not been given\b", re.I)
 
 
 def _iso(m: re.Match | None) -> str | None:
@@ -94,14 +102,43 @@ def _fee(text: str) -> dict | None:
     return {"amount": amount, "currency": currency, "text": " ".join(m.group(0).split())[:200]}
 
 
+def _operative_list(whole: str, page_text: list[tuple[int, str]]) -> list[tuple[int, str, str, str]]:
+    """One target per breach in a clearly identified operative list, even across a page break."""
+    intro = LIST_INTRO.search(whole)
+    end = LIST_END.search(whole, intro.end()) if intro else None
+    if end is None:
+        return []
+    markers = list(LIST_ITEM.finditer(whole, intro.end(), end.start()))
+    if len(markers) < 2:
+        return []
+    ranges, offset = [], 0
+    for no, text in page_text:
+        ranges.append((no, offset, offset + len(text)))
+        offset += len(text) + 1
+    items = []
+    for index, mark in enumerate(markers):
+        limit = markers[index + 1].start() if index + 1 < len(markers) else end.start()
+        no, _, page_end = next(r for r in ranges if r[1] <= mark.start() < r[2])
+        text = whole[mark.start():limit].strip(" ,")
+        quote = whole[mark.start():min(page_end, limit)].strip(" ,")
+        items.append((no, "WAIVER", text, quote))
+    return items
+
+
 def rules(pages: list[dict], ctx: dict) -> list[dict]:
     base = [f for f in ctx.get("base") or [] if str(f.get("group", "")).endswith("COVENANT")]
-    whole = " ".join(" ".join((p.get("text") or "").split()) for p in pages)
+    page_text = [(int(p["no"]), " ".join((p.get("text") or "").split())) for p in pages]
+    whole = " ".join(text for _, text in page_text)
     doc_conditions = [" ".join(m.group(0).split())[:300] for m in CONDITION.finditer(whole)][:6]
     expiry = _iso(EXPIRY.search(whole))
-    reinstate = REINSTATE.search(whole)
+    reinstate = REINSTATE.search(whole) or RESTORED_AT_EXPIRY.search(whole)
+    explicit = _operative_list(whole, page_text)
+    termination = TERMINATION.search(whole) if explicit else None
+    if termination:
+        expiry = _iso(termination) or expiry
+        doc_conditions.append(termination.group(0)[:400])
     fee = _fee(whole)
-    out, seen = [], set()
+    candidates = list(explicit)
     for p in pages:
         listed = sentences(p.get("text") or "")
         for i, s in enumerate(listed):
@@ -115,38 +152,44 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
                 continue
             following = listed[i + 1] if i + 1 < len(listed) else ""
             text = s + (" " + following if CONDITION.match(following.strip()) else "")
-            clause_m = CLAUSE.search(text)
-            clause = re.sub(r"\s+", "", clause_m.group(1)) if clause_m else None
-            metric = _best_metric(text)
-            target = _base_target(base, metric, clause)
-            name = (target or {}).get("name") or metric or (f"Clause {clause}" if clause else "Waiver")
-            key = (target or {}).get("id") or f"{metric}|{clause}"
-            found = periods(text)
-            if key in seen and not found:
-                continue
-            seen.add(key)
-            conditions = [" ".join(c.group(0).split())[:300] for c in CONDITION.finditer(text)] or doc_conditions
-            extended_to = _iso(EXTENDED_TO.search(text[ext.start():])) if kind == "EXTENSION" else None
-            value = {"kind": kind,
-                     "target": {"metric": (target or {}).get("value", {}).get("metric") or metric, "clause": clause,
-                                "appliedCovenantId": (target or {}).get("value", {}).get("appliedCovenantId"),
-                                "name": (target or {}).get("name")},
-                     "periods": found, "conditions": conditions, "expiresOn": expiry,
-                     "reinstatement": " ".join(reinstate.group(0).split())[:300] if reinstate else None,
-                     "fee": fee, "metric": metric or "OTHER",
-                     **({"extendedTo": extended_to} if kind == "EXTENSION" else {})}
-            f = make_field(PACK, pages, "WAIVER", name, value, int(p["no"]), s, "RULES", 0.7,
-                           key=f"{key}-{p['no']}-{i}")
-            if target is None:
-                f["issues"].append(issue("WAIVER_TARGET_UNKNOWN", "the waived covenant is not one of the approved "
-                                                                  "covenants sent; choose it"))
-            if kind == "EXTENSION" and extended_to is None:
-                f["issues"].append(issue("WAIVER_PERIOD_UNKNOWN", "no new date found for the extension; set it"))
-            elif kind != "EXTENSION" and not found:
-                f["issues"].append(issue("WAIVER_PERIOD_UNKNOWN", "no test date or period found for the waiver; "
-                                                                  "set it"))
-            f["status"] = "NEEDS_REVIEW"  # a waiver always goes to a person
-            out.append(f)
+            if not explicit or kind != "WAIVER":
+                candidates.append((int(p["no"]), kind, text, s))
+    out, seen = [], set()
+    for i, (page, kind, text, quote) in enumerate(candidates):
+        clause_m = CLAUSE.search(text)
+        clause = re.sub(r"\s+", "", clause_m.group(1)) if clause_m else None
+        metric = _best_metric(text)
+        target = _base_target(base, metric, clause)
+        name = (target or {}).get("name") or metric or (f"Clause {clause}" if clause else "Waiver")
+        key = (target or {}).get("id") or f"{metric}|{clause}"
+        found = periods(text)
+        if key in seen and not found:
+            continue
+        seen.add(key)
+        conditions = [" ".join(c.group(0).split())[:300] for c in CONDITION.finditer(text)] or doc_conditions
+        if termination and termination.group(0)[:400] not in conditions:
+            conditions = [*conditions, termination.group(0)[:400]]
+        extension = EXTEND.search(text) if kind == "EXTENSION" else None
+        extended_to = _iso(EXTENDED_TO.search(text, extension.start())) if extension else None
+        value = {"kind": kind,
+                 "target": {"metric": (target or {}).get("value", {}).get("metric") or metric, "clause": clause,
+                            "appliedCovenantId": (target or {}).get("value", {}).get("appliedCovenantId"),
+                            "name": (target or {}).get("name")},
+                 "periods": found, "conditions": conditions, "expiresOn": expiry,
+                 "reinstatement": " ".join(reinstate.group(0).split())[:300] if reinstate else None,
+                 "fee": fee, "metric": metric or "OTHER",
+                 **({"extendedTo": extended_to} if kind == "EXTENSION" else {})}
+        f = make_field(PACK, pages, "WAIVER", name, value, page, quote, "RULES", 0.7, key=f"{key}-{page}-{i}")
+        if target is None:
+            f["issues"].append(issue("WAIVER_TARGET_UNKNOWN", "the waived covenant is not one of the approved "
+                                                              "covenants sent; choose it"))
+        if kind == "EXTENSION" and extended_to is None:
+            f["issues"].append(issue("WAIVER_PERIOD_UNKNOWN", "no new date found for the extension; set it"))
+        elif kind != "EXTENSION" and not found:
+            f["issues"].append(issue("WAIVER_PERIOD_UNKNOWN", "no test date or period found for the waiver; "
+                                                              "set it"))
+        f["status"] = "NEEDS_REVIEW"  # a waiver always goes to a person
+        out.append(f)
     return out
 
 

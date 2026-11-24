@@ -865,7 +865,8 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db):
 
         extra["amendedSet"] = amended_set(ctx.get("base") or [], fields)
         extra["effectiveDate"] = next((f["value"]["change"].get("effectiveDate") for f in fields
-                                       if f["value"].get("change")), None)
+                                       if f["value"].get("change")), None) or next(
+            (f["value"].get("date") for f in fields if f["value"].get("key") == "AMENDMENT_PROVISION"), None)
     return fields, warnings, extra
 
 

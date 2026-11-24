@@ -891,7 +891,9 @@
             "TENOR_MONTHS",
             "INTEREST_RATE",
             "FACILITY_TYPE",
-            "EFFECTIVE_DATE"
+            "EFFECTIVE_DATE",
+            "AMENDMENT_PROVISION",
+            "AMENDMENT_ALLOCATION"
           ]
         },
         "text": {
@@ -911,6 +913,10 @@
             "string",
             "null"
           ]
+        },
+        "amendmentItem": {
+          "type": "string",
+          "description": "The numbered source item for a reviewable amendment provision or funding allocation."
         },
         "date": {
           "type": [

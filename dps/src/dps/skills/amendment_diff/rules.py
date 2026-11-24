@@ -19,6 +19,15 @@ NEW_CLAUSE = re.compile(r"\b(?:a\s+)?new\s+(?:sub-?)?clause\s+(\d+(?:\.\d+)*)\s+
                         re.I)
 EFFECTIVE = re.compile(r"\b(?:with\s+effect\s+from|effective\s+(?:from|date|on)\s*:?)\s*(?:the\s+)?(\d{1,2})"
                        r"(?:st|nd|rd|th)?\s+([A-Za-z]{3,9}),?\s+(\d{4})", re.I)
+AMENDMENT_LIST = re.compile(r"\bamend\s+(?:the|this)\s+(?:[\w-]+\s+){0,3}agreement\s+as follows\s*:", re.I)
+NUMBERED_ITEM = re.compile(r"^[ \t]*(\d{1,3})\.[ \t]+(?=\D)", re.M)
+AMENDMENT_END = re.compile(r"^[ \t]*(?:All other provisions|Please confirm your agreement)\b", re.I | re.M)
+EDIT_WORDS = re.compile(r"\b(?:amend(?:ed)?|replac\w+|substitut\w+|delet\w+|renumber\w+|insert\w+|add(?:ed|ition)?)\b",
+                        re.I)
+ALLOCATION_HEADER = re.compile(r"Amount of the Loan\s+Allocated\s*\(expressed in ([A-Z]{3})\)", re.I)
+ALLOCATION_ROW = re.compile(r"^[ \t]*(\(\d+\)|TOTAL AMOUNT)[ \t]+", re.M)
+ALLOCATION_AMOUNT = re.compile(r"^[ \t]*(?:(?:\(\d+\)|TOTAL AMOUNT)[ \t]+[^\d\n]*?)?"
+                               r"(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|0)(?=\s|$)", re.M)
 MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov",
                                       "dec"], start=1)}
 
@@ -52,6 +61,65 @@ def _ops(pages: list[dict]) -> list[dict]:
     for operation in ops:
         unique.setdefault((operation["page"], operation["clause"], operation["type"]), operation)
     return list(unique.values())
+
+
+def _document_provisions(pages: list[dict], effective: str | None) -> list[dict]:
+    """Preserve instructions in a numbered change list as reviewable terms, outside the covenant set."""
+    text = ""
+    page_ranges = []
+    for page in pages:
+        start = len(text)
+        text += (page.get("text") or "") + "\n"
+        page_ranges.append((page["no"], start, len(text)))
+    heading = AMENDMENT_LIST.search(text)
+    if not heading:
+        return []
+    boundary = AMENDMENT_END.search(text, heading.end())
+    end = boundary.start() if boundary else len(text)
+    items = []
+    for match in NUMBERED_ITEM.finditer(text, heading.end(), end):
+        if int(match[1]) != len(items) + 1 or not EDIT_WORDS.search(text[match.end():match.end() + 300]):
+            continue
+        items.append(match)
+    if len(items) < 2:
+        return []
+
+    def source(pos: int) -> tuple[int, str]:
+        page = next(no for no, start, stop in page_ranges if start <= pos < stop)
+        return page, line_at(text, pos)
+
+    result = []
+    for i, item in enumerate(items):
+        stop = items[i + 1].start() if i + 1 < len(items) else end
+        page, quote = source(item.start())
+        raw = text[item.end():stop]
+        body = raw.lstrip()
+        origin = item.end() + len(raw) - len(body)
+        body = body.rstrip()
+        value = {"key": "AMENDMENT_PROVISION", "text": " ".join(body.split()),
+                 "amendmentItem": item[1], "date": effective}
+        field = make_field(PACK, pages, "AGREEMENT_TERM", f"Amendment item {item[1]}", value, page, quote,
+                           key=f"provision-{item[1]}")
+        _hold(field, "UNRESOLVED_AMENDMENT", "Review the amended provision against the agreement.")
+        result.append(field)
+        header = ALLOCATION_HEADER.search(body)
+        if not header:
+            continue
+        rows = list(ALLOCATION_ROW.finditer(body, header.end()))
+        for row_index, row in enumerate(rows):
+            row_end = rows[row_index + 1].start() if row_index + 1 < len(rows) else len(body)
+            amount = ALLOCATION_AMOUNT.search(body, row.start(), row_end)
+            if not amount:
+                continue
+            amount_page, amount_quote = source(origin + amount.start(1))
+            label = line_at(body, row.start()).split(amount[1], 1)[0].strip()
+            allocation = {"key": "AMENDMENT_ALLOCATION", "text": label, "amendmentItem": item[1],
+                          "amount": float(amount[1].replace(",", "")), "currency": header[1].upper()}
+            field = make_field(PACK, pages, "AGREEMENT_TERM", f"Loan allocation {row[1]}", allocation,
+                               amount_page, amount_quote, key=f"provision-{item[1]}-allocation-{row[1]}")
+            _hold(field, "UNRESOLVED_AMENDMENT", "Verify the allocation against the replacement table.")
+            result.append(field)
+    return result
 
 
 def rules(pages: list[dict], ctx: dict) -> list[dict]:
@@ -123,7 +191,7 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
         for f in out:
             f["issues"].append(issue("BASE_UNKNOWN", "the amended agreement's result was not found; check the base"))
             f["status"] = "NEEDS_REVIEW"
-    return out
+    return out + _document_provisions(pages, effective)
 
 
 def _targets(base: list[dict], metric: str | None, clause: str | None) -> list[dict]:
