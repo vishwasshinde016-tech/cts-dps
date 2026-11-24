@@ -93,7 +93,7 @@ def event_payload(result: dict) -> dict:
     c = result["classification"]
     return {"type": c["type"], "confidence": c["confidence"], "mismatch": c["mismatch"],
             "uncertain": c["confidence"] < 0.6, "expected": c.get("expected"),
-            "identifiers": [{"kind": i["kind"], "value": i["value"], "match": i["match"]["status"],
+            "identifiers": [{"kind": i["kind"], "match": i["match"]["status"],
                              "page": i["source"]["page"]} for i in result["identifiers"]],
             "legibility": result.get("legibility"),
             "missingRequired": next((w["message"] for w in result.get("warnings", [])

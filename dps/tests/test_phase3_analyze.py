@@ -427,14 +427,27 @@ def test_analyze_job_from_staging_to_event(client, app, settings, tmp_path, canc
                                                   EventFeed.type == "dps.analysis.completed")).one()
         payload = json.loads(event.payload_json)
         assert payload["type"] == "LOAN_AGREEMENT" and payload["mismatch"] is True
-        assert {"kind": "PAN", "value": "AAPFU0939F", "match": "STRONG", "page": 1} in payload["identifiers"]
+        assert payload["schemaVersion"] == "1.1"
+        assert {"kind": "PAN", "match": "STRONG", "page": 1} in payload["identifiers"]
+        assert "AAPFU0939F" not in event.payload_json
         assert not s.scalars(select(EventFeed).where(EventFeed.job_id == job_id,
                                                      EventFeed.type.like("dps.extraction%"))).first()
         assert s.scalars(select(Run).where(Run.job_id == job_id)).one().run_no == 1
     result = client.get(f"/dps/v1/jobs/{job_id}/result", headers=SERVICE).json()
+    from jsonschema import ValidationError
     from test_jobapi import check
 
+    from dps import feed
+
     check("result", result)
+    current_event = feed.view(event)
+    check("event", current_event)
+    current_event["payload"]["identifiers"][0]["value"] = "historical"
+    with pytest.raises(ValidationError):
+        check("event", current_event)
+    current_event["payload"]["schemaVersion"] = "1.0"
+    check("event", current_event)
+    assert any(i["value"] == "AAPFU0939F" for i in result["identifiers"])
     # B3: a wrong type is a mapping problem: job NEEDS_REVIEW, route MAPPING_REVIEW (the spec's name)
     assert result["classification"]["type"] == "LOAN_AGREEMENT" and result["document"]["route"] == "MAPPING_REVIEW"
 

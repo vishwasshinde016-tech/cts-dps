@@ -12,6 +12,7 @@ events:
     payload: { schemaVersion: string, pipelineVersion: string, runId: string, type: string, confidence: number, mismatch: boolean, uncertain: boolean, expected: "string|null",
                identifiers: array, legibility: number, missingRequired: "string|null", keyPages: array,
                mismatches: array, route: string, resultUrl: string }
+    notes: Payload version 1.1 gives only kind, match status and page for each identifier. Use resultUrl for full details.
   - type: dps.extraction.completed
     when: An extraction finished with every field accepted, or after its review was submitted.
     payload: { schemaVersion: string, pipelineVersion: string, runId: string, skillPack: string, fields: integer, toReview: integer, route: "string|null", documentType: "string|null", resultUrl: string, revision: integer, reviewedBy: string, closed: boolean, notUsed: integer }
