@@ -1,11 +1,11 @@
 # CTS integration handoff
 
-- [DPS API reference, 23 November 2026](DPS-API-reference-2026-11-23.pdf) is the original reference. The endpoint paths were checked against the current [DPS OpenAPI contract](../../../contracts/dps-jobs-api.yaml) and [Spring tools contract](../../../contracts/spring-tools.yaml).
+- [DPS API reference, 23 November 2026](DPS-API-reference-2026-11-23.pdf) includes current integration notes before the original reference. All 32 DPS paths and eight Spring paths in the current [DPS OpenAPI contract](../../../contracts/dps-jobs-api.yaml) and [Spring tools contract](../../../contracts/spring-tools.yaml) appear in the reference.
 - [N5 certificate version ID question](CTS-DPS%20Group%201%20N5%20-%20Certificate%20Version%20ID%20Confirmation.pdf) explains the ID flow, what CTS might need to change, and what to verify in UAT.
 
 ## Current certificate contract
 
-`POST /api/v1/ai/covenant-status` expects each entry in `certificateFileIds` to equal the DMS version ID submitted as `document.versionId` for that certificate's extraction job. The current CTS source takes the upload service's `fileId` from the certificate attachment record. Verify in the deployed integration that both values agree for an original and a corrected upload.
+`POST /api/v1/ai/covenant-status` expects each entry in `certificateFileIds` to equal the DMS version ID submitted as `document.versionId` for that certificate's extraction job. The monitoring path in the reviewed CTS checkout takes the external upload service's opaque `fileId` from the certificate attachment record. Its separate onboarding uploader creates a `documentVersionId` and object key, and onboarding recommendations still use a mock. Confirm the deployed monitoring upload-to-DPS job wiring, including the ID mapping for an original and a corrected certificate.
 
 DPS evaluates only explicitly selected versions when given a nonempty list. An empty or omitted list uses the newest eligible certificate for the requested credit proposal. Only figures a reviewer confirmed or corrected can drive a recommendation.
 
