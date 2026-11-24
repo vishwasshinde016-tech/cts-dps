@@ -1,0 +1,57 @@
+# Apply to the namespace containing the two worker Deployments with KEDA installed.
+# Set serverAddress to the Prometheus service for this DPS deployment.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: dps-worker-standard
+spec:
+  scaleTargetRef: {name: dps-worker-standard}
+  minReplicaCount: 2
+  maxReplicaCount: 8
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown: {stabilizationWindowSeconds: 300}
+  triggers:
+    - type: prometheus
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://prometheus:9090
+        query: 'max(dps_queue_ready{pool="STANDARD"})'
+        threshold: "5"
+        ignoreNullValues: "false"
+    - type: prometheus
+      metricType: Value
+      metadata:
+        serverAddress: http://prometheus:9090
+        query: 'max(dps_queue_oldest_seconds{pool="STANDARD"})'
+        threshold: "60"
+        ignoreNullValues: "false"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: dps-worker-heavy
+spec:
+  scaleTargetRef: {name: dps-worker-heavy}
+  minReplicaCount: 1
+  maxReplicaCount: 4
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown: {stabilizationWindowSeconds: 300}
+  triggers:
+    - type: prometheus
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://prometheus:9090
+        query: 'max(dps_queue_ready{pool="HEAVY"})'
+        threshold: "5"
+        ignoreNullValues: "false"
+    - type: prometheus
+      metricType: Value
+      metadata:
+        serverAddress: http://prometheus:9090
+        query: 'max(dps_queue_oldest_seconds{pool="HEAVY"})'
+        threshold: "60"
+        ignoreNullValues: "false"

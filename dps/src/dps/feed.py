@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from dps.models import EventFeed, Job
 
 SCHEMA = "dps.event/1.0"
+PAYLOAD_VERSION = "1.0"
 
 # Job status -> the event a finished job emits.
 FINAL_EVENTS = {
@@ -40,16 +41,26 @@ def emit(db: Session, type_: str, *, tenant_id: str = "default", job_id: str | N
          document_version_id: str | None = None, correlation_id: str | None = None,
          payload: dict | None = None) -> EventFeed:
     """Adds an event to the session; the caller's commit publishes it together with the change."""
+    body = {**(payload or {}), "schemaVersion": PAYLOAD_VERSION}
     event = EventFeed(type=type_, tenant_id=tenant_id, job_id=job_id, document_version_id=document_version_id,
-                      correlation_id=correlation_id, payload_json=json.dumps(payload or {}, default=str),
+                      correlation_id=correlation_id, payload_json=json.dumps(body, default=str),
                       occurred_at=_db_now(db))
     db.add(event)
     return event
 
 
 def emit_for_job(db: Session, type_: str, job: Job, payload: dict | None = None) -> EventFeed:
+    body = dict(payload or {})
+    if job.pipeline_version:
+        body.setdefault("pipelineVersion", job.pipeline_version)
     return emit(db, type_, tenant_id=job.tenant_id or "default", job_id=job.id,
-                document_version_id=job.document_version_id, correlation_id=job.correlation_id, payload=payload)
+                document_version_id=job.document_version_id, correlation_id=job.correlation_id, payload=body)
+
+
+def result_metadata(result: dict) -> dict:
+    """Use the public result's run identity and the pipeline that wrote that result."""
+    return {key: value for key, value in (("runId", result.get("runId")),
+                                         ("pipelineVersion", (result.get("pipeline") or {}).get("version"))) if value}
 
 
 def view(event: EventFeed) -> dict:

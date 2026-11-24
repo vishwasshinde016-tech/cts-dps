@@ -343,8 +343,9 @@ class Gateway:
 
                     obs.mark_failed(model_span, ex)
                     if isinstance(ex, AiBudgetExhausted):  # a spent month is not an outage (Phase 3 fix 3)
-                        obs.count("dps.ai.budget_spent", 1, route=route_name)
-                        spent = AiDailyBudgetSpent if isinstance(ex, AiDailyBudgetExhausted) else AiMonthlyBudgetSpent
+                        daily = isinstance(ex, AiDailyBudgetExhausted)
+                        obs.count("dps.ai.budget_spent", 1, route=route_name, scope="day" if daily else "month")
+                        spent = AiDailyBudgetSpent if daily else AiMonthlyBudgetSpent
                         raise spent(str(ex)[:200]) from ex
                     breaker.failure()
                     raise AiUnavailable(f"{type(ex).__name__}: {str(ex)[:200]}") from ex

@@ -18,6 +18,7 @@ import httpx
 
 from dps.api.auth import ADMIN, AUDITOR, ROLES_HEADER, SERVICE, SUPPORT, USER_HEADER, Principal
 from dps.errors import ApiError
+from dps.ops.observability import trace_headers
 
 log = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ class SpringCpAccessChecker:
             return True
         headers = ({"Authorization": f"Bearer {principal.token}"} if principal.token
                    else {USER_HEADER: principal.user, ROLES_HEADER: ",".join(sorted(principal.roles))})
+        headers.update(trace_headers())
         safe_cp = cp_id.replace("\n", "_")
         try:
             resp = self._client.get(f"/api/v1/credit-proposals/{cp_id}", headers=headers)

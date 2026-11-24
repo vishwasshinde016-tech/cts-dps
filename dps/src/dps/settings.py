@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     # names are kept so existing deployments need no config change.
     core_base_url: str = "http://localhost:9310"
     core_timeout_seconds: float = 5.0
+    core_health_path: str = ""
     # DPS → Spring calls. Production: client credentials (token refreshed automatically,
     # wins over core_service_token). A fixed core_service_token expires; empty both: SERVICE dev headers.
     core_token_url: str = ""
@@ -100,6 +101,9 @@ class Settings(BaseSettings):
     # A running job's lease, renewed every third of it while the worker is alive: a worker that dies
     # gives its job back within this time, and a long job is never taken over while it still runs.
     worker_lease_seconds: int = 120
+    worker_heartbeat_file: Path | None = None
+    go_live_evaluation_file: str = ""
+    diagnostics_retention_days: int = Field(default=0, ge=0)
     worker_max_attempts: int = 3
     # Phase 1 queue rules (CTS DPS design, Phase 1 tab). A transient failure waits
     # min(retry_max, retry_base * 4^(attempt-1)) seconds, +/-20%, before the next attempt.
@@ -169,6 +173,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _resolve_pipeline(self) -> Settings:
         from dps.versioning import resolve
+
+        if self.env.lower() in ("prod", "production") and "rollout_default" not in self.model_fields_set:
+            self.rollout_default = "SHADOW"
 
         # Settings that change what is read, found or routed to a person (T3). Logging, limits and switches that
         # do not change a result stay out, so they do not make every old job look stale.

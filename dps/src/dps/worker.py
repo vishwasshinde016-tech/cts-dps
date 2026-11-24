@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import signal
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -160,6 +161,7 @@ class Worker:
 
     def run_once(self) -> bool:
         """Scheduler tasks (leader only), then at most one job. Returns True when a job was processed."""
+        self._heartbeat()
         if self._is_leader():
             self.push_events()
             self._age_queue()
@@ -185,6 +187,21 @@ class Worker:
         with self.session_factory() as db:
             jobs.age(db, self.settings.queue_aging_minutes)
             self._queue_metrics(db)
+        if self.settings.go_live_evaluation_file:
+            from dps.ops.golive import load_offline
+
+            metrics = load_offline(self.settings.go_live_evaluation_file, self.settings.pipeline_version)
+            for job_type, values in metrics.items():
+                if "calibrationError" in values:
+                    obs.gauge("dps.calibration_error", values["calibrationError"], job_type=job_type)
+        if self.settings.diagnostics_retention_days:
+            from dps.ops.production import prune_diagnostics
+
+            try:
+                with self.session_factory() as db:
+                    prune_diagnostics(db, self.settings.diagnostics_retention_days)
+            except Exception:  # noqa: BLE001 - retention is retried by the scheduler
+                log.warning("diagnostic retention failed", exc_info=True)
 
     def _reap(self) -> None:
         """G6: jobs whose worker died on their last attempt end DEAD instead of showing "in progress" for ever."""
@@ -205,16 +222,17 @@ class Worker:
 
         try:
             for pool in scaling(db):
-                obs.observe("dps.queue.oldest_seconds", pool["oldestQueuedSeconds"], pool=pool["pool"])
-                obs.observe("dps.queue.depth_per_worker", pool["depthPerWorker"], pool=pool["pool"])
+                obs.gauge("dps.queue.oldest_seconds", pool["oldestQueuedSeconds"], pool=pool["pool"])
+                obs.gauge("dps.queue.depth_per_worker", pool["depthPerWorker"], pool=pool["pool"])
+                obs.gauge("dps.queue.ready", pool["queued"], pool=pool["pool"])
             dead = db.scalar(select(func.count()).select_from(Job).where(Job.status == jobs.DEAD)) or 0
-            obs.observe("dps.jobs.dead", dead)
+            obs.gauge("dps.jobs.dead", dead)
             from dps.ops.production import review_backlog
 
             backlog = review_backlog(db)  # B4: jobs waiting for a person, and the oldest wait
-            obs.observe("dps.review.backlog", backlog["waiting"])
-            obs.observe("dps.review.mapping_backlog", backlog["mappingReview"])
-            obs.observe("dps.review.oldest_wait_seconds", backlog["oldestWaitSeconds"])
+            obs.gauge("dps.review.backlog", backlog["waiting"])
+            obs.gauge("dps.review.mapping_backlog", backlog["mappingReview"])
+            obs.gauge("dps.review.oldest_wait_seconds", backlog["oldestWaitSeconds"])
             from dps.models import AuditSeal, ReviewDecision
 
             rows = db.execute(select(Job.job_type, ReviewDecision.action, func.count())
@@ -226,11 +244,11 @@ class Worker:
                 acc[0] += n
                 acc[1] += n if action in ("CORRECT", "REJECT") else 0
             for job_type, (n, wrong) in per.items():
-                obs.observe("dps.review.error_rate", wrong / n, job_type=job_type)
+                obs.gauge("dps.review.error_rate", wrong / n, job_type=job_type)
             last_seal = db.scalar(select(func.max(AuditSeal.day)))
             if last_seal is not None:
                 stamp = datetime.combine(last_seal, datetime.min.time(), tzinfo=UTC).timestamp()
-                obs.observe("dps.audit_seal.last_day_timestamp", stamp)
+                obs.gauge("dps.audit_seal.last_day_timestamp", stamp)
         except Exception:  # noqa: BLE001 - metrics never stop the scheduler
             log.warning("queue metrics failed", exc_info=True)
 
@@ -432,11 +450,18 @@ class Worker:
                         if not jobs.renew_lease(db, job_id, self.settings.worker_id, lease, attempt):
                             log.warning("Job %s: lease lost to another worker", job_id)
                             return
+                    self._heartbeat()
                 except Exception:  # noqa: BLE001 - a missed beat only shortens the lease
                     log.warning("Job %s: lease renewal failed", job_id, exc_info=True)
 
         threading.Thread(target=beat, name=f"lease-{job_id[:8]}", daemon=True).start()
         return stop
+
+    def _heartbeat(self) -> None:
+        if heartbeat := self.settings.worker_heartbeat_file:
+            heartbeat.touch()
+        obs.gauge("dps.worker.heartbeat_timestamp", time.time(),
+                  worker=self.settings.worker_id, pool=self.settings.worker_pool)
 
     def _sync_document(self, db: Session, job: Job) -> None:
         if job.status in (jobs.FAILED, jobs.DEAD):  # the screens show both as a failed document
@@ -580,5 +605,18 @@ def main() -> None:  # pragma: no cover - process entry point
             time.sleep(2)
 
 
+def heartbeat_healthy(settings: Settings) -> bool:
+    """A missing or stale heartbeat means this worker hasn't polled or renewed its lease recently."""
+    if (path := settings.worker_heartbeat_file) is None:
+        return False
+    try:
+        age = time.time() - path.stat().st_mtime
+    except OSError:
+        return False
+    return 0 <= age <= max(60, settings.worker_lease_seconds)
+
+
 if __name__ == "__main__":  # pragma: no cover
+    if sys.argv[1:] == ["--healthcheck"]:
+        sys.exit(0 if heartbeat_healthy(get_settings()) else 1)
     main()

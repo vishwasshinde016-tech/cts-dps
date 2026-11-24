@@ -18,7 +18,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from dps import jobs
+from dps import feed, jobs
 from dps.models import Job
 from dps.ops import observability as obs
 from dps.skills import Pack, for_job_type, load
@@ -970,7 +970,8 @@ def finish(db: Session, job: Job, result: dict) -> None:
     mapping = (result.get("document") or {}).get("route") == "MAPPING_REVIEW"
     # fields: every field; toReview: the ones waiting for a person; route: why (MAPPING_REVIEW, NEEDS_REVIEW ...)
     jobs.finish(db, job, status, None, "MAPPING_REVIEW" if mapping and status == jobs.NEEDS_REVIEW else None,
-                payload={"skillPack": result["pipeline"]["skillPack"], "fields": len(result["fields"]),
+                payload={**feed.result_metadata(result),
+                         "skillPack": result["pipeline"]["skillPack"], "fields": len(result["fields"]),
                          "toReview": sum(1 for f in result["fields"] if f.get("status") == "NEEDS_REVIEW"),
                          "route": (result.get("document") or {}).get("route"),
                          "documentType": (result.get("classification") or {}).get("type")})

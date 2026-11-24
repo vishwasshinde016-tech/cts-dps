@@ -14,6 +14,7 @@ from datetime import UTC, date
 from pathlib import Path
 from typing import Annotated, Literal
 
+import httpx
 from fastapi import APIRouter, Header, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -718,7 +719,15 @@ def ready(request: Request) -> JSONResponse:
         except Exception:  # noqa: BLE001 - informational only
             workers = "UNKNOWN"
     settings = _settings(request)
+    spring = "NOT_CONFIGURED"
+    if settings.core_health_path:
+        from dps.integrations.spring import SpringClient
+
+        with httpx.Client(base_url=settings.core_base_url, timeout=2.0) as client:
+            spring = SpringClient(settings.core_base_url, 2.0, settings.core_service_token,
+                                  client=client).health(settings.core_health_path)
     return JSONResponse({"status": "UP" if up else "DOWN", **checks, "workers": workers,
+                         "spring": spring,
                          "parser": _parser_state(settings.parser_socket),
                          "model": _model_state(request, settings) if checks["database"] == "UP" else "UNKNOWN"},
                         status_code=200 if up else 503)

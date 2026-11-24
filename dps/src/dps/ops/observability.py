@@ -202,6 +202,13 @@ def observe(name: str, value: float, **attributes: Any) -> None:
         instrument.record(value, {k: str(v) for k, v in attributes.items()})
 
 
+def gauge(name: str, value: float, **attributes: Any) -> None:
+    """Reports a current value such as queue depth or last-success time."""
+    instrument = _instrument("gauge", name)
+    if instrument is not None:
+        instrument.set(value, {k: str(v) for k, v in attributes.items()})
+
+
 def _instrument(kind: str, name: str):
     meter = _otel.get("meter")
     if meter is None:
@@ -209,7 +216,10 @@ def _instrument(kind: str, name: str):
     key = (kind, name)  # pragma: no cover - needs OpenTelemetry
     found = _otel["instruments"].get(key)  # pragma: no cover
     if found is None:  # pragma: no cover
-        found = meter.create_counter(name) if kind == "counter" else meter.create_histogram(name, unit="s")
+        if kind == "gauge":
+            found = meter.create_gauge(name)
+        else:
+            found = meter.create_counter(name) if kind == "counter" else meter.create_histogram(name, unit="s")
         _otel["instruments"][key] = found
     return found  # pragma: no cover
 

@@ -83,6 +83,17 @@ class SpringClient:
         code = (resp.json() or {}).get("currency")
         return code if isinstance(code, str) and len(code) == 3 else None
 
+    def health(self, path: str) -> str:
+        if not path:
+            return "NOT_CONFIGURED"
+        if not path.startswith("/") or path.startswith("//"):
+            return "DOWN"
+        try:
+            response = self._request("GET", path, timeout=2.0)
+            return "UP" if response.status_code == 200 and response.json().get("status") == "UP" else "DOWN"
+        except (SpringUnavailable, ValueError, AttributeError):
+            return "DOWN"
+
     def cp_profile(self, cp_id: str):
         """Phase 2: what applies to one borrower (dps.profiles.LoanProfile), or None when Spring does not answer."""
         from dps.profiles import LoanProfile

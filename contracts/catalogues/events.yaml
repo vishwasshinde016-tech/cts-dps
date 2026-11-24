@@ -1,6 +1,7 @@
 # DPS event catalogue (contract-v1). Events are read from GET /dps/v1/events?after=<cursor>.
 # Ordering: by seq (outbox sequence). Delivery: at least once; de-duplicate on eventId.
 # Every event uses the envelope in schemas/event.json; payloads never hold document content.
+# New payloads carry schemaVersion, pipelineVersion when the job has one, and runId when tied to a saved result.
 version: 1.0.0
 events:
   - type: dps.job.accepted

@@ -19,12 +19,12 @@ import os
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from dps import jobs
-from dps.models import AuditEvent, AuditSeal, Job, Leader, ReviewDecision, utcnow
+from dps.models import AiCall, AuditEvent, AuditSeal, Job, Leader, ReviewDecision, TraceEvent, utcnow
 
 GENESIS = "0" * 64
 
@@ -154,15 +154,25 @@ DEPTH_OUT, DEPTH_IN = 5, 1
 LIMITS = {"STANDARD": (2, 8), "HEAVY": (1, 4)}
 
 
+def prune_diagnostics(db: Session, days: int) -> None:
+    """Prune one batch of expired diagnostic rows per pass, independently of audit and usage totals."""
+    if days <= 0:
+        return
+    cutoff = utcnow() - timedelta(days=days)
+    for model in (AiCall, TraceEvent):
+        oldest = select(model.id).where(model.at < cutoff).order_by(model.at, model.id).limit(500)
+        db.execute(delete(model).where(model.id.in_(oldest)).execution_options(synchronize_session=False))
+    db.commit()
+
+
 def scaling(db: Session) -> list[dict]:
     now = utcnow()
     out = []
     for pool, (lo, hi) in LIMITS.items():
-        queued = db.scalar(select(func.count()).select_from(Job).where(
-            Job.pool == pool, Job.status.in_((jobs.QUEUED, jobs.RETRY_WAIT)), Job.due_at <= now)) or 0
+        ready = (Job.pool == pool, Job.status.in_((jobs.QUEUED, jobs.RETRY_WAIT)), Job.due_at <= now)
+        queued, oldest = db.execute(select(func.count(), func.min(Job.due_at)).where(*ready)).one()
         running = db.scalar(select(func.count()).select_from(Job).where(Job.pool == pool,
                                                                          Job.status == jobs.RUNNING)) or 0
-        oldest = db.scalar(select(func.min(Job.created_at)).where(Job.pool == pool, Job.status == jobs.QUEUED))
         age = (now - oldest).total_seconds() if oldest else 0.0
         depth = queued / max(1, running)
         advice = "HOLD"

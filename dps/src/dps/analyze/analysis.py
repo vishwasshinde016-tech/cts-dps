@@ -123,7 +123,7 @@ def save_run(db: Session, job: Job, result: dict, trigger: str = "SUBMIT") -> Ru
 def finish(db: Session, job: Job, result: dict) -> None:
     """Saves the run, emits dps.analysis.completed and ends the job (NEEDS_REVIEW when flagged)."""
     save_run(db, job, result)
-    feed.emit_for_job(db, "dps.analysis.completed", job, event_payload(result))
+    feed.emit_for_job(db, "dps.analysis.completed", job, {**event_payload(result), **feed.result_metadata(result)})
     status = jobs.NEEDS_REVIEW if result["status"] == "NEEDS_REVIEW" else jobs.DONE
     code = None
     flagged = [w["code"] for w in result.get("warnings", [])
