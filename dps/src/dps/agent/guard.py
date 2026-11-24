@@ -55,6 +55,10 @@ class AiBudgetExhausted(RuntimeError):
     """The month's token budget is spent: the rules answer until the next month or a higher budget."""
 
 
+class AiDailyBudgetExhausted(AiBudgetExhausted):
+    """The day's token budget is spent: the rules answer until tomorrow (UTC)."""
+
+
 # Card numbers (4 x 4 digits) and Aadhaar (3 x 4 digits); a row of years ("2025 2024 2023") is kept, and so are the
 # digit groups inside a longer id ("ac000000-0000-0000-0000-000000000007": record refs the model must cite back).
 _GROUPED_ID = re.compile(r"(?<![\w.,-])\d{4}(?:[ -]\d{4}){2,3}(?![.,]?\d)(?!-?\w)")
@@ -88,6 +92,12 @@ def tokens_this_month(db: Session, now: datetime) -> int:
     return int(used or 0)
 
 
+def tokens_today(db: Session, now: datetime) -> int:
+    used = db.scalar(select(func.coalesce(func.sum(AiUsage.prompt_tokens + AiUsage.completion_tokens), 0))
+                     .where(AiUsage.at >= now.replace(hour=0, minute=0, second=0, microsecond=0)))
+    return int(used or 0)
+
+
 def budget_status(db: Session, settings: Settings, now: datetime | None = None) -> dict:
     """This month's model tokens against the budget, for the screens and the guard."""
     now = now or utcnow()
@@ -109,8 +119,20 @@ def _alert_once(db: Session, action: str, month: str, message: str, **detail) ->
         obs.event(action, message, **detail)
 
 
-def check_budget(db: Session, settings: Settings, now: datetime | None = None) -> None:
-    """Raises AiBudgetExhausted when the month's budget is spent; audits the 80% and 100% marks once each."""
+def check_budget(db: Session, settings: Settings, now: datetime | None = None, daily: int | None = None) -> None:
+    """Raises AiBudgetExhausted when the day's or the month's budget is spent; audits the 80% and 100% marks of the
+    month once each. ``daily``: the routes file's per-day tokens when DPS_AI_DAILY_TOKEN_BUDGET is not set (the routes
+    value was read but never enforced before; improvement plan S11, 24 Nov 2026), so one bulk upload cannot spend
+    the month in a day."""
+    day_budget = settings.ai_daily_token_budget or daily
+    if day_budget:
+        now_day = now or utcnow()
+        used_today = tokens_today(db, now_day)
+        if used_today >= day_budget:
+            _alert_once(db, "AI_DAILY_BUDGET_EXHAUSTED", now_day.strftime("%Y-%m-%d"),
+                        f"AI daily budget spent ({used_today} of {day_budget} tokens): the rules answer until tomorrow",
+                        used=used_today, budget=day_budget)
+            raise AiDailyBudgetExhausted(f"{used_today} of {day_budget} tokens used today")
     budget = settings.ai_monthly_token_budget
     if not budget:
         return
@@ -159,7 +181,7 @@ def purge_cache(db: Session, days: int, now: datetime | None = None) -> int:
 
 
 def guarded(completion: Completion, model: str, session_factory: sessionmaker[Session], settings: Settings,
-            clock: Callable[[], datetime] = utcnow) -> Completion:
+            clock: Callable[[], datetime] = utcnow, daily: int | None = None) -> Completion:
     """``completion`` with the guards above: masked text, cached answers, the monthly budget."""
 
     def call(messages: list[dict]) -> str:
@@ -178,7 +200,7 @@ def guarded(completion: Completion, model: str, session_factory: sessionmaker[Se
                     db.commit()
                     obs.count("dps.ai.cache_hits", 1, model=model)
                     return hit.answer
-            check_budget(db, settings, clock())
+            check_budget(db, settings, clock(), daily)
         answer = completion(safe)
         if settings.ai_cache:
             with session_factory() as db:

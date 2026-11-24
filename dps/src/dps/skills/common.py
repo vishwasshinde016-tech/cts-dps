@@ -250,7 +250,7 @@ def batched_proposals(pack, gateway, batches: list[list[dict]], notes: list | No
                     p["_span"] = span_id
         if got is None:
             spent = next((n["code"] for n in (notes or [])[before:]
-                          if n["code"] in ("AI_BUDGET_EXCEEDED", "AI_MONTHLY_BUDGET_SPENT")), None)
+                          if n["code"] in ("AI_BUDGET_EXCEEDED", "AI_MONTHLY_BUDGET_SPENT", "AI_DAILY_BUDGET_SPENT")), None)
             if spent and i + 1 < len(batches):
                 notes.append(issue(spent, f"{pack.name}: batches {i + 2} to {len(batches)} of "
                                           f"{len(batches)} not read by the agent"))

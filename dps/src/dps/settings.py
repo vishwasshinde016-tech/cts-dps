@@ -109,9 +109,11 @@ class Settings(BaseSettings):
     worker_poison_crashes: int = 2
     # Waiting this long moves a job one priority step up, so bulk work is never starved.
     queue_aging_minutes: int = 15
-    # Fairness defaults when a tenant has no dps_tenant_limit row.
-    queue_max_running_per_tenant: int = 4
-    queue_max_running_per_batch: int = 2
+    # Fairness defaults when a tenant has no dps_tenant_limit row. Raised for many files and heavy jobs (improvement
+    # plan S3, 24 Nov 2026): 4 per tenant and 2 per batch made a bulk upload wait in line while workers and the Azure
+    # quota were free. A bulk batch still leaves room for interactive uploads (6 of 10).
+    queue_max_running_per_tenant: int = 10
+    queue_max_running_per_batch: int = 6
     queue_max_queued_per_tenant: int = 1000
     batch_max_items: int = 500
     # Part of the "same input runs once" key and of the page-model cache. "auto" (default): computed at start-up from
@@ -151,6 +153,9 @@ class Settings(BaseSettings):
     # Phase 3a: model tokens allowed per calendar month (prompt + answer); empty: no cap. At 80% an alert is logged and
     # audited; at 100% the model is not called and the rules answer until the next month.
     ai_monthly_token_budget: int | None = Field(default=None, ge=1)
+    # Tokens allowed per calendar day (UTC); empty: the routes file's budgets.per_tenant_day_tokens when a routes file
+    # is used, else no daily cap. Production sets both (deploy/docker-compose.cts-dps.yml).
+    ai_daily_token_budget: int | None = Field(default=None, ge=1)
     # The same messages to the same model are answered from the cache (dps_ai_cache) instead of a new call. Off by
     # default (full review G17): cached answers hold document quotes outside the DMS's custody. When on, an answer
     # is used only for the same pipeline version and for ai_cache_days, and older answers are purged daily.

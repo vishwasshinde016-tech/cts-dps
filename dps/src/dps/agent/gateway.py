@@ -58,6 +58,12 @@ class AiMonthlyBudgetSpent(AiBudgetExceeded):
     code = "AI_MONTHLY_BUDGET_SPENT"
 
 
+class AiDailyBudgetSpent(AiMonthlyBudgetSpent):
+    """The day's token budget is spent (improvement plan S11): not an outage either."""
+
+    code = "AI_DAILY_BUDGET_SPENT"
+
+
 class AiRefused(GatewayError):
     """The deployment answered but refused (Azure content filter): the model is up, so the circuit stays closed."""
 
@@ -273,12 +279,13 @@ class Gateway:
                     obs.count("dps.ai.refused", 1, route=route_name)
                     raise AiRefused(f"{route.deployment} refused the request: {str(ex)[:200]}") from ex
                 except Exception as ex:  # noqa: BLE001 - provider bugs and auth errors count as an outage
-                    from dps.agent.guard import AiBudgetExhausted
+                    from dps.agent.guard import AiBudgetExhausted, AiDailyBudgetExhausted
 
                     obs.mark_failed(model_span, ex)
                     if isinstance(ex, AiBudgetExhausted):  # a spent month is not an outage (Phase 3 fix 3)
                         obs.count("dps.ai.budget_spent", 1, route=route_name)
-                        raise AiMonthlyBudgetSpent(str(ex)[:200]) from ex
+                        spent = AiDailyBudgetSpent if isinstance(ex, AiDailyBudgetExhausted) else AiMonthlyBudgetSpent
+                        raise spent(str(ex)[:200]) from ex
                     breaker.failure()
                     raise AiUnavailable(f"{type(ex).__name__}: {str(ex)[:200]}") from ex
                 else:
@@ -419,5 +426,6 @@ def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cove
 
         return call
 
-    guard = (lambda c, model: guarded(c, model, session_factory, settings)) if session_factory else None
+    daily = routes.per_tenant_day_tokens if getattr(settings, "ai_routes_file", "") else None
+    guard = (lambda c, model: guarded(c, model, session_factory, settings, daily=daily)) if session_factory else None
     return Gateway(routes, provider, guard=guard, trace_text=bool(getattr(settings, "ai_trace_text", False)))

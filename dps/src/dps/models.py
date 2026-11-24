@@ -135,6 +135,10 @@ class Job(Base):
               mssql_where=text("idempotency_key IS NOT NULL"), sqlite_where=text("idempotency_key IS NOT NULL")),
         Index("ux_dps_job_scoped_input", "tenant_id", "input_key", unique=True,
               mssql_where=text("input_key IS NOT NULL"), sqlite_where=text("input_key IS NOT NULL")),
+        # Improvement plan S5: amendments, document sets, covenant-status and support read jobs by these.
+        Index("ix_dps_job_document", "document_id"),
+        Index("ix_dps_job_version", "tenant_id", "document_version_id"),
+        Index("ix_dps_job_correlation", "correlation_id"),
     )
 
     id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
