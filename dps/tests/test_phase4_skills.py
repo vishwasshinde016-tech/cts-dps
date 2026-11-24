@@ -8,6 +8,7 @@ import json
 
 import pytest
 from conftest import h
+from sqlalchemy import select
 from test_jobapi import check
 from test_phase2_ingest import text_pdf
 from test_phase3_analyze import model_of
@@ -17,7 +18,7 @@ from dps.agent.gateway import AiUnavailable
 from dps.ingest.pipeline import Ingestor
 from dps.ingest.store import LocalStore
 from dps.integrations.spring_tools import FormulaCheck
-from dps.models import Job
+from dps.models import Job, Run
 from dps.parse import sandbox
 from dps.skills import PACKS, for_job_type, load
 from dps.skills import runner as skills
@@ -321,8 +322,8 @@ def test_json_only_for_commentary(client, app):
 
 def test_amendment_job_reads_base_result(client, app, settings, tmp_path):
     w = make_worker(app, settings, tmp_path)
-    submit(client, app, "EXTRACT_AGREEMENT", text_pdf([BASE_AGREEMENT]), ".pdf", "application/pdf", "agr-1",
-           "key-agr-base")
+    base = submit(client, app, "EXTRACT_AGREEMENT", text_pdf([BASE_AGREEMENT]), ".pdf", "application/pdf", "agr-1",
+                  "key-agr-base").json()["jobId"]
     assert w.run_once()  # the base agreement's result is the run the skills flow saved
     amend = submit(client, app, "EXTRACT_AMENDMENT", text_pdf([AMENDMENT]), ".pdf", "application/pdf", "amd-1",
                    "key-amd-1", amendsVersionId="agr-1").json()["jobId"]
@@ -332,6 +333,11 @@ def test_amendment_job_reads_base_result(client, app, settings, tmp_path):
     change = {f["value"]["metric"]: f["value"]["change"]["type"] for f in res["fields"]}
     assert change["DSCR"] == "CHANGE" and change["CURRENT_RATIO"] == "ADD"
     assert {f["value"]["metric"] for f in res["amendedSet"]} == {"DSCR", "CURRENT_RATIO"}
+    with app.state.db.session_factory() as db:
+        base_run = db.scalars(select(Run).where(Run.job_id == base)).one()
+        amendment_run = db.scalars(select(Run).where(Run.job_id == amend)).one()
+        assert amendment_run.base_run_id == base_run.id
+        assert amendment_run.attempt_no == 1
 
 
 def test_an_agreement_job_result_gets_schedule_terms(client, app, settings, tmp_path):

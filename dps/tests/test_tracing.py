@@ -319,6 +319,7 @@ def test_a_finding_opens_its_ai_read_and_model_call_and_the_rows_open_the_trace(
     assert row.trace_id == trace_hex and detail["ai_span_id"] == format(read_span.context.span_id, "016x")
     assert detail["field_id"] == kept["result"]["fields"][0]["id"] and detail["method"] == "AI"
     assert call.trace_id == trace_hex and call.span_id == format(model_span.context.span_id, "016x")
+    assert call.attempt_no == 1
     assert (call.prompt_tokens, call.completion_tokens) == (900, 40)
 
 

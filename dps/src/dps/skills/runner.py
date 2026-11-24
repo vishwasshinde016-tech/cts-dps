@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from dps import feed, jobs
-from dps.models import Job
+from dps.models import Job, Run
 from dps.ops import observability as obs
 from dps.skills import Pack, for_job_type, load
 from dps.skills.common import (
@@ -541,26 +541,22 @@ def approved_base(base: list[dict]) -> list[dict]:
     return out
 
 
-def base_fields(db: Session, job: Job, pipeline_version: str) -> list[dict]:
-    """For an amendment: the **approved** covenants Spring sent (preferred: people may have corrected them), else the
-    latest DPS result of the agreement version it amends (flagged BASE_FROM_DPS by the pack)."""
-    from dps import results
-
-    ctx = json.loads(job.request_json or "{}").get("context") or {}
-    if ctx.get("baseCovenants"):
-        return approved_base(ctx["baseCovenants"])
-    base_version = ctx.get("amendsVersionId")
+def base_fields(db: Session, job: Job, base_version: str | None) -> tuple[list[dict], str | None]:
+    """Return the fields and database ID from the same saved DPS result."""
     if not base_version:
-        return []
+        return [], None
     base = db.scalars(select(Job).where(Job.tenant_id == job.tenant_id, Job.document_version_id == base_version,
                                         Job.job_type.in_(("EXTRACT_AGREEMENT", "EXTRACT_AMENDMENT", "ONBOARD",
                                                           "AUTO")),
                                         Job.status.in_((jobs.DONE, jobs.NEEDS_REVIEW)))
                       .order_by(Job.finished_at.desc())).first()
     if base is None:
-        return []
-    result = results.build(db, base, pipeline_version)
-    return result.get("amendedSet") or result.get("fields", [])
+        return [], None
+    run = db.scalars(select(Run).where(Run.job_id == base.id).order_by(Run.run_no.desc())).first()
+    if run is None:
+        return [], None
+    result = json.loads(run.result_json)
+    return result.get("amendedSet") or result.get("fields", []), run.id
 
 
 def token_budget(pack: Pack, model: dict | None) -> int | None:
@@ -593,8 +589,7 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
             elif pack.name == "statement_lines":
                 fields, warnings, extra = _statement(job, db, statement_deps, flagged=bool(flags))
             else:
-                fields, warnings, extra = _extract(pack, job, model or {"pages": []}, ctx, gateway, tools, db,
-                                                   pipeline_version)
+                fields, warnings, extra = _extract(pack, job, model or {"pages": []}, ctx, gateway, tools, db)
         finally:
             if gateway is not None:
                 gateway.end_job()
@@ -712,13 +707,15 @@ def _taxonomy_version() -> str:
     return get().version
 
 
-def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, pipeline_version: str):
+def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db):
     pages = model.get("pages", [])
+    base_run_id = None
     if pack.name in ("amendment_diff", "waiver"):
         if ctx.get("baseCovenants"):
             ctx["base"], ctx["baseSource"] = approved_base(ctx["baseCovenants"]), "CTS_APPROVED"
         elif db is not None:
-            ctx["base"], ctx["baseSource"] = base_fields(db, job, pipeline_version), "DPS_EXTRACTION"
+            ctx["base"], base_run_id = base_fields(db, job, ctx.get("amendsVersionId"))
+            ctx["baseSource"] = "DPS_EXTRACTION"
     fields = pack.rules(pages, ctx)
     page_note = None
     max_pages = pack.page_selection.get("max_pages", 25)
@@ -835,6 +832,8 @@ def _extract(pack: Pack, job: Job, model: dict, ctx: dict, gateway, tools, db, p
     # the library match and the app formula run in run(), after the taxonomy stamp and the scope enrichment
     warnings += pack.checks(fields, ctx)
     extra = {}
+    if base_run_id:
+        extra["_baseRunId"] = base_run_id
     if entries is not None:
         from dps.skills.covenants import ledger
 

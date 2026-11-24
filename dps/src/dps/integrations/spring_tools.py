@@ -20,6 +20,7 @@ import time
 from collections import deque
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 
 from dps.integrations.spring import SpringClient, SpringUnavailable
@@ -30,6 +31,7 @@ UNAVAILABLE = "SPRING_UNAVAILABLE"
 MAX_BATCH = 200
 FALLBACK_PARALLEL = 4
 LOOKUP_KINDS = frozenset({"FACILITY_ID", "LOAN_ACCOUNT", "CIN", "PAN", "GSTIN", "LEI", "BORROWER_NAME"})
+response_version: ContextVar[str | None] = ContextVar("spring_tool_response_version", default=None)
 
 
 class CircuitOpen(SpringUnavailable):
@@ -152,6 +154,7 @@ class SpringTools:
                     self._sleep(self._backoff * (2 ** attempt))
                 continue
             self.breaker.success()
+            response_version.set((resp.headers.get("X-Spring-Version") or "")[:128] or None)
             return resp
         raise last or SpringUnavailable(f"{method} {path}")
 

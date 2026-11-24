@@ -305,6 +305,7 @@ class Worker:
     def _analyze(self, db: Session, job: Job, doc: Document | None, runner=None) -> None:
         """Phase 3 ANALYZE (page model -> classification and identifiers -> run + dps.analysis.completed) and
         Phase 4 skill packs (page model -> generic flow -> run + extraction event)."""
+        attempt_no = job.attempts or None
         pack_job = job.flow in SKILL_FLOWS
         if job.cancel_requested:
             jobs.finish(db, job, jobs.CANCELLED, "Cancelled before it started", "JOB_CANCELLED")
@@ -395,7 +396,7 @@ class Worker:
         finally:
             vision.page_images.reset(images)  # release the source renderer at the end of the job
             usage.record(db, self.settings, job.job_type[:24], doc.uploaded_by if doc else ACTOR,
-                         document_id=job.document_id, job_id=job.id)
+                         document_id=job.document_id, job_id=job.id, attempt_no=attempt_no)
         seconds = round(time.monotonic() - started, 2)
         obs.observe("dps.document.duration", seconds, flow="ANALYZE", pool=self.settings.worker_pool)
 

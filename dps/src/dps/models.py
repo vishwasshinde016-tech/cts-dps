@@ -278,6 +278,8 @@ class Run(Base):
     id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
     job_id: Mapped[str] = mapped_column(Varchar(36))
     run_no: Mapped[int] = mapped_column(Integer, default=1)
+    attempt_no: Mapped[int | None] = mapped_column(Integer)
+    base_run_id: Mapped[str | None] = mapped_column(Varchar(36))
     status: Mapped[str] = mapped_column(Varchar(16))  # DONE | NEEDS_REVIEW | FAILED
     trigger: Mapped[str] = mapped_column(Varchar(24), default="SUBMIT")  # SUBMIT | REPROCESS | REVIEW
     result_json: Mapped[str] = mapped_column(UnicodeText)
@@ -463,6 +465,7 @@ class AiCall(Base):
     cp_id: Mapped[str | None] = mapped_column(Varchar(64))
     document_id: Mapped[str | None] = mapped_column(Varchar(36))
     job_id: Mapped[str | None] = mapped_column(Varchar(36))
+    attempt_no: Mapped[int | None] = mapped_column(Integer)
     request_id: Mapped[str | None] = mapped_column(Varchar(64))
     model: Mapped[str] = mapped_column(Varchar(128))
     prompt_version: Mapped[str] = mapped_column(Varchar(16))  # first 8 characters of the system prompt's hash
@@ -477,6 +480,23 @@ class AiCall(Base):
     # OpenTelemetry ids of the model call (observability, 23 Nov 2026): the row opens its trace in Langfuse.
     trace_id: Mapped[str | None] = mapped_column(Varchar(32))
     span_id: Mapped[str | None] = mapped_column(Varchar(16))
+
+
+class ToolCall(Base):
+    """Fingerprints of a document agent tool call, with no document text or tool arguments stored."""
+
+    __tablename__ = "dps_tool_call"
+    id: Mapped[str] = mapped_column(Varchar(36), primary_key=True, default=new_id)
+    at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
+    job_id: Mapped[str] = mapped_column(Varchar(36), index=True)
+    attempt_no: Mapped[int | None] = mapped_column(Integer)
+    tool: Mapped[str] = mapped_column(Varchar(64))
+    request_sha256: Mapped[str] = mapped_column(Varchar(64))
+    response_sha256: Mapped[str | None] = mapped_column(Varchar(64))
+    error_type: Mapped[str | None] = mapped_column(Varchar(96))
+    spring_version: Mapped[str | None] = mapped_column(Varchar(128))
+    trace_id: Mapped[str | None] = mapped_column(Varchar(32))
+    read_span_id: Mapped[str | None] = mapped_column(Varchar(16))
 
 
 class TraceEvent(Base):

@@ -3,15 +3,19 @@ every call through the model gateway. CI never calls a model: the gateway's prov
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 
+import httpx
 import pytest
+from sqlalchemy import select
 from test_phase2_ingest import text_pdf
 from test_phase3_analyze import model_of
 from test_phase4_skills import AMENDMENT, SANCTION, Tools, fake_job
+from test_spring_tools import make as make_spring_tools
 
-from dps.agent import document_agent, vision
+from dps.agent import document_agent, usage, vision
 from dps.agent.document_agent import (
     CovenantLibraryTool,
     FindDefinitionTool,
@@ -26,6 +30,7 @@ from dps.agent.document_agent import (
 from dps.agent.gateway import Gateway, LlmDisabled, Route, Routes, from_settings
 from dps.agent.guard import _masked
 from dps.integrations.spring_tools import FormulaCheck, LookupMatch
+from dps.models import ToolCall
 from dps.settings import Settings, endpoint_problem
 from dps.skills import load
 from dps.skills import runner as skills
@@ -74,6 +79,24 @@ class Script:
 
 def gateway(script: Script, routes=("small", "strong", "vision")) -> Gateway:
     return Gateway(Routes({n: Route(n, "fake", f"dep-{n}", retries=0) for n in routes}), script, sleep=lambda _s: None)
+
+
+def test_document_agent_tool_call_records_only_fingerprints(app, settings):
+    spring, requests = make_spring_tools(lambda request: httpx.Response(
+        200, json={"items": [{"id": "agent", "valid": True}]}, headers={"X-Spring-Version": "test-build"}))
+    script = Script({}, {("strong", "sanction"): ("validate_formula", {"expression": "DSCR >= 1.2"})})
+    usage.begin()
+    pack = load("sanction")
+    pages = [{"no": 1, "text": SANCTION}]
+    document_agent.read(pack, gateway(script), pages, "Read this document", spring=spring)
+    with app.state.db.session_factory() as db:
+        usage.record(db, settings, "EXTRACT_SANCTION", "worker", job_id="tool-audit", attempt_no=2)
+        row = db.scalars(select(ToolCall).where(ToolCall.job_id == "tool-audit")).one()
+        assert (row.tool, row.spring_version, row.attempt_no) == ("validate_formula", "test-build", 2)
+        assert len(row.request_sha256) == 64
+        assert row.response_sha256 == hashlib.sha256(b"valid").hexdigest()
+        assert row.error_type is None
+    assert len(requests) == 1
 
 
 class Spring:
