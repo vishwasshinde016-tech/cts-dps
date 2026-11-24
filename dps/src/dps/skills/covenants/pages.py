@@ -95,6 +95,26 @@ def covenant_pages(pages: list[dict], candidates: list[dict], max_pages: int = 2
     return (batches[0] if batches else []), note
 
 
+def _pack_pages(order: list[tuple[int, str]], by_no: dict[int, dict], max_pages: int, max_chars: int,
+                max_batches: int) -> list[dict[int, str]]:
+    budget = max(max_chars - RESERVED_CHARS, 0)
+    batches: list[dict[int, str]] = [{}]
+    used = [0]
+    for no, why in order:
+        size = len(by_no[no].get("text") or "") + 40
+        placed = False
+        for b, keep in enumerate(batches):  # the first batch it fits in
+            if len(keep) < max_pages and (not keep or used[b] + size <= budget):
+                keep[no] = why
+                used[b] += size
+                placed = True
+                break
+        if not placed and len(batches) < max(max_batches, 1):
+            batches.append({no: why})
+            used.append(size)
+    return batches
+
+
 def covenant_batches(pages: list[dict], candidates: list[dict], max_pages: int = 25, max_chars: int = 60_000,
                      max_batches: int = 1) -> tuple[list[list[dict]], dict]:
     """The pages to send as up to ``max_batches`` reads (long agreements: one prompt cannot hold every covenant page).
@@ -128,21 +148,7 @@ def covenant_batches(pages: list[dict], candidates: list[dict], max_pages: int =
     if not order:  # no signal at all (a short or unusual document): the first pages
         order = [(no, "FIRST_PAGES") for no in numbers[:max_pages]]
 
-    budget = max(max_chars - RESERVED_CHARS, 0)
-    batches: list[dict[int, str]] = [{}]
-    used = [0]
-    for no, why in order:
-        size = len(by_no[no].get("text") or "") + 40
-        placed = False
-        for b, keep in enumerate(batches):  # the first batch it fits in
-            if len(keep) < max_pages and (not keep or used[b] + size <= budget):
-                keep[no] = why
-                used[b] += size
-                placed = True
-                break
-        if not placed and len(batches) < max(max_batches, 1):
-            batches.append({no: why})
-            used.append(size)
+    batches = _pack_pages(order, by_no, max_pages, max_chars, max_batches)
     kept = {no: (why, b + 1) for b, keep in enumerate(batches) for no, why in keep.items()}
     not_sent = [no for no, why in order if no not in kept and why in ("RULES", "SECTION", "DUTY")]
     out = [[p for p in pages if p["no"] in keep] for keep in batches if keep]

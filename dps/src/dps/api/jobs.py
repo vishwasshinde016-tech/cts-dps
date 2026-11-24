@@ -178,6 +178,21 @@ def _accepted(job: Job, duplicate: bool) -> dict:
             "links": {"self": f"/dps/v1/jobs/{job.id}", "result": f"/dps/v1/jobs/{job.id}/result"}}
 
 
+def _validate_staged_document(document: DocumentRef, settings: Settings) -> None:
+    # Phase 3: a staged file, not yet committed by the DMS, checked before commit.
+    if not document.stagingRef:
+        raise ApiError(400, "INVALID_INPUT", "document.stagingRef (or objectKey) is required for ANALYZE.")
+    from dps.ingest.store import LocalStore, StoreError
+
+    staged = LocalStore(settings.storage_dir, settings.staging_dir, settings.derived_dir,
+                        settings.max_file_mb * 1024 * 1024)
+    try:
+        staged.open_staged(document.stagingRef, document.sha256)
+    except StoreError as ex:
+        code = ex.code if ex.code == "INTEGRITY_MISMATCH" else "INVALID_INPUT"
+        raise ApiError(400, code, f"document.stagingRef: {ex}") from ex
+
+
 def validate_job(store, body: JobRequest, settings: Settings) -> dict:
     """Checks a request that the schema accepts against the rules of Phase 1. Returns the job type's entry."""
     spec = JOB_TYPES.get(body.jobType)
@@ -202,18 +217,7 @@ def validate_job(store, body: JobRequest, settings: Settings) -> dict:
     if body.document.sizeBytes > settings.max_upload_mb * 1024 * 1024:
         raise ApiError(400, "INVALID_INPUT", f"The file is larger than {settings.max_upload_mb} MB.")
     if body.jobType == "ANALYZE" and not body.document.objectKey:
-        # Phase 3: a staged file, not yet committed by the DMS, checked before commit.
-        if not body.document.stagingRef:
-            raise ApiError(400, "INVALID_INPUT", "document.stagingRef (or objectKey) is required for ANALYZE.")
-        from dps.ingest.store import LocalStore, StoreError
-
-        staged = LocalStore(settings.storage_dir, settings.staging_dir, settings.derived_dir,
-                            settings.max_file_mb * 1024 * 1024)
-        try:
-            staged.open_staged(body.document.stagingRef, body.document.sha256)
-        except StoreError as ex:
-            code = ex.code if ex.code == "INTEGRITY_MISMATCH" else "INVALID_INPUT"
-            raise ApiError(400, code, f"document.stagingRef: {ex}") from ex
+        _validate_staged_document(body.document, settings)
         return spec
     if (body.jobType != "ANALYZE" and not body.document.versionId) or not body.document.objectKey:
         raise ApiError(400, "INVALID_INPUT", "document.versionId and document.objectKey are required for "

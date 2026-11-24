@@ -340,6 +340,36 @@ def _plain(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _reject_alias(best: str | None, best_phrase: str, lead: str, text: str) -> bool:
+    if best in _TOTALS and not (lead.startswith("total") or lead.strip(" :") == best_phrase
+                                or re.search(r",\s*total\s*$", lead)):  # "Current assets, total"
+        return True  # "Prepaid expenses and other current assets" is not total current assets
+    if best == "LT_DEBT" and re.search(r"current\s+(portion|maturities)|due\s+within", text) \
+            and not re.search(r"\b(less|excluding|net\s+of)\s+(the\s+)?current\s+(portion|maturities)", text):
+        return True  # the part of long-term debt due within a year is not long-term debt
+    # Statement wording stress test: a cash-flow line is never a balance, a deferred or grant revenue never the sales.
+    if best == "CASH" and re.search(r"\b(provided|generated|used|inflow|outflow|flows?|increase|decrease)\b", text):
+        return True
+    if best == "FIXED_ASSETS" and re.search(r"\b(purchases?|payments?|acquisition|additions?|proceeds|sale|disposal)\b",
+                                            text):
+        return True
+    if best == "TAX" and re.search(r"\b(payable|receivables?|recoverable|refunds?|assets?|liabilit\w*|deferred|paid|"
+                                   r"advances?)\b", text):
+        return True  # bug hunt (held-out set): "Income tax payable", "Deferred income tax asset" are not the tax charge
+    if best == "REVENUE" and re.search(r"\b(deferred|unearned|grants?|cost\s+of|reserves?)\b", text):
+        return True  # Sri Lanka run: "Revenue reserves" is retained earnings in equity, not the sales
+    if best == "INVENTORY" and re.search(r"\b(provisions?|reversal|write[- ]?(?:offs?|downs?)|obsolete|slow[- ]moving|"
+                                         r"impairment|allowance)\b", text):
+        return True  # Sri Lanka run (Hemas): "Provision for Obsolete & Slow-Moving Stocks" in the cash flow
+    if best == "CASH" and re.search(r"\bbeginning\s+of\b|\bopening\b", text):
+        return True  # held-out set: "Cash ... as at the beginning of the year" is last year's closing cash
+    if best in ("PAT", "PBT") and re.search(r"\bshare\s+of\b|non-?controlling|minority", text):
+        return True  # held-out set: "Share of net income of equity companies" is not the company's net income
+    if best in ("LT_DEBT", "ST_DEBT", "TOTAL_DEBT") and re.search(r"\b(proceeds|repayments?|repaid|raised)\b", text):
+        return True  # held-out set: "Proceeds from long term borrowings" is a cash flow, not the debt
+    return False
+
+
 def match_key(label: str) -> str | None:
     text = " " + _plain(_DECORATION.sub(" ", _DECORATION.sub(" ", label or ""))) + " "
     if _EXCLUDE.search(text):
@@ -360,32 +390,8 @@ def match_key(label: str) -> str | None:
     for key, rx in _PATTERNS:
         if rx.search(text) or rx.search(lead):  # "(ii) Sales", "3. Income taxes": the numbering is no part of it
             return key
-    if best in _TOTALS and not (lead.startswith("total") or lead.strip(" :") == best_phrase
-                                or re.search(r",\s*total\s*$", lead)):  # "Current assets, total"
-        return None  # "Prepaid expenses and other current assets" is not total current assets
-    if best == "LT_DEBT" and re.search(r"current\s+(portion|maturities)|due\s+within", text) \
-            and not re.search(r"\b(less|excluding|net\s+of)\s+(the\s+)?current\s+(portion|maturities)", text):
-        return None  # the part of long-term debt due within a year is not long-term debt
-    # Statement wording stress test: a cash-flow line is never a balance, a deferred or grant revenue never the sales.
-    if best == "CASH" and re.search(r"\b(provided|generated|used|inflow|outflow|flows?|increase|decrease)\b", text):
+    if _reject_alias(best, best_phrase, lead, text):
         return None
-    if best == "FIXED_ASSETS" and re.search(r"\b(purchases?|payments?|acquisition|additions?|proceeds|sale|disposal)\b",
-                                            text):
-        return None
-    if best == "TAX" and re.search(r"\b(payable|receivables?|recoverable|refunds?|assets?|liabilit\w*|deferred|paid|"
-                                   r"advances?)\b", text):
-        return None  # bug hunt (held-out set): "Income tax payable", "Deferred income tax asset" are not the tax charge
-    if best == "REVENUE" and re.search(r"\b(deferred|unearned|grants?|cost\s+of|reserves?)\b", text):
-        return None  # Sri Lanka run: "Revenue reserves" is retained earnings in equity, not the sales
-    if best == "INVENTORY" and re.search(r"\b(provisions?|reversal|write[- ]?(?:offs?|downs?)|obsolete|slow[- ]moving|"
-                                         r"impairment|allowance)\b", text):
-        return None  # Sri Lanka run (Hemas): "Provision for Obsolete & Slow-Moving Stocks" in the cash flow
-    if best == "CASH" and re.search(r"\bbeginning\s+of\b|\bopening\b", text):
-        return None  # held-out set: "Cash ... as at the beginning of the year" is last year's closing cash
-    if best in ("PAT", "PBT") and re.search(r"\bshare\s+of\b|non-?controlling|minority", text):
-        return None  # held-out set: "Share of net income of equity companies" is not the company's net income
-    if best in ("LT_DEBT", "ST_DEBT", "TOTAL_DEBT") and re.search(r"\b(proceeds|repayments?|repaid|raised)\b", text):
-        return None  # held-out set: "Proceeds from long term borrowings" is a cash flow, not the debt
     return best
 
 
@@ -651,6 +657,21 @@ def rows_from_csv(data: bytes, entity: str = "STANDALONE") -> list[tuple[str, fl
     return rows_from_grid(grid, lambda i, j: f"R{i + 1}C{j + 1}", entity)
 
 
+def _prefer_statement_total(found: dict[str, LineValue], key: str | None, lead: str) -> None:
+    if key == "NET_WORTH" and key in found and "attributable" in found[key].label.lower() \
+            and "attributable" not in lead:
+        del found[key]  # with non-controlling interests the total equity is the net worth
+    if key == "NET_WORTH" and key in found and _PLAIN_EQUITY_TOTAL.match(lead) \
+            and not _PLAIN_EQUITY_TOTAL.match(_NUMBERING.sub("", found[key].label.lower().strip())):
+        del found[key]  # held-out set: "Total Kimberly-Clark Corporation Stockholders' Equity" is the parent's part
+    if key == "CFO" and key in found and "cash generated from operations" in found[key].label.lower() \
+            and lead.startswith("net cash"):
+        del found[key]  # held-out set: cash generated from operations is before interest, tax and gratuity paid
+    if key in ("REVENUE", "TAX") and key in found and lead.startswith("total") \
+            and not _NUMBERING.sub("", found[key].label.lower()).startswith("total"):
+        del found[key]  # "Net sales" then "Total net sales and revenues": the total is the revenue
+
+
 def extract_values(rows: list[tuple[str, float, int | None, str | None]], header_text: str,
                    currency: str = "INR", rate: float = 1.0) -> StatementResult:
     """Values in ``currency``'s money unit (INR crore, millions of any other currency, dps.money); ``rate`` converts
@@ -670,18 +691,7 @@ def extract_values(rows: list[tuple[str, float, int | None, str | None]], header
         lead = _NUMBERING.sub("", label.lower().strip())
         if key == "REVENUE" and lead.startswith("total") and "OTHER_INCOME" in found:
             key = "TOTAL_INCOME"  # Indian "Total revenue" after other income is the total income
-        if key == "NET_WORTH" and key in found and "attributable" in found[key].label.lower() \
-                and "attributable" not in lead:
-            del found[key]  # with non-controlling interests the total equity is the net worth
-        if key == "NET_WORTH" and key in found and _PLAIN_EQUITY_TOTAL.match(lead) \
-                and not _PLAIN_EQUITY_TOTAL.match(_NUMBERING.sub("", found[key].label.lower().strip())):
-            del found[key]  # held-out set: "Total Kimberly-Clark Corporation Stockholders' Equity" is the parent's part
-        if key == "CFO" and key in found and "cash generated from operations" in found[key].label.lower() \
-                and lead.startswith("net cash"):
-            del found[key]  # held-out set: cash generated from operations is before interest, tax and gratuity paid
-        if key in ("REVENUE", "TAX") and key in found and lead.startswith("total") \
-                and not _NUMBERING.sub("", found[key].label.lower()).startswith("total"):
-            del found[key]  # "Net sales" then "Total net sales and revenues": the total is the revenue
+        _prefer_statement_total(found, key, lead)
         if key in _EXPENSES and key not in found or re.search(r"\b(cost of sales|administrative expenses|"
                                                              r"distribution expenses)\b", lead):
             expense_signs.append(value)

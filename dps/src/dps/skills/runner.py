@@ -270,6 +270,27 @@ def merge_same_sentence(fields: list[dict]) -> list[dict]:
     return [f for f in fields if id(f) not in dropped]
 
 
+def _agent_covenant_value(value: dict, p: dict) -> tuple[dict, str | None]:
+    from dps.skills.app_formula import normalise_operator
+
+    value = {**{k: None for k in COVENANT_KEYS}, **value,
+             "metric": value.get("metric") or p.get("_written") or p["name"]}
+    # the agent's operator in the contract's terms ("≥", "minimum" -> ">="); anything else is not an operator
+    unread_op = None
+    raw_op = value.get("operator")
+    value["operator"] = normalise_operator(raw_op)
+    if raw_op is not None and value["operator"] is None:
+        unread_op = str(raw_op)[:40]
+    threshold = value.get("threshold")
+    if isinstance(threshold, str):  # "1.25x", "3.50:1" -> 1.25, 3.5
+        m = re.search(r"-?\d+(?:\.\d+)?", threshold.replace(",", ""))
+        value["threshold"] = float(m.group(0)) if m else None
+    elif isinstance(threshold, bool):
+        value["threshold"] = None
+    value["expression"] = None  # always built by DPS in the app's formula language (app_formula)
+    return value, unread_op
+
+
 def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: list[dict] | None,
                 method: str = "AI") -> list[dict]:
     """Agent proposals the rules did not find: kept with method AI (or AI_VISION), high-risk ones and every covenant
@@ -292,22 +313,7 @@ def _agent_only(pack: Pack, pages: list[dict], fields: list[dict], proposals: li
         # covenants the agent read (bulk run: Holly's six broke result.json, "'expression' is a required property")
         unread_op = None
         if group in COVENANT_GROUPS:
-            from dps.skills.app_formula import normalise_operator
-
-            value = {**{k: None for k in COVENANT_KEYS}, **value,
-                     "metric": value.get("metric") or p.get("_written") or p["name"]}
-            # the agent's operator in the contract's terms ("≥", "minimum" -> ">="); anything else is not an operator
-            raw_op = value.get("operator")
-            value["operator"] = normalise_operator(raw_op)
-            if raw_op is not None and value["operator"] is None:
-                unread_op = str(raw_op)[:40]
-            threshold = value.get("threshold")
-            if isinstance(threshold, str):  # "1.25x", "3.50:1" -> 1.25, 3.5
-                m = re.search(r"-?\d+(?:\.\d+)?", threshold.replace(",", ""))
-                value["threshold"] = float(m.group(0)) if m else None
-            elif isinstance(threshold, bool):
-                value["threshold"] = None
-            value["expression"] = None  # always built by DPS in the app's formula language (app_formula)
+            value, unread_op = _agent_covenant_value(value, p)
         if group == "WAIVER":  # the agent's reading in the waiver shape; the target is matched by a person
             from dps.skills.waiver.rules import KINDS
 
@@ -570,6 +576,16 @@ def token_budget(pack: Pack, model: dict | None) -> int | None:
     return max(base, min(per_page * pages, ceiling or base))
 
 
+def _hold_for_prompt_injection(fields: list[dict], warnings: list[dict]) -> None:
+    if any(w["code"] == "PROMPT_INJECTION_SUSPECTED" for w in warnings):
+        for f in fields:  # text written to steer an AI model: every value waits for a person, the reason on each
+            if f.get("status") in ("AUTO_ACCEPTED", "NEEDS_REVIEW"):
+                f["status"] = "NEEDS_REVIEW"
+                if not any(i.get("code") == "PROMPT_INJECTION_SUSPECTED" for i in f.get("issues") or []):
+                    f.setdefault("issues", []).append(issue("PROMPT_INJECTION_SUSPECTED",
+                                                            "the document addresses an AI model"))
+
+
 def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: Session | None = None,
         pipeline_version: str = "1", raw: bytes | None = None, scorer_dir: str | None = None,
         statement_deps=None) -> dict:
@@ -631,13 +647,7 @@ def run(pack: Pack, job: Job, model: dict | None, gateway=None, tools=None, db: 
     check_numbers(fields)  # after scoring: a number not in its own quote always goes to a person
     if pack.name not in ("commentary", "reconcile_set", "statement_lines"):  # the statement reader checks its own
         warnings += document_checks(model, gateway is not None)
-    if any(w["code"] == "PROMPT_INJECTION_SUSPECTED" for w in warnings):
-        for f in fields:  # text written to steer an AI model: every value waits for a person, the reason on each
-            if f.get("status") in ("AUTO_ACCEPTED", "NEEDS_REVIEW"):
-                f["status"] = "NEEDS_REVIEW"
-                if not any(i.get("code") == "PROMPT_INJECTION_SUSPECTED" for i in f.get("issues") or []):
-                    f.setdefault("issues", []).append(issue("PROMPT_INJECTION_SUSPECTED",
-                                                            "the document addresses an AI model"))
+    _hold_for_prompt_injection(fields, warnings)
     if pack.name not in ("commentary", "reconcile_set"):
         extra["_pages"] = page_accounting((model or {}).get("pages", []))
         if not [f for f in fields if f.get("group") != "SCHEDULE_TERM"] \

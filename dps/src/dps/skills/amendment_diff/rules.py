@@ -122,6 +122,23 @@ def _document_provisions(pages: list[dict], effective: str | None) -> list[dict]
     return result
 
 
+def _unmatched_operation(pages: list[dict], base: list[dict], o: dict, effective: str | None) -> dict:
+    possible = _targets(base, o["metric"], o["clause"])
+    old = possible[0] if len(possible) == 1 else None
+    metric = o["metric"] or (old or {}).get("value", {}).get("metric") or "OTHER"
+    value = dict(old["value"]) if old else {
+        "metric": metric, "operator": None, "threshold": None, "unit": None, "expression": None,
+    }
+    value["change"] = {"type": o["type"], "clause": o["clause"], "effectiveDate": effective,
+                       "appliedCovenantId": value.get("appliedCovenantId"), "from": None}
+    f = make_field(PACK, pages, old["group"] if old else "POSSIBLE_COVENANT",
+                   old["name"] if old else f"Clause {o['clause']}", value, o["page"], o["quote"],
+                   confidence=0.85, key=f"{o['type']}-{o['page']}-{o['clause']}")
+    if old is None or o["type"] != "DELETE":
+        _hold(f, "UNRESOLVED_AMENDMENT", "Confirm the target and revised terms against the approved agreement.")
+    return f
+
+
 def rules(pages: list[dict], ctx: dict) -> list[dict]:
     """Find proposed changes against the base version's individual covenant records."""
     base = [f for f in ctx.get("base", []) if f["group"].endswith("COVENANT")]
@@ -164,20 +181,8 @@ def rules(pages: list[dict], ctx: dict) -> list[dict]:
     for o in ops:
         if (o["page"], o["clause"], o["type"]) in handled:
             continue
-        possible = _targets(base, o["metric"], o["clause"])
-        old = possible[0] if len(possible) == 1 else None
-        metric = o["metric"] or (old or {}).get("value", {}).get("metric") or "OTHER"
-        value = dict(old["value"]) if old else {
-            "metric": metric, "operator": None, "threshold": None, "unit": None, "expression": None,
-        }
-        value["change"] = {"type": o["type"], "clause": o["clause"], "effectiveDate": effective,
-                           "appliedCovenantId": value.get("appliedCovenantId"), "from": None}
-        f = make_field(PACK, pages, old["group"] if old else "POSSIBLE_COVENANT",
-                       old["name"] if old else f"Clause {o['clause']}", value, o["page"], o["quote"],
-                       confidence=0.85, key=f"{o['type']}-{o['page']}-{o['clause']}")
-        if old is None or o["type"] != "DELETE":
-            _hold(f, "UNRESOLVED_AMENDMENT", "Confirm the target and revised terms against the approved agreement.")
-        target_key = _change_key(value)
+        f = _unmatched_operation(pages, base, o, effective)
+        target_key = _change_key(f["value"])
         touched[target_key] = touched.get(target_key, 0) + 1
         out.append(f)
     for f in out:
