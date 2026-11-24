@@ -224,7 +224,10 @@ def batched_proposals(pack, gateway, batches: list[list[dict]], notes: list | No
     token budget stops the remaining batches, and says which were not read."""
     out: list[dict] | None = None
     seen: set[tuple] = set()
+    from dps.jobs import stop_if_cancelled
+
     for i, batch in enumerate(batches):
+        stop_if_cancelled()  # a cancelled or replaced job stops before its next AI call (S10)
         what = "the agreement's covenant pages: list the covenants" if pack.name == "covenants" else \
             "the pages for this task: list what is"
         extra = f"These are part {i + 1} of {len(batches)} of {what} on these pages." if len(batches) > 1 else ""
@@ -250,7 +253,8 @@ def batched_proposals(pack, gateway, batches: list[list[dict]], notes: list | No
                     p["_span"] = span_id
         if got is None:
             spent = next((n["code"] for n in (notes or [])[before:]
-                          if n["code"] in ("AI_BUDGET_EXCEEDED", "AI_MONTHLY_BUDGET_SPENT", "AI_DAILY_BUDGET_SPENT")), None)
+                          if n["code"] in ("AI_BUDGET_EXCEEDED", "AI_MONTHLY_BUDGET_SPENT",
+                                           "AI_DAILY_BUDGET_SPENT")), None)
             if spent and i + 1 < len(batches):
                 notes.append(issue(spent, f"{pack.name}: batches {i + 2} to {len(batches)} of "
                                           f"{len(batches)} not read by the agent"))

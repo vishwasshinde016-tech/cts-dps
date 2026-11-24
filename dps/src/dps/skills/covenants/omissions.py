@@ -94,7 +94,9 @@ def read(gateway, entries: list[dict], pages: list[dict], notes: list | None = N
     decisions: dict[str, dict] = {}
     types = _types_text()
     batches = [entries[i:i + MAX_ITEMS] for i in range(0, len(entries), MAX_ITEMS)]
+    from dps.jobs import stop_if_cancelled
     for n, batch in enumerate(batches):
+        stop_if_cancelled()  # improvement plan S10
         if n >= MAX_CALLS:
             if notes is not None:
                 notes.append(issue("RESIDUAL_BUDGET", f"{sum(len(b) for b in batches[n:])} unexplained duty "

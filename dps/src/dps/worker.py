@@ -35,6 +35,8 @@ from dps.skills.statement_lines.reader import ContentFailed, NeedsHeavyPool
 log = logging.getLogger(__name__)
 
 SKILL_FLOWS = ("SKILL_PACK",)  # every job type that reads a document (one pipeline, full review WP7)
+# Spring refuses the content of an event push: the bad events are recorded and skipped (E1), never retried for ever.
+REJECTED_EVENTS = frozenset({400, 409, 413, 415, 422})
 ACTOR = "dps-worker"
 
 
@@ -98,16 +100,49 @@ class Worker:
                 return 0
             try:
                 resp = self.core._request("POST", path, json={"events": events})
-                resp.raise_for_status()
             except (SpringUnavailable, httpx.HTTPError) as ex:
                 log.warning("event push to Spring failed (%d events, retried later): %s", len(events),
                             type(ex).__name__)
                 self._push_after = time.monotonic() + 30
                 return 0
+            if resp.status_code in REJECTED_EVENTS:
+                # Spring refuses the content (improvement plan E1, 24 Nov 2026): before, the same batch was retried
+                # every 30 s for ever and no later event was ever pushed. Each event is sent alone; the ones Spring
+                # still refuses are recorded (audit EVENT_PUSH_REJECTED, metric) and skipped. They stay in the
+                # feed, so GET /dps/v1/events still serves them.
+                pushed = self._push_one_by_one(db, path, events)
+            elif resp.status_code >= 400:  # 401/403/404/408/429: configuration or load, never skip: retry, alert
+                log.error("event push refused by Spring: HTTP %s (%d events wait; check the token and the path)",
+                          resp.status_code, len(events))
+                obs.count("dps.events.push_refused", 1, status=str(resp.status_code))
+                self._push_after = time.monotonic() + 30
+                return 0
+            else:
+                pushed = len(events)
             cursor.seq, cursor.updated_at = last, utcnow()
             db.commit()
-            pushed = len(events)
         return pushed
+
+    def _push_one_by_one(self, db: Session, path: str, events: list[dict]) -> int:
+        from dps import services
+
+        delivered = 0
+        for event in events:
+            try:
+                resp = self.core._request("POST", path, json={"events": [event]})
+            except (SpringUnavailable, httpx.HTTPError) as ex:
+                raise SpringUnavailable(f"event push interrupted: {type(ex).__name__}") from ex
+            if resp.status_code < 400:
+                delivered += 1
+            elif resp.status_code in REJECTED_EVENTS:
+                services.audit(db, "dps-worker", "EVENT_PUSH_REJECTED", "event", str(event.get("eventId")),
+                               seq=event.get("seq"), type=event.get("type"), status=resp.status_code)
+                obs.count("dps.events.push_rejected", 1, type=str(event.get("type")))
+                log.error("event %s (%s) refused by Spring with HTTP %s: recorded and skipped",
+                          event.get("eventId"), event.get("type"), resp.status_code)
+            else:
+                raise SpringUnavailable(f"event push: HTTP {resp.status_code}")
+        return delivered
 
     def _seal(self) -> None:
         """Once an hour: seal every finished day not sealed yet (the audit hash chain)."""
@@ -205,6 +240,7 @@ class Worker:
         from dps.integrations.spring import CORRELATION
 
         correlation = CORRELATION.set(job.correlation_id)  # every Spring call of this job carries it
+        cancel_check = jobs.CANCEL_CHECK.set(self._cancel_check(job.id))  # AI readers stop when it is cancelled
         stop = self._start_heartbeat(job.id, job.attempts)
         # The job's trace (observability, 23 Nov 2026). In Langfuse: the trace name is the job type, the session is
         # the document (every job on one document side by side), the user is who uploaded it. Ids only: no file name.
@@ -228,7 +264,16 @@ class Worker:
                 stop.set()
                 jobs.worker_attempt.reset(token)
                 CORRELATION.reset(correlation)
+                jobs.CANCEL_CHECK.reset(cancel_check)
                 self.page_models.clear()  # sequential worker: never keep a page model past its job
+
+    def _cancel_check(self, job_id: str):
+        """Reads the job's cancel flag in its own short session (the job's session holds uncommitted work)."""
+        def check() -> bool:
+            with self.session_factory() as s:
+                return jobs.cancelled(s, job_id)
+
+        return check
 
     def _run(self, db: Session, job: Job, doc: Document | None) -> None:
         if job.flow == "ANALYZE":
@@ -276,6 +321,12 @@ class Worker:
                     target(db, job, self.page_models[doc.sha256])
         except jobs.LeaseLost:
             raise
+        except jobs.JobCancelled:  # cancelled or replaced while reading: no result is saved, no more AI calls (S10)
+            db.rollback()
+            db.refresh(job)
+            jobs.finish(db, job, jobs.CANCELLED, "Cancelled while it was being read", "JOB_CANCELLED")
+            self._sync_document(db, job)
+            return
         except NeedsHeavyPool as ex:  # a statement the standard reader cannot read: the HEAVY pool reads it
             db.rollback()
             db.refresh(job)
