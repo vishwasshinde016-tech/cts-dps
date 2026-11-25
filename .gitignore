@@ -38,3 +38,5 @@ offline-bundle/
 
 # Parsed pages written by local demo runs
 dps/derived/
+# start-dps.ps1 logs and process list
+dps/logs/

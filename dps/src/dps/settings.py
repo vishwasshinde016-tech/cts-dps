@@ -167,6 +167,14 @@ class Settings(BaseSettings):
     # document at a time while the rest of an upload waited in the queue). Each job also reads with
     # ai_parallel_reads model calls, so the Azure load is up to worker_threads x ai_parallel_reads calls at once.
     worker_threads: int = Field(default=3, ge=1, le=16)
+    # The HEAVY pool's own limit: one Docling job can use 6 GB (Limits.for_pool), so three at once would need 18 GB.
+    # worker_threads applies to the STANDARD pool only.
+    heavy_worker_threads: int = Field(default=1, ge=1, le=8)
+
+    def job_threads(self) -> int:
+        """Jobs this worker process runs at once: HEAVY uses heavy_worker_threads, every other pool worker_threads."""
+        return self.heavy_worker_threads if self.worker_pool.upper() == "HEAVY" else self.worker_threads
+
     ai_skip_confident: bool = True
     # The same messages to the same model are answered from the cache (dps_ai_cache) instead of a new call. Off by
     # default (full review G17): cached answers hold document quotes outside the DMS's custody. When on, an answer

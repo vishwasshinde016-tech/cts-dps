@@ -606,7 +606,7 @@ def main() -> None:  # pragma: no cover - process entry point
     core = SpringClient.from_settings(settings)
     stop = {"flag": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(flag=True))
-    count = max(1, settings.worker_threads)
+    count = max(1, settings.job_threads())  # HEAVY: heavy_worker_threads (default 1), else worker_threads
     workers = [_one_worker(settings if count == 1 else settings.model_copy(
         update={"worker_id": f"{settings.worker_id}-{n + 1}"}), database, core) for n in range(count)]
     log.info("DPS worker %s started (pool=%s, %d job(s) at a time)", settings.worker_id, settings.worker_pool, count)

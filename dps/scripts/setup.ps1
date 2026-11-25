@@ -7,6 +7,7 @@
 #   ... scripts\setup.ps1 -Offline          # no internet: everything from ..\offline-bundle (make-offline-bundle.ps1)
 #   ... scripts\setup.ps1 -Tests            # also run the full test suite
 #   ... scripts\setup.ps1 -Samples          # also re-download the architect's demo files (needs internet)
+#   ... scripts\setup.ps1 -Full             # everything the full app needs: also -Heavy (no Docker, no tests)
 #   ... scripts\setup.ps1 -All              # -Heavy -Observability -Tests together
 #   ... scripts\setup.ps1 -NoKeyPrompt      # supply Azure credentials externally for unattended install
 #
@@ -31,6 +32,7 @@ param(
     [switch]$Observability,
     [switch]$Offline,
     [switch]$All,
+    [switch]$Full,
     [switch]$NoKeyPrompt,
     [string]$Bundle = "",
     [string]$Python = ""
@@ -41,6 +43,7 @@ $dps = Split-Path -Parent $PSScriptRoot          # ...\cts-dps\dps
 $repo = Split-Path -Parent $dps                  # ...\cts-dps
 Set-Location $dps
 if ($All) { $Heavy = $true; $Observability = $true; $Tests = $true }
+if ($Full) { $Heavy = $true }  # the full app: API, STANDARD and HEAVY workers, OCR and Docling models
 if (-not $Bundle) { $Bundle = Join-Path $repo "offline-bundle" }
 
 # The same model file and hash as the Dockerfile (Phase 2): RapidOCR's PP-OCRv6 small English text model.
@@ -212,14 +215,16 @@ function Show($name, $ok, $hint) {
 $envText = (Get-Content ".env" -Raw)
 Show "DPS packages (.venv)" (Test-Path ".venv\Scripts\python.exe") "run setup.ps1 again"
 Show "OCR model PP-OCRv6" (Test-Ocr) "setup.ps1 (needs modelscope.cn) or copy into offline-bundle\models"
-Show "HEAVY reader (Docling, .venv-heavy)" (Test-Path ".venv-heavy\Scripts\docling-tools.exe") "setup.ps1 -Heavy"
-Show "Docling models" (Test-Path (Join-Path $DoclingModels "docling-project--docling-models")) "setup.ps1 -Heavy"
+Show "HEAVY reader (Docling, .venv-heavy)" (Test-Path ".venv-heavy\Scripts\docling-tools.exe") "setup.ps1 -Full"
+Show "Docling models" (Test-Path (Join-Path $DoclingModels "docling-project--docling-models")) "setup.ps1 -Full"
 Show "Azure OpenAI key (AI on)" ($envText -match '(?m)^AZURE_API_KEY=\S+') "setup.ps1 again, paste the key"
 Show "Traces to Langfuse (OTEL_* in .env)" ($envText -match '(?m)^OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=') "setup.ps1 -Observability"
 
 Write-Host ""
 Write-Host "DPS is installed." -ForegroundColor Green
-Write-Host "  API:      .venv\Scripts\uvicorn --factory dps.main:create_app --port 9400   (docs at http://localhost:9400/docs)"
+Write-Host "  Start:    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\start-dps.ps1   (API + both workers, logs in logs\)"
+Write-Host "  Stop:     powershell -NoProfile -ExecutionPolicy Bypass -File scripts\stop-dps.ps1"
+Write-Host "  API only: .venv\Scripts\uvicorn --factory dps.main:create_app --port 9400   (docs at http://localhost:9400/docs)"
 Write-Host "  Worker:   .venv\Scripts\python -m dps.worker          (HEAVY pool: .venv-heavy\Scripts\python -m dps.worker with DPS_WORKER_POOL=HEAVY)"
 Write-Host "  Demo:     .venv\Scripts\python scripts\demo_onboard.py <file.pdf> [--trace run.txt] [--json result.json]"
 Write-Host "  Traces:   http://localhost:3000 (after -Observability; guide: docs\cts-dps\observability-demo.md)"

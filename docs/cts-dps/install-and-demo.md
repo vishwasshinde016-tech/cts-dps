@@ -26,8 +26,10 @@ About 20 minutes. Windows commands shown (PowerShell); Linux and macOS use `.ven
 ```powershell
 git clone https://github.com/vishwasshinde016-tech/cts-dps.git C:\cts-dps
 cd C:\cts-dps\dps
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1 -Full
 ```
+
+`-Full` installs everything the full app needs: the API and STANDARD worker (`.venv`), the HEAVY worker with Docling and its models (`.venv-heavy`, about 2 GB), the OCR model, `.env` with the Azure OpenAI key (it asks for it), and the database tables. Then start the app with `scripts\start-dps.ps1` (section 5).
 
 `scripts\setup.ps1` runs steps 2 to 4 below. It also puts the PP-OCRv6 English OCR model where DPS looks for it, checking its SHA-256; without it, scanned pages run words together. Then it runs the one-document demo and prints what is installed and what is missing. Options:
 - `-Heavy` also installs the HEAVY reader: Docling in `.venv-heavy` and its layout, table and OCR models (about 2 GB).
@@ -35,6 +37,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 - `-Offline` installs everything from `..\offline-bundle` with no internet (see below).
 - `-Tests` also runs the full test suite.
 - `-Samples` also downloads the demo files (section 4).
+- `-Full` is `-Heavy`: everything the full app needs, with no Docker and no tests.
 - `-All` is `-Heavy -Observability -Tests` together.
 
 **Offline (office laptop).**
@@ -148,7 +151,23 @@ What each file shows, with measured results, is in the demo panel of `docs/cts-d
 
 ## 5. Run the service (API + worker)
 
-Use two terminals, both in `cts-dps\dps`.
+The API and workers require Azure OpenAI: `AZURE_API_KEY` must be set in `dps\.env` (setup asks for it). Without it they stop at start.
+
+**Quick way (one command).** In `cts-dps\dps`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\start-dps.ps1
+```
+
+It checks the key and the port, starts the API, the STANDARD worker and the HEAVY worker (if `.venv-heavy` exists) as hidden background processes, waits until `http://127.0.0.1:9400/health/live` answers, and prints where everything is. Logs go to `dps\logs\` (`api.log`, `worker-standard.err.log`, ...). Options: `-NoHeavy`, `-Port 9500`. Then run a job (step 3 below). Stop everything with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\stop-dps.ps1
+```
+
+`DPS_WORKER_THREADS` (default 3) sets how many jobs the STANDARD worker runs at once; `DPS_HEAVY_WORKER_THREADS` (default 1) does the same for the HEAVY worker, because one Docling job can use 6 GB.
+
+**By hand.** Use two terminals, both in `cts-dps\dps`.
 
 1. In the first terminal, start the API:
 

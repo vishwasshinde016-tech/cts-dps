@@ -118,3 +118,10 @@ def test_a_short_scan_gets_time_for_ocr_and_the_docling_model_load():
     from dps.parse.sandbox import Limits
 
     assert Limits.for_pool("HEAVY").wall_clock(6) >= 600
+
+
+def test_a_heavy_worker_runs_one_docling_job_at_a_time():
+    """A HEAVY job can use 6 GB (Docling): worker_threads (3) must not apply to the HEAVY pool."""
+    assert Settings(worker_pool="HEAVY").job_threads() == 1
+    assert Settings(worker_pool="HEAVY", heavy_worker_threads=2).job_threads() == 2
+    assert Settings(worker_pool="STANDARD").job_threads() == 3
