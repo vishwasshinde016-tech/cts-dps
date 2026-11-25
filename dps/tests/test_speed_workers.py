@@ -8,7 +8,7 @@ import threading
 import pytest
 from sqlalchemy import text
 
-from dps.db import Database
+from dps.db import SQLITE_BUSY_SECONDS, Database
 from dps.settings import Settings
 
 
@@ -16,7 +16,7 @@ def test_sqlite_waits_for_a_writer_instead_of_failing(tmp_path):
     db = Database(f"sqlite:///{(tmp_path / 'w.db').as_posix()}")
     with db.engine.connect() as c:
         assert c.execute(text("PRAGMA journal_mode")).scalar().lower() == "wal"
-        assert c.execute(text("PRAGMA busy_timeout")).scalar() >= 30000
+        assert c.execute(text("PRAGMA busy_timeout")).scalar() == SQLITE_BUSY_SECONDS * 1000
     with db.engine.begin() as c:
         c.execute(text("create table t (n integer)"))
     errors = []

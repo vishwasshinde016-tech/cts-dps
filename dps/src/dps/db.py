@@ -32,7 +32,9 @@ def make_engine(url: str) -> Engine:
             # WAL: readers never wait for a writer, and one writer waits (busy_timeout) instead of failing.
             cursor = connection.cursor()
             cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_SECONDS * 1000}")
+            # A fixed literal (milliseconds = SQLITE_BUSY_SECONDS * 1000): PRAGMA takes no bound parameters, and a
+            # formatted SQL string is flagged by the code scan. test_speed_workers keeps the two in step.
+            cursor.execute("PRAGMA busy_timeout=30000")
             cursor.execute("PRAGMA synchronous=NORMAL")
             cursor.close()
     if backend == "mysql":
