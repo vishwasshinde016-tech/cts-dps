@@ -109,5 +109,12 @@ def test_an_unknown_page_count_gets_a_long_documents_parse_time():
     """A 26-page report with hidden page objects got the 10-page limit and failed with PARSE_TIMEOUT."""
     from dps.parse.sandbox import Limits
 
-    assert Limits().wall_clock(None) == 240 and Limits.for_pool("HEAVY").wall_clock(None) == 720
+    assert Limits().wall_clock(None) == 240 and Limits.for_pool("HEAVY").wall_clock(None) == 2400
     assert Limits().wall_clock(5) == 120  # a known short document keeps the short limit
+
+
+def test_a_short_scan_gets_time_for_ocr_and_the_docling_model_load():
+    """A 6-page scanned waiver took 379 s on an idle laptop (OCR 204 s, Docling 165 s) and failed the 300 s limit."""
+    from dps.parse.sandbox import Limits
+
+    assert Limits.for_pool("HEAVY").wall_clock(6) >= 600

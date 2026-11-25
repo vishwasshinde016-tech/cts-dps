@@ -416,7 +416,7 @@ def test_sandbox_survives_crash_and_hang_and_has_no_network():
 def test_limits_scale_with_pages():
     lim = sandbox.Limits()
     assert lim.wall_clock(5) == 120 and lim.wall_clock(50) == 300 and lim.wall_clock(5000) == 900
-    assert sandbox.Limits.for_pool("HEAVY").wall_clock(20) == 360
+    assert sandbox.Limits.for_pool("HEAVY").wall_clock(20) == 1200
     assert sandbox.Limits.for_pool("HEAVY").memory_bytes == 6 * sandbox.GB
 
 
