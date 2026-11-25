@@ -1,0 +1,38 @@
+---
+title: DPS Architecture - CTS and DPS Boundaries
+---
+flowchart LR
+  subgraph CTS_APP["CTS application"]
+    CTS["CTS Spring"]
+    SOURCE[("CTS document store")]
+  end
+  subgraph DPS["DPS service"]
+    API["DPS REST API ×2"]
+    WORKER["DPS workers · 3 Standard, 1 Heavy"]
+    PARSER["Parser sidecars ×4"]
+    EXTRACT["Extraction pipeline · skills, rules, validation"]
+    AGENT["CrewAI Document Agent"]
+    GATE["AI gateway"]
+  end
+  subgraph STORE["Persistent storage"]
+    SQL[("MySQL · cov_monitoring")]
+    DERIVED[("DPS derived storage")]
+  end
+  subgraph MODEL["External AI"]
+    AZURE["Azure OpenAI"]
+  end
+
+  CTS <-->|HTTPS REST · Bearer token| API
+  API <-->|Jobs · results| SQL
+  API -->|File check · evidence read| SOURCE
+  API <-->|Evidence previews · saved page reads| DERIVED
+  SOURCE -->|Source bytes · read only| WORKER
+  WORKER <-->|Claim lease · save results · index files| SQL
+  WORKER <-->|Load and save page models| DERIVED
+  WORKER <-->|Unix socket · bytes and pages| PARSER
+  WORKER -.->|CTS lookups · optional event push| CTS
+  WORKER -->|Page model| EXTRACT
+  EXTRACT <-->|AI reads| AGENT
+  EXTRACT <-->|Direct model reads| GATE
+  AGENT <-->|Agent model calls| GATE
+  GATE <-->|Model calls| AZURE

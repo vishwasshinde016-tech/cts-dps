@@ -1,0 +1,67 @@
+---
+title: DPS Component Architecture
+config:
+  theme: base
+  themeVariables:
+    fontFamily: "Segoe UI, Arial, sans-serif"
+    fontSize: "18px"
+    lineColor: "#405c74"
+    titleColor: "#122a42"
+    edgeLabelBackground: "#ffffff"
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 32
+    rankSpacing: 47
+    padding: 14
+---
+flowchart LR
+  subgraph CTS["CTS"]
+    SPRING["CTS Spring"]
+    FILES[("Document store")]
+  end
+
+  subgraph DPS["DPS runtime"]
+    API["FastAPI ×2"]
+    WORKER["Workers<br/>3 Standard · 1 Heavy"]
+    PARSER["Parser sidecars ×4<br/>Native text · OCR"]
+    PAGE["Page model<br/>Build · reuse"]
+    SKILL["Skill router<br/>Job type · classifier"]
+    EXTRACT["Extraction<br/>Skill packs · rules"]
+    AGENT["Document Agent<br/>CrewAI · skill tools"]
+    GATE["AI gateway<br/>Routes · limits"]
+    VERIFY["Validation<br/>Schema · evidence"]
+  end
+
+  subgraph DATA["DPS persistence"]
+    SQL[("MySQL · cov_monitoring<br/>Jobs · results · review · events")]
+    DERIVED[("Derived files<br/>Page models · previews")]
+  end
+
+  AZURE["Azure OpenAI<br/>Small · strong · vision"]
+
+  SPRING <-->|Jobs · results · review| API
+  API <-->|Read / write| SQL
+  SQL -->|Lease| WORKER
+  FILES -->|File bytes| WORKER
+  WORKER --> PARSER
+  PARSER --> PAGE
+  PAGE <-->|Load / save| DERIVED
+  PAGE --> SKILL --> EXTRACT
+  EXTRACT <--> AGENT
+  AGENT <--> GATE <--> AZURE
+  EXTRACT --> VERIFY
+
+  VERIFY -->|Result revision| SQL
+
+  classDef cts fill:#eef5ff,stroke:#2875b9,color:#102c4d,stroke-width:1.4px;
+  classDef runtime fill:#fff,stroke:#57748c,color:#102c4d,stroke-width:1.4px;
+  classDef store fill:#e7f5ef,stroke:#24795b,color:#174535,stroke-width:1.4px;
+  classDef ai fill:#f1ecfb,stroke:#7150ad,color:#382561,stroke-width:1.4px;
+  class SPRING,FILES cts;
+  class API,WORKER,PARSER,PAGE,SKILL,EXTRACT,VERIFY runtime;
+  class SQL,DERIVED store;
+  class AGENT,GATE,AZURE ai;
+  style CTS fill:#f5f9ff,stroke:#93b6d9,color:#102c4d
+  style DPS fill:#f5f8fb,stroke:#8aa4b8,color:#102c4d
+  style DATA fill:#f2faf6,stroke:#80aa96,color:#174535

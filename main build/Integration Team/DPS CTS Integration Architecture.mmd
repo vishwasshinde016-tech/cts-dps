@@ -1,0 +1,30 @@
+---
+title: DPS CTS Integration Architecture
+---
+flowchart LR
+  CTS["CTS Spring"]
+  API["DPS REST API ×2"]
+  SQL[("MySQL · cov_monitoring")]
+  SOURCE[("CTS document store")]
+  DERIVED[("DPS derived storage")]
+  WORKER["DPS workers · 3 Standard, 1 Heavy"]
+  PARSER["Parser sidecars ×4"]
+  EXTRACT["Extraction pipeline · skills, rules, validation"]
+  AGENT["CrewAI Document Agent"]
+  GATE["AI gateway"]
+  AZURE["Azure OpenAI"]
+
+  CTS <-->|HTTPS REST · Bearer token| API
+  API <-->|Jobs · results| SQL
+  API -->|File check · evidence read| SOURCE
+  API <-->|Evidence previews · saved page reads| DERIVED
+  SOURCE -->|Source bytes · read only| WORKER
+  WORKER <-->|Claim lease · save results · index files| SQL
+  WORKER <-->|Load and save page models| DERIVED
+  WORKER <-->|Unix socket · bytes and pages| PARSER
+  WORKER -.->|CTS lookups · optional event push| CTS
+  WORKER -->|Page model| EXTRACT
+  EXTRACT <-->|AI reads| AGENT
+  EXTRACT <-->|Direct model reads| GATE
+  AGENT <-->|Agent model calls| GATE
+  GATE <-->|Model calls| AZURE
