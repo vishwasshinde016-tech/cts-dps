@@ -103,6 +103,13 @@ def note(model: str, prompt_tokens: int, completion_tokens: int, *, seconds: flo
                                    answer, error, trace_id, span_id, cached_tokens))
 
 
+def has_model_answer() -> bool:
+    """Whether this job received a nonempty reply from the provider."""
+    current = _noted.get()
+    return current is not None and any(not call.error and (call.answer or "").strip()
+                                       for call in current.detail)
+
+
 def last_call(span_id: str | None = None) -> Call | None:
     """The most recent call noted in this request (its tokens go on the model call's trace span); with ``span_id``,
     only a call noted inside that span (another thread's call is never taken for this one)."""

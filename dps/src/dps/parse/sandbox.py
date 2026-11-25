@@ -42,6 +42,9 @@ class ParserOutOfMemory(SandboxError):
     code = "OUT_OF_MEMORY"
 
 
+UNKNOWN_PAGES = 40
+
+
 @dataclass(frozen=True)
 class Limits:
     memory_bytes: int = 2 * GB  # LIGHT pool; HEAVY uses 6 GB
@@ -53,15 +56,20 @@ class Limits:
 
     @classmethod
     def for_pool(cls, pool: str) -> Limits:
-        """LIGHT: 2 GB, at least 2 min, at most 15. HEAVY (scans, long documents): 6 GB, 3 min per 10 pages, at least 5
-        min, at most 60 (a 396-page facility agreement needs more than 15)."""
+        """LIGHT: 2 GB, at least 2 min, at most 15. HEAVY (scans, long documents): 6 GB, 10 min per 10 pages, at least
+        10 min, at most 60 (a 396-page facility agreement needs more than 15). A scanned page needs OCR (35 s on a
+        laptop) and then Docling, and Docling's first page loads its models (about 130 s): a 6-page scanned waiver took
+        379 s on an idle laptop and failed the old 300 s limit (live run of 25 Nov 2026)."""
         if pool == "HEAVY":
-            return cls(memory_bytes=6 * GB, seconds_per_10_pages=180.0, min_seconds=300.0, max_seconds=3600.0,
+            return cls(memory_bytes=6 * GB, seconds_per_10_pages=600.0, min_seconds=600.0, max_seconds=3600.0,
                        cpu_seconds=3600)
         return cls()
 
     def wall_clock(self, pages: int | None) -> float:
-        pages = max(1, pages or 10)
+        # Unknown page count (a PDF whose pages sit in compressed object streams): assume a long document, not a
+        # short one. A 26-page half-year report got the 10-page limit and failed with PARSE_TIMEOUT when three jobs
+        # shared the CPU (live run of 25 Nov 2026).
+        pages = max(1, pages or UNKNOWN_PAGES)
         return min(self.max_seconds, max(self.min_seconds, self.seconds_per_10_pages * pages / 10))
 
 

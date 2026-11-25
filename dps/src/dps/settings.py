@@ -135,7 +135,7 @@ class Settings(BaseSettings):
     ai_temperature: float | None = None
     # Longest wait for one model answer. Kept under the gateway's 120 s so a slow model gives the rules
     # answer instead of a 504 page.
-    ai_timeout_seconds: float = 60.0
+    ai_timeout_seconds: float = 180.0
     # Statement PDFs: the model also reads the statement pages and a covenant input the two readers read
     # differently is held for review (extraction/statement_ai.py). Needs ai_model; off by default (cost).
     statement_ai_check: bool = True
@@ -162,7 +162,19 @@ class Settings(BaseSettings):
     ai_daily_token_budget: int | None = Field(default=None, ge=1)
     # Model calls one job may run at once (improvement plan S1, 24 Nov 2026): a document's AI reads (covenant parts,
     # page batches, schedule batches) run in parallel, within each route's requests per minute. 1 = one at a time.
-    ai_parallel_reads: int = Field(default=1, ge=1, le=16)
+    ai_parallel_reads: int = Field(default=3, ge=1, le=16)
+    # Jobs one worker process runs at once, each on its own thread (25 Nov 2026: a laptop with one worker read one
+    # document at a time while the rest of an upload waited in the queue). Each job also reads with
+    # ai_parallel_reads model calls, so the Azure load is up to worker_threads x ai_parallel_reads calls at once.
+    worker_threads: int = Field(default=3, ge=1, le=16)
+    # The HEAVY pool's own limit: one Docling job can use 6 GB (Limits.for_pool), so three at once would need 18 GB.
+    # worker_threads applies to the STANDARD pool only.
+    heavy_worker_threads: int = Field(default=1, ge=1, le=8)
+
+    def job_threads(self) -> int:
+        """Jobs this worker process runs at once: HEAVY uses heavy_worker_threads, every other pool worker_threads."""
+        return self.heavy_worker_threads if self.worker_pool.upper() == "HEAVY" else self.worker_threads
+
     ai_skip_confident: bool = True
     # The same messages to the same model are answered from the cache (dps_ai_cache) instead of a new call. Off by
     # default (full review G17): cached answers hold document quotes outside the DMS's custody. When on, an answer
@@ -245,3 +257,14 @@ def export_model_env(path: str | Path = ".env") -> list[str]:
 def get_settings() -> Settings:
     export_model_env()
     return Settings()
+
+
+def runtime_settings() -> Settings:
+    """Production and local app processes require Azure-backed document extraction."""
+    export_model_env()
+    settings = Settings(ai_skip_confident=False, statement_ai_check=True, ai_cache=False)
+    if not llm_allowed(settings):
+        raise RuntimeError("DPS requires Azure AI. Set DPS_LLM_ENABLED=true and configure a model or routes.")
+    if problem := endpoint_problem(settings):
+        raise RuntimeError(f"DPS requires an approved Azure endpoint: {problem}")
+    return settings

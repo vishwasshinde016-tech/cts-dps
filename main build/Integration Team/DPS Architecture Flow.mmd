@@ -1,0 +1,73 @@
+---
+title: DPS architecture - CTS upload to reviewed result
+config:
+  theme: base
+  themeVariables:
+    fontFamily: "Segoe UI, Arial, sans-serif"
+    fontSize: "16px"
+    lineColor: "#52708a"
+    titleColor: "#112943"
+  flowchart:
+    htmlLabels: true
+    curve: linear
+    nodeSpacing: 23
+    rankSpacing: 28
+    wrappingWidth: 400
+    padding: 11
+---
+flowchart TB
+    CTS["CTS Spring / document store<br/>Upload the file in CTS. Send the version ID, storage key,<br/>SHA-256, borrower context and Idempotency-Key."]
+    API["DPS API - POST /dps/v1/jobs<br/>Validate service access, document and request.<br/>Return a job ID. A repeated request can reuse it."]
+    QUEUE["MySQL job queue - CTS target: cov_monitoring<br/>dps_document, dps_job and dps_event_feed.<br/>A worker claims the job under a timed lease."]
+    INPUT{"What does<br/>the job read?"}
+    CTS --> API --> QUEUE --> INPUT
+
+    INPUT -->|PDF, Office file or image| READ["Read accepted file bytes from CTS storage<br/>Verify hash. Look for a reusable page model by<br/>tenant, source hash, format and pipeline version."]
+    INPUT -->|Commentary or document set| MANIFEST["Read a JSON manifest<br/>DRAFT_COMMENTARY or RECONCILE_SET.<br/>These jobs bypass document parsing."]
+
+    READ --> CACHE{"Matching<br/>page model?"}
+    CACHE -->|Yes| LOAD["Load the saved page model"]
+    CACHE -->|No| PARSE["Isolated parser - Unix socket, no network<br/>Read native text and use OCR where needed.<br/>Large, poorly read or resource-limited jobs can move<br/>to the HEAVY worker and its Docling parser."]
+    PARSE --> STORE["Write page-model.json.gz to derived file storage<br/>Page text, numbers, quality and available layout.<br/>MySQL dps_artifact stores the path and hashes."]
+    LOAD --> ROUTE{"How is the reading<br/>workflow chosen?"}
+    STORE --> ROUTE
+    ROUTE -->|AUTO / ONBOARD| CLASSIFY["Classify the page model<br/>Rules score the document type. The small Azure route<br/>can cross-check it. Map the detected type to a pack."]
+    ROUTE -->|EXTRACT_*| TYPED["Use the pack named by the job type"]
+    ROUTE -->|ANALYZE| ANALYZE["Analyze type, identifiers and legibility<br/>Match identifiers through CTS where available.<br/>Return analysis and mapping signals."]
+
+    CLASSIFY --> PACKS
+    TYPED --> PACKS
+    PACKS["Document skill packs<br/>Agreement, guarantee, trust deed or restatement → covenants<br/>Sanction letter → sanction · Amendment → amendment_diff<br/>Waiver / consent → waiver · Statement → statement_lines<br/>Compliance certificate → certificate<br/>Agreement, sanction and amendment can also use schedule_terms."]
+    MANIFEST --> MANPACKS["Manifest skill packs<br/>commentary drafts from supplied data.<br/>reconcile_set combines earlier reviewed results."]
+
+    PACKS --> RULES["Read with rules first<br/>Find candidate fields and evidence. Select relevant pages.<br/>For agreements, scope AI reads to financial covenants,<br/>undertakings, reporting and events of default."]
+    RULES --> SECOND{"Does this workflow use<br/>a model for this read?"}
+    SECOND -->|Rules-only, confident skip or AI unavailable| CHECK
+    SECOND -->|Yes| PLAN["Build bounded reads using pack prompt and schema<br/>CTS Compose defaults to up to 4 concurrent reads per job.<br/>Reads share a job budget and cancellation checks."]
+    PLAN --> AGENT["Azure gateway and Document Agent<br/>strong = extraction · vision = supported image reads<br/>Tool-enabled reads use a fresh CrewAI agent with the<br/>pack's allowed tools. Other readers can call the gateway directly."]
+    AGENT -.-> TOOLS["Allowed tools, depending on the skill<br/>Page text, text search, definitions, CTS identifier lookup,<br/>covenant library and formula validation."]
+    AGENT --> CHECK["Check and combine findings<br/>Validate JSON, page and quote. Check numeric support.<br/>Repair invalid output once where supported. Discard<br/>unsupported findings and keep review warnings."]
+    CHECK --> SAVE
+    ANALYZE --> SAVE
+    MANPACKS --> SAVE
+
+    SAVE["Persist the result revision and job outcome<br/>MySQL dps_run stores result JSON. dps_event_feed<br/>records updates. Page previews are saved on demand<br/>in derived storage and indexed by dps_artifact."]
+    SAVE --> DELIVERY["Spring fetches status, result and page evidence<br/>Poll by job ID or event sequence. Push is optional.<br/>CTS can submit field decisions and close the review."]
+    DELIVERY --> REVIEW["Recorded outcome<br/>dps_review_decision preserves field actions.<br/>dps_statement_value stores published statement figures.<br/>CTS applies approved data under its own business rules."]
+
+    API -.-> DEPLOY["CTS Compose reference configuration<br/>2 API replicas · 3 STANDARD workers · 1 HEAVY worker<br/>4 parser sidecars, one per worker."]
+    AGENT -.-> GATE["Model controls<br/>Allowed Azure routes, supported text masking, route pause,<br/>token and rate limits. Optional answer cache defaults to off."]
+    SAVE -.-> OPS["Support and audit<br/>Job attempts, processing traces, AI usage, tool fingerprints<br/>and audit history stay in DPS. CTS retains its own records."]
+
+    classDef cts fill:#eaf4ff,stroke:#1681cb,color:#112943,stroke-width:1.4px;
+    classDef run fill:#ffffff,stroke:#90aac0,color:#112943,stroke-width:1.3px;
+    classDef data fill:#e6f6f0,stroke:#087967,color:#133d38,stroke-width:1.4px;
+    classDef ai fill:#f0ebfb,stroke:#7051b8,color:#30224f,stroke-width:1.4px;
+    classDef dec fill:#fff1dc,stroke:#a56427,color:#4d341b,stroke-width:1.4px;
+    classDef note fill:#f3f6fa,stroke:#a2b4c8,color:#354c62,stroke-width:1px;
+    class CTS,DELIVERY,REVIEW cts;
+    class API,READ,PARSE,LOAD,CLASSIFY,TYPED,ANALYZE,MANIFEST,MANPACKS,RULES,CHECK run;
+    class QUEUE,STORE,SAVE data;
+    class PACKS,PLAN,AGENT ai;
+    class INPUT,CACHE,ROUTE,SECOND dec;
+    class DEPLOY,TOOLS,GATE,OPS note;

@@ -17,14 +17,14 @@ from dps.api.review import router as review_router
 from dps.db import Base, Database, require_snapshot_isolation
 from dps.ingest.file_store import FileStore
 from dps.ops import observability as obs
-from dps.settings import Settings, get_settings, llm_allowed
+from dps.settings import Settings, llm_allowed, runtime_settings
 
 CORRELATION_HEADER = "X-Correlation-Id"
 
 
 def create_app(settings: Settings | None = None, *, cp_checker: CpAccessChecker | None = None,
                create_schema: bool = False, advisor: Advisor | None = None) -> FastAPI:
-    settings = settings or get_settings()
+    settings = settings if settings is not None else runtime_settings()
     obs.setup("dps-api")
     app = FastAPI(title="Document Processing Service", version=__version__)
     app.state.settings = settings

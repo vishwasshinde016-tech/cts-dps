@@ -96,13 +96,22 @@ class ModelRefused(RuntimeError):
 _REFUSAL = ("contentpolicyviolation", "content_filter", "content management policy", "responsibleaipolicyviolation")
 
 
+DEFAULT_MAX_TOKENS = 16000
+# A long covenant answer takes 40-80 s when several reads run at once; at 60 s 8 of 21 calls timed out and were sent
+# again (live run of 25 Nov 2026). DPS_AI_TIMEOUT_SECONDS sets it; a routes file's timeout_s wins for its route.
+DEFAULT_TIMEOUT_SECONDS = 180.0
+
+
 @dataclass(frozen=True)
 class Route:
     name: str
     provider: str
     deployment: str
-    max_tokens: int = 3000
-    timeout_s: float = 60.0
+    # The longest answer one model call may give. 3000 cut covenant lists short: 24 of 66 calls on 12 real files
+    # stopped at exactly 3000 tokens, their JSON was cut off and thrown away (MODEL_OUTPUT_INVALID) and the covenants
+    # in it were lost (live run of 25 Nov 2026). An answer is only as long as it needs to be.
+    max_tokens: int = DEFAULT_MAX_TOKENS
+    timeout_s: float = DEFAULT_TIMEOUT_SECONDS
     temperature: float | None = None  # None: the model's default (newer Azure OpenAI models refuse any other)
     retries: int = 3
     rpm: int = 300
@@ -115,7 +124,8 @@ class Routes:
     per_tenant_day_tokens: int = 20_000_000
 
     @classmethod
-    def load(cls, path: str | Path | None, default_model: str = "", share: int = 1) -> Routes:
+    def load(cls, path: str | Path | None, default_model: str = "", share: int = 1,
+             timeout_s: float | None = None) -> Routes:
         """The route file, or (no file) every route on ``default_model`` so today's single-model set-up works.
 
         ``share``: how many worker processes call the same deployments. Each process keeps its own token bucket, so
@@ -125,12 +135,14 @@ class Routes:
         else:
             raw = {"routes": {n: {"provider": "default", "deployment": default_model}
                               for n in ("small", "strong", "vision")}}
-        defaults = raw.get("defaults") or {}
+        # DPS_AI_TIMEOUT_SECONDS was read into the settings but never reached a route (every call waited 60 s)
+        defaults = {"timeout_s": timeout_s or DEFAULT_TIMEOUT_SECONDS, **(raw.get("defaults") or {})}
         routes = {}
         for name, spec in (raw.get("routes") or {}).items():
             merged = {**defaults, **(spec or {})}
             routes[name] = Route(name, str(merged.get("provider", "default")), str(merged.get("deployment", "")),
-                                 int(merged.get("max_tokens", 3000)), float(merged.get("timeout_s", 60)),
+                                 int(merged.get("max_tokens", DEFAULT_MAX_TOKENS)),
+                                 float(merged.get("timeout_s", DEFAULT_TIMEOUT_SECONDS)),
                                  None if merged.get("temperature") is None else float(merged["temperature"]),
                                  int(merged.get("retries", 3)),
                                  max(1, int(merged.get("rpm", 300)) // max(1, share)))
@@ -470,7 +482,8 @@ def from_settings(settings, session_factory=None, env: dict | None = None) -> Ga
     if not llm_allowed(settings):
         raise LlmDisabled("LLM use is off (DPS_LLM_ENABLED=false or no DPS_AI_MODEL / routes file)")
     problem = endpoint_problem(settings, env) or route_problem(
-        Routes.load(getattr(settings, "ai_routes_file", "") or None, settings.ai_model))
+        Routes.load(getattr(settings, "ai_routes_file", "") or None, settings.ai_model,
+                    timeout_s=getattr(settings, "ai_timeout_seconds", None)))
     if problem:
         raise LlmDisabled(f"LLM refused: {problem}")
     return _live_gateway(settings, session_factory)  # pragma: no cover - live model wiring
@@ -481,7 +494,8 @@ def _live_gateway(settings, session_factory=None) -> Gateway:  # pragma: no cove
     from dps.agent.guard import guarded
 
     routes = Routes.load(getattr(settings, "ai_routes_file", "") or None, settings.ai_model,
-                         int(getattr(settings, "ai_rpm_share", 1) or 1))
+                         int(getattr(settings, "ai_rpm_share", 1) or 1),
+                         timeout_s=getattr(settings, "ai_timeout_seconds", None))
     routes = replace(routes, routes={name: replace(route, temperature=temperature_for(route, settings))
                                      for name, route in routes.routes.items()})
 

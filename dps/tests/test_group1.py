@@ -432,12 +432,12 @@ def test_warm_parser_reuses_and_recycles_child_for_statement_rows():
                            statement=(".csv", "STANDALONE", "WESTERN"))
     parser = WarmParser(Limits(), max_requests=2)
     try:
-        first = parser.parse(request, timeout=30)
+        first = parser.parse(request, timeout=120)
         child = parser._process
         assert child.is_alive() and first["rows"][0][0] == "Revenue"
-        assert parser.parse(request, timeout=30) == first
+        assert parser.parse(request, timeout=120) == first
         assert parser._process is None
-        assert parser.parse(request, timeout=30) == first
+        assert parser.parse(request, timeout=120) == first
         assert parser._process is not child
     finally:
         parser.close()

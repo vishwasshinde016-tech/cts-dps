@@ -8,6 +8,8 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
+SQLITE_BUSY_SECONDS = 30
+
 
 class Base(DeclarativeBase):
     pass
@@ -17,11 +19,24 @@ def make_engine(url: str) -> Engine:
     kwargs: dict = {"pool_pre_ping": True}
     backend = make_url(url).get_backend_name()
     if backend == "sqlite":
-        kwargs["connect_args"] = {"check_same_thread": False}
+        # Several workers and the API share one SQLite file on a laptop. Without a busy wait the second writer
+        # failed at once with "database is locked" and its worker died (live run of 25 Nov 2026).
+        kwargs["connect_args"] = {"check_same_thread": False, "timeout": SQLITE_BUSY_SECONDS}
     if backend == "mysql":
         kwargs["isolation_level"] = "READ COMMITTED"
         kwargs["connect_args"] = {"charset": "utf8mb4"}
     engine = create_engine(url, **kwargs)
+    if backend == "sqlite" and make_url(url).database not in (None, "", ":memory:"):
+        @event.listens_for(engine, "connect")
+        def sqlite_concurrency(connection, _):
+            # WAL: readers never wait for a writer, and one writer waits (busy_timeout) instead of failing.
+            cursor = connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            # A fixed literal (milliseconds = SQLITE_BUSY_SECONDS * 1000): PRAGMA takes no bound parameters, and a
+            # formatted SQL string is flagged by the code scan. test_speed_workers keeps the two in step.
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.close()
     if backend == "mysql":
         @event.listens_for(engine, "connect")
         def set_utc(connection, _):

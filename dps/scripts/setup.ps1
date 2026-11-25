@@ -7,14 +7,15 @@
 #   ... scripts\setup.ps1 -Offline          # no internet: everything from ..\offline-bundle (make-offline-bundle.ps1)
 #   ... scripts\setup.ps1 -Tests            # also run the full test suite
 #   ... scripts\setup.ps1 -Samples          # also re-download the architect's demo files (needs internet)
+#   ... scripts\setup.ps1 -Full             # everything the full app needs: also -Heavy (no Docker, no tests)
 #   ... scripts\setup.ps1 -All              # -Heavy -Observability -Tests together
-#   ... scripts\setup.ps1 -NoKeyPrompt      # do not ask for the Azure key (unattended install; AI stays off)
+#   ... scripts\setup.ps1 -NoKeyPrompt      # supply Azure credentials externally for unattended install
 #
 # What it does, in order:
 #   1. checks Python (3.12 preferred, 3.11-3.13 accepted);
 #   2. creates .venv;
 #   3. installs DPS with the worker and dev extras (from the internet, or from offline-bundle\wheelhouse);
-#   4. creates .env from .env.example (only if .env is missing) and asks for the Azure OpenAI key (optional);
+#   4. creates .env from .env.example (only if .env is missing) and can save local Azure credentials;
 #   5. creates the database tables (Alembic);
 #   6. puts the PP-OCRv6 English OCR model where DPS looks for it, checking its SHA-256 (without it the OCR runs
 #      English words together);
@@ -31,6 +32,7 @@ param(
     [switch]$Observability,
     [switch]$Offline,
     [switch]$All,
+    [switch]$Full,
     [switch]$NoKeyPrompt,
     [string]$Bundle = "",
     [string]$Python = ""
@@ -41,6 +43,7 @@ $dps = Split-Path -Parent $PSScriptRoot          # ...\cts-dps\dps
 $repo = Split-Path -Parent $dps                  # ...\cts-dps
 Set-Location $dps
 if ($All) { $Heavy = $true; $Observability = $true; $Tests = $true }
+if ($Full) { $Heavy = $true }  # the full app: API, STANDARD and HEAVY workers, OCR and Docling models
 if (-not $Bundle) { $Bundle = Join-Path $repo "offline-bundle" }
 
 # The same model file and hash as the Dockerfile (Phase 2): RapidOCR's PP-OCRv6 small English text model.
@@ -115,15 +118,15 @@ if (Test-Path ".env") {
     Write-Host ".env created from .env.example (SQLite, local storage, dev sign-in, AI off)"
 }
 
-Step "4b. Azure OpenAI key (optional: switches the Document Agent on)"
+Step "4b. Azure OpenAI credentials for the required Document Agent"
 $envLines = Get-Content ".env"
 $keyLine = $envLines | Where-Object { $_ -match '^AZURE_API_KEY=' } | Select-Object -First 1
 if ($keyLine -and $keyLine.Trim() -ne 'AZURE_API_KEY=') {
     Write-Host "AZURE_API_KEY is already set in .env: left as it is"
 } elseif ($NoKeyPrompt -or -not [Environment]::UserInteractive) {
-    Write-Host "not asked (-NoKeyPrompt or no console): AI stays off. Run setup again or edit .env to add the key."
+    Write-Host "No prompt. Configure the vault or local Azure credentials before starting DPS."
 } else {
-    $secure = Read-Host "Paste the Azure OpenAI key and press Enter (or just press Enter to keep AI off)" -AsSecureString
+    $secure = Read-Host "Paste the Azure OpenAI key, or press Enter if credentials are supplied externally" -AsSecureString
     $key = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
     if ($key) {
         $envLines = $envLines | Where-Object { $_ -notmatch '^AZURE_API_KEY=' -and $_ -notmatch '^DPS_LLM_ENABLED=' }
@@ -132,7 +135,7 @@ if ($keyLine -and $keyLine.Trim() -ne 'AZURE_API_KEY=') {
         Set-Content -Path ".env" -Value $envLines -Encoding ASCII
         Write-Host "key saved in .env (this laptop only; .env is never committed); AI switched on" -ForegroundColor Green
     } else {
-        Write-Host "no key: AI stays off (rules only). Run setup again or edit .env to add it later."
+        Write-Host "No local key saved. Supply Azure credentials externally before starting DPS."
     }
 }
 
@@ -212,14 +215,16 @@ function Show($name, $ok, $hint) {
 $envText = (Get-Content ".env" -Raw)
 Show "DPS packages (.venv)" (Test-Path ".venv\Scripts\python.exe") "run setup.ps1 again"
 Show "OCR model PP-OCRv6" (Test-Ocr) "setup.ps1 (needs modelscope.cn) or copy into offline-bundle\models"
-Show "HEAVY reader (Docling, .venv-heavy)" (Test-Path ".venv-heavy\Scripts\docling-tools.exe") "setup.ps1 -Heavy"
-Show "Docling models" (Test-Path (Join-Path $DoclingModels "docling-project--docling-models")) "setup.ps1 -Heavy"
+Show "HEAVY reader (Docling, .venv-heavy)" (Test-Path ".venv-heavy\Scripts\docling-tools.exe") "setup.ps1 -Full"
+Show "Docling models" (Test-Path (Join-Path $DoclingModels "docling-project--docling-models")) "setup.ps1 -Full"
 Show "Azure OpenAI key (AI on)" ($envText -match '(?m)^AZURE_API_KEY=\S+') "setup.ps1 again, paste the key"
 Show "Traces to Langfuse (OTEL_* in .env)" ($envText -match '(?m)^OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=') "setup.ps1 -Observability"
 
 Write-Host ""
 Write-Host "DPS is installed." -ForegroundColor Green
-Write-Host "  API:      .venv\Scripts\uvicorn --factory dps.main:create_app --port 9400   (docs at http://localhost:9400/docs)"
+Write-Host "  Start:    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\start-dps.ps1   (API + both workers, logs in logs\)"
+Write-Host "  Stop:     powershell -NoProfile -ExecutionPolicy Bypass -File scripts\stop-dps.ps1"
+Write-Host "  API only: .venv\Scripts\uvicorn --factory dps.main:create_app --port 9400   (docs at http://localhost:9400/docs)"
 Write-Host "  Worker:   .venv\Scripts\python -m dps.worker          (HEAVY pool: .venv-heavy\Scripts\python -m dps.worker with DPS_WORKER_POOL=HEAVY)"
 Write-Host "  Demo:     .venv\Scripts\python scripts\demo_onboard.py <file.pdf> [--trace run.txt] [--json result.json]"
 Write-Host "  Traces:   http://localhost:3000 (after -Observability; guide: docs\cts-dps\observability-demo.md)"
