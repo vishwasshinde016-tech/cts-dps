@@ -32,6 +32,43 @@ def test_workers_build_no_model_while_the_switch_is_off(app, settings, monkeypat
     worker.build_pack_runner(settings, app.state.db)
 
 
+def test_runtime_requires_ai_and_forces_a_live_read(tmp_path, monkeypatch):
+    from dps.settings import runtime_settings
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DPS_LLM_ENABLED", "false")
+    monkeypatch.setenv("DPS_AI_MODEL", "azure/unit-test")
+    with pytest.raises(RuntimeError, match="requires Azure AI"):
+        runtime_settings()
+    monkeypatch.setenv("DPS_LLM_ENABLED", "true")
+    monkeypatch.setenv("AZURE_API_BASE", "https://approved.invalid/")
+    monkeypatch.setenv("DPS_AI_ALLOWED_HOSTS", "approved.invalid")
+    monkeypatch.setenv("DPS_AI_SKIP_CONFIDENT", "true")
+    monkeypatch.setenv("DPS_STATEMENT_AI_CHECK", "false")
+    monkeypatch.setenv("DPS_AI_CACHE", "true")
+    settings = runtime_settings()
+    assert not settings.ai_skip_confident and settings.statement_ai_check and not settings.ai_cache
+
+
+@pytest.mark.parametrize("model_answer", [False, True])
+def test_runtime_extraction_only_saves_with_model_answer(app, settings, monkeypatch, model_answer):
+    from types import SimpleNamespace
+
+    from dps import worker
+    from dps.flows import skill_job
+    from dps.skills import runner
+
+    events = []
+    monkeypatch.setattr(runner, "run_job", lambda *a, **k: {"status": "DONE"})
+    monkeypatch.setattr(runner, "finish", lambda *a: events.append("saved"))
+    monkeypatch.setattr(worker.jobs, "finish", lambda *args: events.append(args[-1]))
+    monkeypatch.setattr(worker.usage, "has_model_answer", lambda: model_answer)
+    monkeypatch.setattr(skill_job, "run_skill_job", lambda _id, _kind, run, save: save(run()))
+    job = SimpleNamespace(id="fixture", job_type="ONBOARD")
+    worker.build_pack_runner(settings, app.state.db, require_ai=True)(None, job, {}, None)
+    assert events == (["saved"] if model_answer else ["AI_READ_REQUIRED"])
+
+
 def test_workers_use_the_gateway_when_switched_on(app, settings, monkeypatch):
     from dps import worker
 

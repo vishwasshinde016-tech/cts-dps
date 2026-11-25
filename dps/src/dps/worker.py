@@ -30,7 +30,7 @@ from dps.integrations.spring import SpringClient, SpringUnavailable
 from dps.models import Document, Job, utcnow
 from dps.ops import observability as obs
 from dps.profiles import currency_words
-from dps.settings import Settings, get_settings, llm_allowed
+from dps.settings import Settings, get_settings, llm_allowed, runtime_settings
 from dps.skills.statement_lines.reader import ContentFailed, NeedsHeavyPool
 
 log = logging.getLogger(__name__)
@@ -561,7 +561,7 @@ def statement_deps(settings: Settings, database: Database, core: SpringClient,
 
 
 def build_pack_runner(settings: Settings, database: Database, core: SpringClient | None = None,
-                      page_models: dict[str, dict] | None = None):
+                      page_models: dict[str, dict] | None = None, *, require_ai: bool = False):
     """The one pipeline (full review WP7): every job type that reads a document runs its skill pack in the skills
     flow (EXTRACT_AGREEMENT, EXTRACT_STATEMENT, EXTRACT_SANCTION, EXTRACT_CERTIFICATE, EXTRACT_AMENDMENT,
     EXTRACT_WAIVER, ONBOARD, RECONCILE_SET, DRAFT_COMMENTARY)."""
@@ -574,13 +574,23 @@ def build_pack_runner(settings: Settings, database: Database, core: SpringClient
     statements = statement_deps(settings, database, core or SpringClient.from_settings(settings), page_models,
                                 gateway)
 
+    def save(db: Session, job: Job, result: dict) -> None:
+        if require_ai and (job.job_type in ("ONBOARD", "AUTO") or job.job_type.startswith("EXTRACT_")) \
+                and not usage.has_model_answer():
+            result["status"] = jobs.FAILED
+            jobs.finish(db, job, jobs.FAILED,
+                        "Azure AI did not complete a model read. No extraction result was published.",
+                        "AI_READ_REQUIRED")
+            return
+        skills.finish(db, job, result)
+
     def run(db: Session, job: Job, model: dict | None, raw: bytes | None) -> None:
         from dps.flows.skill_job import run_skill_job
 
         run_skill_job(job.id, job.job_type,
                       lambda: skills.run_job(job, model, gateway, tools, db, settings.pipeline_version, raw,
                                              scorer_dir=settings.scorer_dir, statement_deps=statements),
-                      lambda result: skills.finish(db, job, result))
+                      lambda result: save(db, job, result))
 
     return run
 
@@ -589,7 +599,7 @@ def main() -> None:  # pragma: no cover - process entry point
     from dps.skills.covenants.taxonomy import get as get_taxonomy
 
     get_taxonomy()  # fail startup before claiming any jobs if the taxonomy is missing or invalid
-    settings = get_settings()
+    settings = runtime_settings()
     obs.setup("dps-worker-heavy" if settings.worker_pool == "HEAVY" else "dps-worker")
     database = Database(settings.database_url)
     require_snapshot_isolation(database.engine)
@@ -597,7 +607,8 @@ def main() -> None:  # pragma: no cover - process entry point
     page_models: dict[str, dict] = {}
     ingestor = build_ingestor(settings) if settings.ingest_enabled else None
     worker = Worker(settings, database.session_factory, core, {}, ingestor, page_models,
-                    build_analyzer(settings, database), build_pack_runner(settings, database, core, page_models))
+                    build_analyzer(settings, database),
+                    build_pack_runner(settings, database, core, page_models, require_ai=True))
     stop = {"flag": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(flag=True))
     log.info("DPS worker %s started (pool=%s)", settings.worker_id, settings.worker_pool)

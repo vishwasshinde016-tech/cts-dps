@@ -11,7 +11,7 @@ Turns loan agreements, amendments, waivers and financial statements into covenan
 | Flow B | Parse → Extract/Calculate → Validate (checks, optional AI reader) → Report / hold (`dps.flows.statement`); C5 event per linked CP. A reviewer's corrections are kept when the statement is reported |
 | Every step | [../docs/cts-dps/end-to-end-explained.md](../docs/cts-dps/end-to-end-explained.md) |
 | Workers | `python -m dps.worker`; `DPS_WORKER_POOL=HEAVY` (with `.[heavy]`) runs Docling for scans |
-| Advisory AI | Rules by default; set `DPS_AI_MODEL` (for example `azure/<deployment>`) to use an LLM through CrewAI. Always labelled advisory |
+| Document AI | Running the API or a worker requires a configured, approved Azure deployment. Document extraction uses rules and Azure AI. Extraction jobs need a live model response before results can be saved. Findings remain advisory |
 | Tracking | Each document's history (table `dps_trace_event`, shown by `scripts\show_job.py`), every AI call (`dps_ai_call`), log lines with request id, user, job and document, OpenTelemetry when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and the daily log file (`python -m dps.ops.logcollector`): [`src/dps/ops/observability.py`](src/dps/ops/observability.py) |
 | Auth | Entra ID JWT or `DEV_HEADER`; CP access delegated to the Spring app |
 

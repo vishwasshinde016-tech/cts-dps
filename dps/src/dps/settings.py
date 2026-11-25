@@ -245,3 +245,14 @@ def export_model_env(path: str | Path = ".env") -> list[str]:
 def get_settings() -> Settings:
     export_model_env()
     return Settings()
+
+
+def runtime_settings() -> Settings:
+    """Production and local app processes require Azure-backed document extraction."""
+    export_model_env()
+    settings = Settings(ai_skip_confident=False, statement_ai_check=True, ai_cache=False)
+    if not llm_allowed(settings):
+        raise RuntimeError("DPS requires Azure AI. Set DPS_LLM_ENABLED=true and configure a model or routes.")
+    if problem := endpoint_problem(settings):
+        raise RuntimeError(f"DPS requires an approved Azure endpoint: {problem}")
+    return settings

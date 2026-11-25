@@ -8,13 +8,13 @@
 #   ... scripts\setup.ps1 -Tests            # also run the full test suite
 #   ... scripts\setup.ps1 -Samples          # also re-download the architect's demo files (needs internet)
 #   ... scripts\setup.ps1 -All              # -Heavy -Observability -Tests together
-#   ... scripts\setup.ps1 -NoKeyPrompt      # do not ask for the Azure key (unattended install; AI stays off)
+#   ... scripts\setup.ps1 -NoKeyPrompt      # supply Azure credentials externally for unattended install
 #
 # What it does, in order:
 #   1. checks Python (3.12 preferred, 3.11-3.13 accepted);
 #   2. creates .venv;
 #   3. installs DPS with the worker and dev extras (from the internet, or from offline-bundle\wheelhouse);
-#   4. creates .env from .env.example (only if .env is missing) and asks for the Azure OpenAI key (optional);
+#   4. creates .env from .env.example (only if .env is missing) and can save local Azure credentials;
 #   5. creates the database tables (Alembic);
 #   6. puts the PP-OCRv6 English OCR model where DPS looks for it, checking its SHA-256 (without it the OCR runs
 #      English words together);
@@ -115,15 +115,15 @@ if (Test-Path ".env") {
     Write-Host ".env created from .env.example (SQLite, local storage, dev sign-in, AI off)"
 }
 
-Step "4b. Azure OpenAI key (optional: switches the Document Agent on)"
+Step "4b. Azure OpenAI credentials for the required Document Agent"
 $envLines = Get-Content ".env"
 $keyLine = $envLines | Where-Object { $_ -match '^AZURE_API_KEY=' } | Select-Object -First 1
 if ($keyLine -and $keyLine.Trim() -ne 'AZURE_API_KEY=') {
     Write-Host "AZURE_API_KEY is already set in .env: left as it is"
 } elseif ($NoKeyPrompt -or -not [Environment]::UserInteractive) {
-    Write-Host "not asked (-NoKeyPrompt or no console): AI stays off. Run setup again or edit .env to add the key."
+    Write-Host "No prompt. Configure the vault or local Azure credentials before starting DPS."
 } else {
-    $secure = Read-Host "Paste the Azure OpenAI key and press Enter (or just press Enter to keep AI off)" -AsSecureString
+    $secure = Read-Host "Paste the Azure OpenAI key, or press Enter if credentials are supplied externally" -AsSecureString
     $key = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
     if ($key) {
         $envLines = $envLines | Where-Object { $_ -notmatch '^AZURE_API_KEY=' -and $_ -notmatch '^DPS_LLM_ENABLED=' }
@@ -132,7 +132,7 @@ if ($keyLine -and $keyLine.Trim() -ne 'AZURE_API_KEY=') {
         Set-Content -Path ".env" -Value $envLines -Encoding ASCII
         Write-Host "key saved in .env (this laptop only; .env is never committed); AI switched on" -ForegroundColor Green
     } else {
-        Write-Host "no key: AI stays off (rules only). Run setup again or edit .env to add it later."
+        Write-Host "No local key saved. Supply Azure credentials externally before starting DPS."
     }
 }
 
