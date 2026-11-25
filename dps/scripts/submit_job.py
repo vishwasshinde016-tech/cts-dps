@@ -40,8 +40,8 @@ from pathlib import Path
 MEDIA = {".pdf": "application/pdf", ".csv": "text/csv", ".xls": "application/vnd.ms-excel",
          ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
          ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-         ".json": "application/json"}
-JOBS = ["ONBOARD", "EXTRACT_AGREEMENT", "EXTRACT_AMENDMENT", "EXTRACT_SANCTION", "EXTRACT_STATEMENT",
+         ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
+JOBS = ["AUTO", "ONBOARD", "EXTRACT_AGREEMENT", "EXTRACT_AMENDMENT", "EXTRACT_SANCTION", "EXTRACT_STATEMENT",
         "EXTRACT_CERTIFICATE", "ANALYZE", "EXTRACT_WAIVER", "RECONCILE_SET"]
 FINAL = {"DONE", "NEEDS_REVIEW", "FAILED", "DEAD", "CANCELLED"}
 HEADERS = {"X-User": "cts-spring", "X-Roles": "SERVICE"}
@@ -59,7 +59,8 @@ def load_env(path: Path) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("file", type=Path)
-    ap.add_argument("--job", default="ONBOARD", choices=JOBS, help="job type (default ONBOARD)")
+    ap.add_argument("--job", default="AUTO", choices=JOBS,
+                    help="job type (default AUTO: DPS finds the type, as the bank app sends every upload)")
     ap.add_argument("--type", default=None, help="the type the user chose, e.g. LOAN_AGREEMENT (optional)")
     ap.add_argument("--cp", default="CP-DEMO-1", help="credit proposal id Spring would send")
     ap.add_argument("--as-of", default=None, help="period end for statements, YYYY-MM-DD")

@@ -604,17 +604,54 @@ def main() -> None:  # pragma: no cover - process entry point
     database = Database(settings.database_url)
     require_snapshot_isolation(database.engine)
     core = SpringClient.from_settings(settings)
-    page_models: dict[str, dict] = {}
-    ingestor = build_ingestor(settings) if settings.ingest_enabled else None
-    worker = Worker(settings, database.session_factory, core, {}, ingestor, page_models,
-                    build_analyzer(settings, database),
-                    build_pack_runner(settings, database, core, page_models, require_ai=True))
     stop = {"flag": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(flag=True))
-    log.info("DPS worker %s started (pool=%s)", settings.worker_id, settings.worker_pool)
+    count = max(1, settings.worker_threads)
+    workers = [_one_worker(settings if count == 1 else settings.model_copy(
+        update={"worker_id": f"{settings.worker_id}-{n + 1}"}), database, core) for n in range(count)]
+    log.info("DPS worker %s started (pool=%s, %d job(s) at a time)", settings.worker_id, settings.worker_pool, count)
+    if count == 1:
+        run_loop(workers[0], stop)
+        return
+    # Several jobs at once in one process (improvement of 25 Nov 2026): one start-up (about a minute of imports)
+    # and one copy of the models in memory, instead of a process per job. Each thread has its own worker, page
+    # models and model gateway; the database decides which thread takes which job.
+    threads = [threading.Thread(target=run_loop, args=(w, stop), name=f"dps-job-{n + 1}", daemon=True)
+               for n, w in enumerate(workers)]
+    for t in threads:
+        t.start()
+    try:
+        while any(t.is_alive() for t in threads):
+            for t in threads:
+                t.join(timeout=1)
+    except KeyboardInterrupt:
+        stop["flag"] = True
+
+
+def _one_worker(settings: Settings, database: Database, core: SpringClient) -> Worker:
+    page_models: dict[str, dict] = {}
+    ingestor = build_ingestor(settings) if settings.ingest_enabled else None
+    return Worker(settings, database.session_factory, core, {}, ingestor, page_models,
+                  build_analyzer(settings, database),
+                  build_pack_runner(settings, database, core, page_models, require_ai=True))
+
+
+def run_loop(worker: Worker, stop: dict, sleep: Callable[[float], None] = time.sleep) -> None:
+    """Claims and runs jobs until stopped. A database or unexpected error in one loop is logged and the loop goes on
+    after a pause: before, one "database is locked" ended the worker process and its queue stopped (live run of
+    25 Nov 2026). A job left half-done is taken again when its lease runs out."""
+    failures = 0
     while not stop["flag"]:
-        if not worker.run_once():
-            time.sleep(2)
+        try:
+            idle = not worker.run_once()
+            failures = 0
+        except Exception:  # noqa: BLE001 - the worker must outlive one bad loop
+            failures += 1
+            log.exception("worker loop failed (%d in a row); trying again", failures)
+            sleep(min(60, 5 * failures))
+            continue
+        if idle:
+            sleep(2)
 
 
 def heartbeat_healthy(settings: Settings) -> bool:

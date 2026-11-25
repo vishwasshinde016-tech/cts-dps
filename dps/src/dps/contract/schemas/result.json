@@ -724,8 +724,9 @@
           "description": "As printed: THOUSAND, LAKH, CRORE, MILLION (phase 4)"
         },
         "asOfDate": {
-          "type": "string",
-          "format": "date"
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "The statement's period end; null when none was sent and the statement names none (warning PERIOD_DATE_MISSING: set it in the review with document:asOfDate)"
         },
         "periodMonths": {
           "type": [

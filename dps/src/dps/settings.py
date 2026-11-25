@@ -162,7 +162,11 @@ class Settings(BaseSettings):
     ai_daily_token_budget: int | None = Field(default=None, ge=1)
     # Model calls one job may run at once (improvement plan S1, 24 Nov 2026): a document's AI reads (covenant parts,
     # page batches, schedule batches) run in parallel, within each route's requests per minute. 1 = one at a time.
-    ai_parallel_reads: int = Field(default=1, ge=1, le=16)
+    ai_parallel_reads: int = Field(default=4, ge=1, le=16)
+    # Jobs one worker process runs at once, each on its own thread (25 Nov 2026: a laptop with one worker read one
+    # document at a time while the rest of an upload waited in the queue). Each job also reads with
+    # ai_parallel_reads model calls, so the Azure load is up to worker_threads x ai_parallel_reads calls at once.
+    worker_threads: int = Field(default=3, ge=1, le=16)
     ai_skip_confident: bool = True
     # The same messages to the same model are answered from the cache (dps_ai_cache) instead of a new call. Off by
     # default (full review G17): cached answers hold document quotes outside the DMS's custody. When on, an answer

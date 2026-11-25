@@ -4,7 +4,8 @@
 # because "openai/...", "anthropic/..." and the like call that provider's public host.
 # small: document type (second opinion); strong: the Document Agent's reads; vision: scanned pages read from
 # their images.
-defaults: { max_tokens: 3000, timeout_s: 60, temperature: null, retries: 3 }
+# max_tokens: the longest answer; covenant lists of a long agreement need more than 3000 (cut-off JSON is lost).
+defaults: { max_tokens: 16000, timeout_s: 60, temperature: null, retries: 3 }
 routes:
   small:      { provider: azure, deployment: azure/gpt-4.1-mini, rpm: 300 }
   strong:     { provider: azure, deployment: azure/gpt-4.1, rpm: 120, timeout_s: 90 }

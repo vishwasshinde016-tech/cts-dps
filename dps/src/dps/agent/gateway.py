@@ -96,12 +96,18 @@ class ModelRefused(RuntimeError):
 _REFUSAL = ("contentpolicyviolation", "content_filter", "content management policy", "responsibleaipolicyviolation")
 
 
+DEFAULT_MAX_TOKENS = 16000
+
+
 @dataclass(frozen=True)
 class Route:
     name: str
     provider: str
     deployment: str
-    max_tokens: int = 3000
+    # The longest answer one model call may give. 3000 cut covenant lists short: 24 of 66 calls on 12 real files
+    # stopped at exactly 3000 tokens, their JSON was cut off and thrown away (MODEL_OUTPUT_INVALID) and the covenants
+    # in it were lost (live run of 25 Nov 2026). An answer is only as long as it needs to be.
+    max_tokens: int = DEFAULT_MAX_TOKENS
     timeout_s: float = 60.0
     temperature: float | None = None  # None: the model's default (newer Azure OpenAI models refuse any other)
     retries: int = 3
@@ -130,7 +136,7 @@ class Routes:
         for name, spec in (raw.get("routes") or {}).items():
             merged = {**defaults, **(spec or {})}
             routes[name] = Route(name, str(merged.get("provider", "default")), str(merged.get("deployment", "")),
-                                 int(merged.get("max_tokens", 3000)), float(merged.get("timeout_s", 60)),
+                                 int(merged.get("max_tokens", DEFAULT_MAX_TOKENS)), float(merged.get("timeout_s", 60)),
                                  None if merged.get("temperature") is None else float(merged["temperature"]),
                                  int(merged.get("retries", 3)),
                                  max(1, int(merged.get("rpm", 300)) // max(1, share)))
