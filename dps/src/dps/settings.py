@@ -135,7 +135,7 @@ class Settings(BaseSettings):
     ai_temperature: float | None = None
     # Longest wait for one model answer. Kept under the gateway's 120 s so a slow model gives the rules
     # answer instead of a 504 page.
-    ai_timeout_seconds: float = 60.0
+    ai_timeout_seconds: float = 180.0
     # Statement PDFs: the model also reads the statement pages and a covenant input the two readers read
     # differently is held for review (extraction/statement_ai.py). Needs ai_model; off by default (cost).
     statement_ai_check: bool = True
@@ -162,7 +162,7 @@ class Settings(BaseSettings):
     ai_daily_token_budget: int | None = Field(default=None, ge=1)
     # Model calls one job may run at once (improvement plan S1, 24 Nov 2026): a document's AI reads (covenant parts,
     # page batches, schedule batches) run in parallel, within each route's requests per minute. 1 = one at a time.
-    ai_parallel_reads: int = Field(default=4, ge=1, le=16)
+    ai_parallel_reads: int = Field(default=3, ge=1, le=16)
     # Jobs one worker process runs at once, each on its own thread (25 Nov 2026: a laptop with one worker read one
     # document at a time while the rest of an upload waited in the queue). Each job also reads with
     # ai_parallel_reads model calls, so the Azure load is up to worker_threads x ai_parallel_reads calls at once.

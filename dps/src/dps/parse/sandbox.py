@@ -42,6 +42,9 @@ class ParserOutOfMemory(SandboxError):
     code = "OUT_OF_MEMORY"
 
 
+UNKNOWN_PAGES = 40
+
+
 @dataclass(frozen=True)
 class Limits:
     memory_bytes: int = 2 * GB  # LIGHT pool; HEAVY uses 6 GB
@@ -61,7 +64,10 @@ class Limits:
         return cls()
 
     def wall_clock(self, pages: int | None) -> float:
-        pages = max(1, pages or 10)
+        # Unknown page count (a PDF whose pages sit in compressed object streams): assume a long document, not a
+        # short one. A 26-page half-year report got the 10-page limit and failed with PARSE_TIMEOUT when three jobs
+        # shared the CPU (live run of 25 Nov 2026).
+        pages = max(1, pages or UNKNOWN_PAGES)
         return min(self.max_seconds, max(self.min_seconds, self.seconds_per_10_pages * pages / 10))
 
 

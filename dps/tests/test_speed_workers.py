@@ -61,7 +61,7 @@ def test_a_worker_outlives_a_failed_loop():
 
 def test_defaults_read_several_documents_and_batches_at_once():
     s = Settings()
-    assert s.worker_threads == 3 and s.ai_parallel_reads == 4
+    assert s.worker_threads == 3 and s.ai_parallel_reads == 3  # 9 calls at once stays within the Azure rate
 
 
 @pytest.mark.parametrize("name,media", [("a.png", "image/png"), ("a.jpg", "image/jpeg"), ("a.pdf", "application/pdf")])
@@ -84,6 +84,15 @@ def test_a_model_answer_is_not_cut_off_at_3000_tokens():
     assert Routes.load(None, "azure/x").routes["strong"].max_tokens == DEFAULT_MAX_TOKENS
 
 
+def test_the_timeout_setting_reaches_every_route():
+    """DPS_AI_TIMEOUT_SECONDS was read but never used: every call waited 60 s and 8 of 21 timed out under load."""
+    from dps.agent.gateway import DEFAULT_TIMEOUT_SECONDS, Routes
+
+    assert all(r.timeout_s == 120 for r in Routes.load(None, "azure/x", timeout_s=120).routes.values())
+    assert all(r.timeout_s == DEFAULT_TIMEOUT_SECONDS >= 180 for r in Routes.load(None, "azure/x").routes.values())
+    assert Settings().ai_timeout_seconds >= 180
+
+
 def test_a_statement_with_no_period_date_still_follows_the_contract():
     import json
     from pathlib import Path
@@ -94,3 +103,11 @@ def test_a_statement_with_no_period_date_still_follows_the_contract():
                         .read_text(encoding="utf-8"))
     line = schema["$defs"]["statementLineValue"] if "$defs" in schema else schema["definitions"]["statementLineValue"]
     jsonschema.validate({"amount": 61.2, "unit": "INR_CR", "asOfDate": None}, line)
+
+
+def test_an_unknown_page_count_gets_a_long_documents_parse_time():
+    """A 26-page report with hidden page objects got the 10-page limit and failed with PARSE_TIMEOUT."""
+    from dps.parse.sandbox import Limits
+
+    assert Limits().wall_clock(None) == 240 and Limits.for_pool("HEAVY").wall_clock(None) == 720
+    assert Limits().wall_clock(5) == 120  # a known short document keeps the short limit
